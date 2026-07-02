@@ -9,7 +9,7 @@ Tensu 是企业级大模型网关平台：统一 LLM API 接入、供应商管�
 
 ## 当前状态
 
-项目处于初始阶段：[src/](src/)、[tests/](tests/)、[frontend/](frontend/) 均为空，[Tensu.slnx](Tensu.slnx) 尚无项目引用。搭建脚手架时按下述技术栈与约定进行，并同步更新本文件的构建/测试命令。
+脚手架已搭建完成。后端（`src/`）包含完整 CRUD API 与网关代理；前端（`frontend/`）包含管理端完整页面。详见下方「构建与测试」。
 
 ## 技术栈
 
@@ -59,7 +59,24 @@ Tensu 是企业级大模型网关平台：统一 LLM API 接入、供应商管�
 
 ## 构建与测试
 
-<!-- 脚手架搭建后补充实际命令，例如： -->
-<!-- 后端：dotnet build Tensu.slnx / dotnet test -->
-<!-- 前端：cd frontend && npm install && npm run dev / npm run build / npm run lint -->
-尚未搭建脚手架，暂无构建/测试命令。
+后端：
+```bash
+dotnet build Tensu.slnx          # 构建
+dotnet test Tensu.slnx            # 测试
+dotnet run --project src/Tensu.Api # 启动开发服务器（http://localhost:5000）
+```
+
+前端：
+```bash
+cd frontend
+npm install        # 安装依赖
+npm run dev        # 开发服务器（http://localhost:3000，代理到后端 5000）
+npm run build      # 生产构建（输出到 frontend/dist/）
+```
+
+Docker：
+```bash
+docker compose up --build   # 一键启动（http://localhost:5000）
+```
+
+默认管理员账号：`admin` / `admin123`

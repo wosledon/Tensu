@@ -1,0 +1,118 @@
+using Microsoft.EntityFrameworkCore;
+using Tensu.Api.Data;
+using Tensu.Api.Infrastructure;
+using Tensu.Core.Common;
+using Tensu.Core.Entities;
+using Tensu.Core.Enums;
+
+namespace Tensu.Api.Services;
+
+public class ApiKeyService : BaseService
+{
+    private readonly TensuDbContext _db;
+    private readonly EncryptionService _encryption;
+
+    public ApiKeyService(TensuDbContext db, EncryptionService encryption)
+    {
+        _db = db;
+        _encryption = encryption;
+    }
+
+    public async Task<PagedResult<ApiKey>> GetListAsync(PagedRequest request, int? orgId = null)
+    {
+        var query = _db.ApiKeys.Include(k => k.Organization).Include(k => k.User).AsQueryable();
+
+        if (orgId.HasValue)
+            query = query.Where(k => k.OrganizationId == orgId.Value);
+
+        if (!string.IsNullOrEmpty(request.Keyword))
+            query = query.Where(k => k.Name.Contains(request.Keyword) || k.KeyPrefix.Contains(request.Keyword));
+
+        query = ApplyPaging(query, request, out var total);
+        var items = await query.ToListAsync();
+        return ToPagedResult(items, total, request);
+    }
+
+    public async Task<ApiKey?> GetByIdAsync(int id)
+    {
+        return await _db.ApiKeys.Include(k => k.Organization).Include(k => k.User)
+            .FirstOrDefaultAsync(k => k.Id == id);
+    }
+
+    public async Task<(ApiKey key, string plainTextKey)> CreateAsync(ApiKey apiKey)
+    {
+        var plainTextKey = GenerateApiKey();
+        apiKey.KeyValue = _encryption.Encrypt(plainTextKey);
+        apiKey.KeyPrefix = plainTextKey[..Math.Min(8, plainTextKey.Length)];
+        apiKey.CreatedAt = DateTime.UtcNow;
+        apiKey.UpdatedAt = DateTime.UtcNow;
+        _db.ApiKeys.Add(apiKey);
+        await _db.SaveChangesAsync();
+        return (apiKey, plainTextKey);
+    }
+
+    public async Task<ApiKey?> UpdateAsync(int id, ApiKey updated)
+    {
+        var key = await _db.ApiKeys.FindAsync(id);
+        if (key == null) return null;
+
+        key.Name = updated.Name;
+        key.ExpiresAt = updated.ExpiresAt;
+        key.AllowedModels = updated.AllowedModels;
+        key.IpWhitelist = updated.IpWhitelist;
+        key.Status = updated.Status;
+        key.RateLimitRpm = updated.RateLimitRpm;
+        key.RateLimitTpm = updated.RateLimitTpm;
+        key.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return key;
+    }
+
+    public async Task<bool> RevokeAsync(int id)
+    {
+        var key = await _db.ApiKeys.FindAsync(id);
+        if (key == null) return false;
+        key.Status = KeyStatus.Disabled;
+        key.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var key = await _db.ApiKeys.FindAsync(id);
+        if (key == null) return false;
+        _db.ApiKeys.Remove(key);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<ApiKey?> ValidateKeyAsync(string plainTextKey)
+    {
+        // Try matching by prefix first for performance
+        var prefix = plainTextKey[..Math.Min(8, plainTextKey.Length)];
+        var candidates = await _db.ApiKeys
+            .Include(k => k.Organization)
+            .Where(k => k.KeyPrefix == prefix && k.Status == KeyStatus.Active)
+            .ToListAsync();
+
+        foreach (var candidate in candidates)
+        {
+            var decrypted = _encryption.Decrypt(candidate.KeyValue);
+            if (decrypted == plainTextKey)
+            {
+                // Check expiry
+                if (candidate.ExpiresAt.HasValue && candidate.ExpiresAt.Value < DateTime.UtcNow)
+                    return null;
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static string GenerateApiKey()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        return $"tk-{Convert.ToBase64String(bytes).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
+    }
+}

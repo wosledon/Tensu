@@ -1,2 +1,9 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tensu.Api/Tensu.Api.csproj" />
+    <Project Path="src/Tensu.Core/Tensu.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tensu.Tests/Tensu.Tests.csproj" />
+  </Folder>
 </Solution>

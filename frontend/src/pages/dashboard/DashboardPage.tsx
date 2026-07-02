@@ -1,0 +1,156 @@
+import { useState, useEffect } from 'react';
+import { Card, Col, Row, Statistic, Typography, Spin } from 'antd';
+import { ApiOutlined, ThunderboltOutlined, DollarOutlined, CloudOutlined } from '@ant-design/icons';
+import ReactECharts from 'echarts-for-react';
+import { useTranslation } from 'react-i18next';
+import { useThemeMode } from '../../contexts/ThemeContext';
+import { analyticsApi } from '../../api';
+
+const { Title } = Typography;
+
+const chartColors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#5AC8FA', '#FF3B30', '#30B0C7', '#FF2D55'];
+
+export default function DashboardPage() {
+  const { t } = useTranslation();
+  const { isDark } = useThemeMode();
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    analyticsApi.dashboard()
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div>;
+
+  const textColor = isDark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
+  const gridColor = isDark ? 'rgba(84,84,88,0.2)' : 'rgba(60,60,67,0.08)';
+
+  const trendOption = {
+    color: chartColors,
+    tooltip: { trigger: 'axis' as const },
+    legend: { data: [t('audit.totalRequests'), t('audit.totalTokens')], textStyle: { color: textColor } },
+    grid: { left: 48, right: 24, top: 48, bottom: 24 },
+    xAxis: { type: 'category' as const, data: data?.dailyTrend?.map((d: any) => d.date) || [], axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
+    yAxis: [
+      { type: 'value' as const, name: t('audit.totalRequests'), axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
+      { type: 'value' as const, name: t('audit.totalTokens'), axisLabel: { color: textColor }, splitLine: { show: false } },
+    ],
+    series: [
+      {
+        name: t('audit.totalRequests'), type: 'bar' as const,
+        data: data?.dailyTrend?.map((d: any) => d.requests) || [],
+        itemStyle: { borderRadius: [6, 6, 0, 0] },
+      },
+      {
+        name: t('audit.totalTokens'), type: 'line' as const, yAxisIndex: 1,
+        data: data?.dailyTrend?.map((d: any) => d.tokens) || [],
+        smooth: true, lineStyle: { width: 2 },
+      },
+    ],
+  };
+
+  const modelPieOption = {
+    color: chartColors,
+    tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
+    legend: { orient: 'vertical' as const, right: 8, top: 'center', textStyle: { color: textColor } },
+    series: [{
+      type: 'pie' as const, radius: ['45%', '70%'], center: ['35%', '50%'],
+      avoidLabelOverlap: false, itemStyle: { borderRadius: 10, borderColor: isDark ? '#1C1C1E' : '#fff', borderWidth: 2 },
+      label: { show: false }, emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+      data: data?.modelDistribution?.map((d: any) => ({ name: d.name, value: d.value })) || [],
+    }],
+  };
+
+  const latencyOption = {
+    color: ['#007AFF', '#5AC8FA'],
+    tooltip: { trigger: 'axis' as const },
+    legend: { data: [t('audit.avgLatency'), t('audit.successRate')], textStyle: { color: textColor } },
+    grid: { left: 48, right: 48, top: 48, bottom: 24 },
+    xAxis: { type: 'category' as const, data: data?.dailyTrend?.map((d: any) => d.date) || [], axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
+    yAxis: [
+      { type: 'value' as const, name: 'ms', axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
+      { type: 'value' as const, name: '%', min: 0, max: 100, axisLabel: { color: textColor }, splitLine: { show: false } },
+    ],
+    series: [
+      {
+        name: t('audit.avgLatency'), type: 'line' as const, smooth: true,
+        data: data?.dailyTrend?.map((d: any) => Math.round(d.avgLatency)) || [],
+        areaStyle: { opacity: 0.15 },
+      },
+      {
+        name: t('audit.successRate'), type: 'line' as const, yAxisIndex: 1, smooth: true,
+        data: data?.dailyTrend?.map((d: any) => d.successRate) || [],
+        lineStyle: { type: 'dashed' as const },
+      },
+    ],
+  };
+
+  const stats = [
+    { title: t('dashboard.todayRequests'), value: data?.today?.requests || 0, icon: <ApiOutlined />, color: '#007AFF' },
+    { title: t('dashboard.todayTokens'), value: data?.today?.tokens || 0, icon: <ThunderboltOutlined />, color: '#34C759' },
+    { title: t('dashboard.todayCost'), value: data?.today?.cost || 0, prefix: '$', precision: 4, icon: <DollarOutlined />, color: '#FF9500' },
+    { title: t('dashboard.cacheHitRate'), value: data?.today?.cacheHitRate || 0, suffix: '%', icon: <CloudOutlined />, color: '#AF52DE' },
+  ];
+
+  return (
+    <div>
+      <Title level={4} style={{ marginBottom: 24 }}>{t('dashboard.title')}</Title>
+
+      <Row gutter={[24, 24]}>
+        {stats.map((s, i) => (
+          <Col key={i} xs={24} sm={12} lg={6}>
+            <Card style={{ borderRadius: 18 }}>
+              <Statistic
+                title={s.title}
+                value={s.value}
+                prefix={s.prefix}
+                suffix={s.suffix}
+                precision={s.precision}
+                valueStyle={{ color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 }}
+              />
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={16}>
+          <Card title={t('dashboard.requestTrend')} style={{ borderRadius: 18 }}>
+            <ReactECharts option={trendOption} style={{ height: 280 }} />
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title={t('dashboard.modelDistribution')} style={{ borderRadius: 18 }}>
+            <ReactECharts option={modelPieOption} style={{ height: 280 }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={14}>
+          <Card title={t('audit.latency') + ' & ' + t('audit.status')} style={{ borderRadius: 18 }}>
+            <ReactECharts option={latencyOption} style={{ height: 280 }} />
+          </Card>
+        </Col>
+        <Col xs={24} lg={10}>
+          <Card title={t('dashboard.providerHealth')} style={{ borderRadius: 18 }}>
+            {data?.providers?.length ? data.providers.map((p: any) => (
+              <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--ant-color-border-secondary)' }}>
+                <span>{p.name}</span>
+                <span style={{ color: p.healthStatus === 'Healthy' ? '#34C759' : p.healthStatus === 'Unhealthy' ? '#FF3B30' : '#FF9500', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                  {p.healthStatus}
+                </span>
+              </div>
+            )) : (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+}

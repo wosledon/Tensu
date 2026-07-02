@@ -1,0 +1,65 @@
+{
+  "common": {
+    "save": "Save", "cancel": "Cancel", "delete": "Delete", "edit": "Edit", "create": "Create",
+    "search": "Search", "reset": "Reset", "confirm": "Confirm", "loading": "Loading...",
+    "noData": "No Data", "actions": "Actions", "status": "Status", "enabled": "Enabled", "disabled": "Disabled",
+    "success": "Success", "error": "Error", "deleteConfirm": "Are you sure? This action cannot be undone.",
+    "yes": "Yes", "no": "No", "all": "All", "copy": "Copy", "copied": "Copied",
+    "show": "Show", "hide": "Hide", "submit": "Submit", "back": "Back"
+  },
+  "nav": {
+    "dashboard": "Dashboard", "providers": "Providers", "models": "Models", "routeModels": "Route Models",
+    "apiKeys": "API Keys", "organizations": "Organizations", "audit": "Audit & Analytics", "settings": "Settings"
+  },
+  "auth": {
+    "login": "Login", "logout": "Logout", "username": "Username", "password": "Password",
+    "loginTitle": "Sign in to Tensu", "loginSubtitle": "LLM Gateway Platform", "invalidCredentials": "Invalid username or password"
+  },
+  "provider": {
+    "title": "Providers", "name": "Name", "protocol": "Protocol", "baseUrl": "Base URL",
+    "description": "Description", "healthStatus": "Health", "keyStrategy": "Key Strategy",
+    "keys": "Keys", "addKey": "Add Key", "keyName": "Key Name", "keyValue": "Key Value",
+    "weight": "Weight", "healthy": "Healthy", "degraded": "Degraded", "unhealthy": "Unhealthy", "unknown": "Unknown"
+  },
+  "model": {
+    "title": "Models", "name": "Model Name", "displayName": "Display Name", "provider": "Provider",
+    "vision": "Vision", "reasoning": "Reasoning", "toolUse": "Tool Use", "thinking": "Thinking",
+    "inputContext": "Input Context", "outputContext": "Output Context", "pricing": "Pricing",
+    "inputPrice": "Input Price", "outputPrice": "Output Price", "cachedPrice": "Cached Price",
+    "currency": "Currency", "perMillion": "/1M tokens"
+  },
+  "routeModel": {
+    "title": "Route Models", "name": "Name", "mode": "Mode", "shadow": "Shadow", "route": "Route",
+    "target": "Target Model", "fallback": "Fallback", "rules": "Rules", "addRule": "Add Rule",
+    "condition": "Condition", "priority": "Priority", "ruleType": "Rule Type", "keyword": "Keyword", "regex": "Regex", "contextSize": "Context Size"
+  },
+  "apiKey": {
+    "title": "API Keys", "name": "Name", "key": "Key", "organization": "Organization",
+    "user": "User", "expiresAt": "Expires At", "allowedModels": "Allowed Models",
+    "ipWhitelist": "IP Whitelist", "revoke": "Revoke", "revokeConfirm": "Are you sure you want to revoke this key? This cannot be undone.",
+    "created": "Key created. Please save it now:", "copyKey": "Copy Key"
+  },
+  "organization": {
+    "title": "Organizations", "name": "Name", "parent": "Parent", "description": "Description",
+    "contentLogging": "Content Logging", "retentionDays": "Retention Days",
+    "users": "Users", "addUser": "Add User", "displayName": "Display Name",
+    "email": "Email", "role": "Role", "active": "Active", "resetPassword": "Reset Password"
+  },
+  "audit": {
+    "title": "Audit & Analytics", "requestId": "Request ID", "timestamp": "Timestamp", "model": "Model",
+    "provider": "Provider", "inputTokens": "Input Tokens", "outputTokens": "Output Tokens",
+    "totalTokens": "Total Tokens", "latency": "Latency", "ttft": "TTFT",
+    "speed": "Speed", "cost": "Cost", "cacheHit": "Cache Hit", "compression": "Compression",
+    "status": "Status", "summary": "Summary", "totalRequests": "Total Requests",
+    "successRate": "Success Rate", "avgLatency": "Avg Latency", "totalCost": "Total Cost"
+  },
+  "settings": {
+    "title": "Settings", "general": "General", "compression": "Compression",
+    "cache": "Cache", "rateLimit": "Rate Limit"
+  },
+  "dashboard": {
+    "title": "Dashboard", "welcome": "Welcome to Tensu", "todayRequests": "Today's Requests",
+    "todayTokens": "Today's Tokens", "todayCost": "Today's Cost", "cacheHitRate": "Cache Hit Rate",
+    "requestTrend": "Request Trend", "modelDistribution": "Model Distribution", "providerHealth": "Provider Health"
+  }
+}
