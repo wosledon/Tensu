@@ -1,14 +1,52 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, message } from 'antd';
-import { EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
+import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, Typography, theme, message, Row, Col } from 'antd';
+import { EditOutlined, DeleteOutlined, DollarOutlined, EyeOutlined, BulbOutlined, ToolOutlined, ExperimentOutlined, ContainerOutlined, ThunderboltOutlined, CompressOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelApi, providerApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, CapabilityTags, FormModal } from '../../components';
 import type { Model, Provider } from '../../types';
 
+interface CapabilityItemProps {
+  icon: React.ComponentType<{ style?: React.CSSProperties }>;
+  label: string;
+  hint: string;
+  name: string;
+  color?: string;
+}
+
+function CapabilityItem({ icon: Icon, label, hint, name, color }: CapabilityItemProps) {
+  const { token } = theme.useToken();
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '12px 16px',
+        borderRadius: token.borderRadiusLG,
+        backgroundColor: token.colorFillQuaternary,
+        transition: 'background-color 200ms ease',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Icon style={{ fontSize: 18, color: color ?? token.colorPrimary }} />
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 14 }}>{label}</div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{hint}</Typography.Text>
+        </div>
+      </div>
+      <Form.Item name={name} valuePropName="checked" style={{ marginBottom: 0 }}>
+        <Switch />
+      </Form.Item>
+    </div>
+  );
+}
+
 export default function ModelsPage() {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<Model | null>(null);
@@ -133,45 +171,184 @@ export default function ModelsPage() {
         />
       </Card>
 
-      <FormModal title={t('model.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
-        <Form.Item name="providerId" label={t('model.provider')} rules={[{ required: true }]}>
-          <Select options={providerOptions} showSearch optionFilterProp="label" />
-        </Form.Item>
-        <Form.Item name="name" label={t('model.name')} rules={[{ required: true }]}><Input placeholder="gpt-4o" /></Form.Item>
-        <Form.Item name="displayName" label={t('model.displayName')}><Input /></Form.Item>
-        <Space size={16} wrap>
-          <Form.Item name="supportsVision" label={t('model.vision')} valuePropName="checked"><Switch /></Form.Item>
-          <Form.Item name="supportsReasoning" label={t('model.reasoning')} valuePropName="checked"><Switch /></Form.Item>
-          <Form.Item name="supportsToolUse" label={t('model.toolUse')} valuePropName="checked"><Switch /></Form.Item>
-          <Form.Item name="supportsThinking" label={t('model.thinking')} valuePropName="checked"><Switch /></Form.Item>
-        </Space>
-        <Space size={16}>
-          <Form.Item name="inputContextSize" label={t('model.inputContext')} rules={[{ required: true }]}>
-            <InputNumber min={0} addonAfter="tokens" style={{ width: 180 }} />
-          </Form.Item>
-          <Form.Item name="outputContextSize" label={t('model.outputContext')} rules={[{ required: true }]}>
-            <InputNumber min={0} addonAfter="tokens" style={{ width: 180 }} />
-          </Form.Item>
-        </Space>
-        <Space size={16}>
-          <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
-          <Form.Item name="compressionEnabled" label={t('audit.compression')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
-        </Space>
+      <FormModal
+        title={t('model.title')}
+        header={editing ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{t('common.edit')}</span>
+            <span style={{ color: token.colorTextTertiary }}>·</span>
+            <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>
+              {editing.provider?.name}-{editing.name}
+            </span>
+          </div>
+        ) : undefined}
+        open={open}
+        form={form}
+        editing={!!editing}
+        submitting={submitting}
+        width={640}
+        onOk={submit}
+        onCancel={close}
+      >
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ContainerOutlined style={{ color: token.colorPrimary }} />
+              <span>{t('model.basicInfo')}</span>
+            </div>
+          }
+          style={{ marginBottom: 16, borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="providerId" label={t('model.provider')} rules={[{ required: true }]}>
+                <Select options={providerOptions} showSearch optionFilterProp="label" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="name" label={t('model.name')} rules={[{ required: true }]}>
+                <Input placeholder="gpt-4o" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="displayName" label={t('model.displayName')}>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ThunderboltOutlined style={{ color: token.colorWarning }} />
+              <span>{t('model.capabilities')}</span>
+            </div>
+          }
+          style={{ marginBottom: 16, borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <CapabilityItem
+                icon={EyeOutlined}
+                label={t('model.vision')}
+                hint={t('model.visionHint')}
+                name="supportsVision"
+                color={token.colorInfo}
+              />
+            </Col>
+            <Col span={12}>
+              <CapabilityItem
+                icon={BulbOutlined}
+                label={t('model.reasoning')}
+                hint={t('model.reasoningHint')}
+                name="supportsReasoning"
+                color={token.colorWarning}
+              />
+            </Col>
+            <Col span={12}>
+              <CapabilityItem
+                icon={ToolOutlined}
+                label={t('model.toolUse')}
+                hint={t('model.toolUseHint')}
+                name="supportsToolUse"
+                color={token.colorSuccess}
+              />
+            </Col>
+            <Col span={12}>
+              <CapabilityItem
+                icon={ExperimentOutlined}
+                label={t('model.thinking')}
+                hint={t('model.thinkingHint')}
+                name="supportsThinking"
+                color={token.colorPrimary}
+              />
+            </Col>
+          </Row>
+        </Card>
+
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CompressOutlined style={{ color: token.colorSuccess }} />
+              <span>{t('model.contextWindow')}</span>
+            </div>
+          }
+          style={{ marginBottom: 16, borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="inputContextSize" label={t('model.inputContext')} rules={[{ required: true }]}>
+                <InputNumber min={0} addonAfter="tokens" style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="outputContextSize" label={t('model.outputContext')} rules={[{ required: true }]}>
+                <InputNumber min={0} addonAfter="tokens" style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SettingOutlined style={{ color: token.colorTextSecondary }} />
+              <span>{t('model.configuration')}</span>
+            </div>
+          }
+          style={{ borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="compressionEnabled" label={t('model.compression')} valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
       </FormModal>
 
       <FormModal title={t('model.pricing')} open={pricingOpen} form={pricingForm} editing={false} onOk={handlePricing} onCancel={() => setPricingOpen(false)}>
-        <Form.Item name="inputPricePerMillionTokens" label={t('model.inputPrice')} rules={[{ required: true }]}>
-          <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="outputPricePerMillionTokens" label={t('model.outputPrice')} rules={[{ required: true }]}>
-          <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="cachedInputPricePerMillionTokens" label={t('model.cachedPrice')}>
-          <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="currency" label={t('model.currency')} initialValue="USD">
-          <Select options={[{ value: 'USD', label: 'USD' }, { value: 'CNY', label: 'CNY' }, { value: 'EUR', label: 'EUR' }]} />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="inputPricePerMillionTokens" label={t('model.inputPrice')} rules={[{ required: true }]}>
+              <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="outputPricePerMillionTokens" label={t('model.outputPrice')} rules={[{ required: true }]}>
+              <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="cachedInputPricePerMillionTokens" label={t('model.cachedPrice')}>
+              <InputNumber min={0} step={0.01} precision={6} addonAfter={`USD${t('model.perMillion')}`} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="currency" label={t('model.currency')} initialValue="USD">
+              <Select options={[{ value: 'USD', label: 'USD' }, { value: 'CNY', label: 'CNY' }, { value: 'EUR', label: 'EUR' }]} />
+            </Form.Item>
+          </Col>
+        </Row>
       </FormModal>
     </div>
   );

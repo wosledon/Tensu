@@ -14,14 +14,49 @@ public class OrganizationService : BaseService
         _db = db;
     }
 
-    public async Task<List<Organization>> GetTreeAsync()
+    public async Task<List<object>> GetTreeAsync()
     {
-        return await _db.Organizations.OrderBy(o => o.Path).ToListAsync();
+        var orgs = await _db.Organizations.OrderBy(o => o.Path).ToListAsync();
+        return orgs.Select(MapToTreeDto).ToList();
     }
 
-    public async Task<Organization?> GetByIdAsync(int id)
+    public async Task<object?> GetByIdAsync(int id)
     {
-        return await _db.Organizations.Include(o => o.Children).FirstOrDefaultAsync(o => o.Id == id);
+        var org = await _db.Organizations.Include(o => o.Children).FirstOrDefaultAsync(o => o.Id == id);
+        return org == null ? null : MapToDetailDto(org);
+    }
+
+    private static object MapToTreeDto(Organization org)
+    {
+        return new
+        {
+            org.Id,
+            org.ParentId,
+            org.Name,
+            org.Path,
+            org.Description,
+            org.EnableContentLogging,
+            org.DataRetentionDays,
+            org.CreatedAt,
+            org.UpdatedAt
+        };
+    }
+
+    private static object MapToDetailDto(Organization org)
+    {
+        return new
+        {
+            org.Id,
+            org.ParentId,
+            org.Name,
+            org.Path,
+            org.Description,
+            org.EnableContentLogging,
+            org.DataRetentionDays,
+            org.CreatedAt,
+            org.UpdatedAt,
+            Children = org.Children.Select(MapToTreeDto).ToList()
+        };
     }
 
     public async Task<Organization> CreateAsync(Organization org, int? parentId = null)

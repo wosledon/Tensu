@@ -23,8 +23,6 @@ public class ApiKeysController : AdminBaseController
     {
         var orgId = IsSuperAdmin ? (int?)null : CurrentOrgId;
         var result = await _service.GetListAsync(request, orgId);
-        // Mask key values
-        foreach (var key in result.Items) key.KeyValue = "***";
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -33,9 +31,8 @@ public class ApiKeysController : AdminBaseController
     {
         var key = await _service.GetByIdAsync(id);
         if (key == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
-        if (!IsSuperAdmin && key.OrganizationId != CurrentOrgId)
+        if (!IsSuperAdmin && ((dynamic)key).OrganizationId != CurrentOrgId)
             return Forbid();
-        key.KeyValue = "***";
         return Ok(ApiResponse<object>.Success(key));
     }
 
@@ -63,7 +60,7 @@ public class ApiKeysController : AdminBaseController
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] ApiKey apiKey)
     {
-        var existing = await _service.GetByIdAsync(id);
+        var existing = await _service.GetEntityByIdAsync(id);
         if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
             return Forbid();
@@ -71,13 +68,13 @@ public class ApiKeysController : AdminBaseController
         var updated = await _service.UpdateAsync(id, apiKey);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         updated.KeyValue = "***";
-        return Ok(ApiResponse<object>.Success(updated));
+        return Ok(ApiResponse<object>.Success(ApiKeyService.MapToListDto(updated)));
     }
 
     [HttpPost("{id}/revoke")]
     public async Task<IActionResult> Revoke(int id)
     {
-        var existing = await _service.GetByIdAsync(id);
+        var existing = await _service.GetEntityByIdAsync(id);
         if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
             return Forbid();
@@ -90,7 +87,7 @@ public class ApiKeysController : AdminBaseController
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var existing = await _service.GetByIdAsync(id);
+        var existing = await _service.GetEntityByIdAsync(id);
         if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
             return Forbid();

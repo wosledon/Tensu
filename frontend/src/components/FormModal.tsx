@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 interface FormModalProps {
   title: string;
+  header?: React.ReactNode;
   open: boolean;
   form: FormInstance;
   editing: boolean;
@@ -14,13 +15,15 @@ interface FormModalProps {
 }
 
 export default function FormModal({
-  title, open, form, editing, submitting, width = 560, onOk, onCancel, children,
+  title, header, open, form, editing, submitting, width = 560, onOk, onCancel, children,
 }: FormModalProps) {
   const { t } = useTranslation();
 
+  const modalTitle = header ?? (editing ? `${t('common.edit')} - ${title}` : `${t('common.create')} - ${title}`);
+
   return (
     <Modal
-      title={editing ? `${t('common.edit')} - ${title}` : `${t('common.create')} - ${title}`}
+      title={modalTitle}
       open={open}
       onOk={onOk}
       onCancel={onCancel}

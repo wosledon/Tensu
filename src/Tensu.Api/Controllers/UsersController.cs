@@ -22,8 +22,6 @@ public class UsersController : AdminBaseController
     public async Task<IActionResult> List([FromQuery] PagedRequest request, [FromQuery] int? orgId)
     {
         var result = await _service.GetListAsync(request, orgId);
-        // Strip password hashes from response
-        foreach (var user in result.Items) user.PasswordHash = "***";
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -32,7 +30,6 @@ public class UsersController : AdminBaseController
     {
         var user = await _service.GetByIdAsync(id);
         if (user == null) return NotFound(ApiResponse.Error(40401, "User not found"));
-        user.PasswordHash = "***";
         return Ok(ApiResponse<object>.Success(user));
     }
 

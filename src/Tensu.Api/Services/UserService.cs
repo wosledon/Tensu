@@ -15,7 +15,7 @@ public class UserService : BaseService
         _db = db;
     }
 
-    public async Task<PagedResult<User>> GetListAsync(PagedRequest request, int? orgId = null)
+    public async Task<PagedResult<object>> GetListAsync(PagedRequest request, int? orgId = null)
     {
         var query = _db.Users.Include(u => u.Organization).AsQueryable();
 
@@ -27,12 +27,44 @@ public class UserService : BaseService
 
         query = ApplyPaging(query, request, out var total);
         var items = await query.ToListAsync();
-        return ToPagedResult(items, total, request);
+        return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
     }
 
-    public async Task<User?> GetByIdAsync(int id)
+    public async Task<object?> GetByIdAsync(int id)
     {
-        return await _db.Users.Include(u => u.Organization).FirstOrDefaultAsync(u => u.Id == id);
+        var user = await _db.Users.Include(u => u.Organization).FirstOrDefaultAsync(u => u.Id == id);
+        return user == null ? null : MapToDetailDto(user);
+    }
+
+    private static object MapToListDto(User u)
+    {
+        return new
+        {
+            u.Id,
+            u.Username,
+            u.Email,
+            u.DisplayName,
+            u.Role,
+            u.AuthProvider,
+            u.ExternalId,
+            u.PictureUrl,
+            u.IsActive,
+            u.OrganizationId,
+            Organization = u.Organization == null ? null : new
+            {
+                u.Organization.Id,
+                u.Organization.Name,
+                u.Organization.Path
+            },
+            u.CreatedAt,
+            u.UpdatedAt,
+            u.LastLoginAt
+        };
+    }
+
+    private static object MapToDetailDto(User u)
+    {
+        return MapToListDto(u);
     }
 
     public async Task<User> CreateAsync(User user, string password)

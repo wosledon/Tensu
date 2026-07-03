@@ -55,6 +55,13 @@ public class HealthCheckBackgroundService : BackgroundService
 
         foreach (var provider in providers)
         {
+            foreach (var key in provider.Keys)
+            {
+                var keyStatus = await CheckProviderKeyAsync(provider, key, encryption, ct);
+                key.Status = keyStatus;
+                key.LastHealthCheckAt = DateTime.UtcNow;
+            }
+
             var keyStatuses = provider.Keys
                 .Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired)
                 .Select(k => k.Status)
@@ -82,13 +89,6 @@ public class HealthCheckBackgroundService : BackgroundService
 
             provider.LastHealthCheckAt = DateTime.UtcNow;
             provider.HealthStatus = providerStatus;
-
-            foreach (var key in provider.Keys)
-            {
-                var keyStatus = await CheckProviderKeyAsync(provider, key, encryption, ct);
-                key.Status = keyStatus;
-                key.LastHealthCheckAt = DateTime.UtcNow;
-            }
         }
 
         await db.SaveChangesAsync(ct);

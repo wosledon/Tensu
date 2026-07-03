@@ -18,7 +18,7 @@ public class ApiKeyService : BaseService
         _encryption = encryption;
     }
 
-    public async Task<PagedResult<ApiKey>> GetListAsync(PagedRequest request, int? orgId = null)
+    public async Task<PagedResult<object>> GetListAsync(PagedRequest request, int? orgId = null)
     {
         var query = _db.ApiKeys.Include(k => k.Organization).Include(k => k.User).AsQueryable();
 
@@ -30,13 +30,55 @@ public class ApiKeyService : BaseService
 
         query = ApplyPaging(query, request, out var total);
         var items = await query.ToListAsync();
-        return ToPagedResult(items, total, request);
+        return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
     }
 
-    public async Task<ApiKey?> GetByIdAsync(int id)
+    public async Task<object?> GetByIdAsync(int id)
     {
-        return await _db.ApiKeys.Include(k => k.Organization).Include(k => k.User)
+        var key = await _db.ApiKeys.Include(k => k.Organization).Include(k => k.User)
             .FirstOrDefaultAsync(k => k.Id == id);
+        return key == null ? null : MapToDetailDto(key);
+    }
+
+    public async Task<ApiKey?> GetEntityByIdAsync(int id)
+    {
+        return await _db.ApiKeys.FindAsync(id);
+    }
+
+    internal static object MapToListDto(ApiKey k)
+    {
+        return new
+        {
+            k.Id,
+            k.Name,
+            k.KeyPrefix,
+            k.ExpiresAt,
+            k.AllowedModels,
+            k.IpWhitelist,
+            k.Status,
+            k.RateLimitRpm,
+            k.RateLimitTpm,
+            k.OrganizationId,
+            Organization = k.Organization == null ? null : new
+            {
+                k.Organization.Id,
+                k.Organization.Name,
+                k.Organization.Path
+            },
+            User = k.User == null ? null : new
+            {
+                k.User.Id,
+                k.User.Username,
+                k.User.DisplayName
+            },
+            k.CreatedAt,
+            k.UpdatedAt
+        };
+    }
+
+    private static object MapToDetailDto(ApiKey k)
+    {
+        return MapToListDto(k);
     }
 
     public async Task<(ApiKey key, string plainTextKey)> CreateAsync(ApiKey apiKey)

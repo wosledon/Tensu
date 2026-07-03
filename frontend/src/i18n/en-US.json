@@ -89,7 +89,16 @@
     "syncFromProvider": "Sync Models from Provider",
     "syncSuccess": "Synced {{total}} models, {{added}} new",
     "syncError": "Sync failed",
-    "selectProvider": "Select Provider"
+    "selectProvider": "Select Provider",
+    "basicInfo": "Basic Info",
+    "capabilities": "Capabilities",
+    "contextWindow": "Context Window",
+    "configuration": "Configuration",
+    "compression": "Compression",
+    "visionHint": "Supports image understanding",
+    "reasoningHint": "Supports chain-of-thought reasoning",
+    "toolUseHint": "Supports function calling and tools",
+    "thinkingHint": "Supports explicit thinking mode"
   },
   "capability": {
     "title": "Capability Scores",

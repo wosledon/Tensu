@@ -24,6 +24,14 @@ export default function ProvidersPage() {
   const [editingKey, setEditingKey] = useState<ProviderKey | null>(null);
   const [keyForm] = Form.useForm();
 
+  const handleToggleEnabled = async (record: Provider) => {
+    try {
+      await providerApi.update(record.id, { isEnabled: !record.isEnabled });
+      message.success(t('common.success'));
+      fetchData();
+    } catch {}
+  };
+
   const handleAddKey = async () => {
     if (!drawerProvider) return;
     try {
@@ -111,7 +119,12 @@ export default function ProvidersPage() {
         return <span style={{ fontFamily: 'monospace' }}>{count}</span>;
       },
     },
-    { title: t('common.enabled'), dataIndex: 'isEnabled', key: 'isEnabled', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.yes') : t('common.no')}</Tag> },
+    {
+      title: t('common.enabled'), dataIndex: 'isEnabled', key: 'isEnabled', width: 100, align: 'center' as const,
+      render: (v: boolean, r: Provider) => (
+        <Switch size="small" checked={v} onChange={() => handleToggleEnabled(r)} />
+      ),
+    },
     {
       title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 180,
       render: (_: any, r: Provider) => (
@@ -209,13 +222,25 @@ export default function ProvidersPage() {
       </Drawer>
 
       <FormModal title={t('provider.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
-        <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="protocol" label={t('provider.protocol')} rules={[{ required: true }]}>
-          <Select options={[{ value: 'OpenAI', label: 'OpenAI' }, { value: 'Anthropic', label: 'Anthropic' }]} />
-        </Form.Item>
-        <Form.Item name="baseUrl" label={t('provider.baseUrl')} rules={[{ required: true }]}><Input placeholder="https://api.openai.com" /></Form.Item>
-        <Form.Item name="description" label={t('provider.description')}><Input.TextArea rows={2} /></Form.Item>
-        <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Space size={16} style={{ width: '100%' }} direction="vertical">
+          <Space size={16} style={{ width: '100%' }} wrap>
+            <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="protocol" label={t('provider.protocol')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
+              <Select options={[{ value: 'OpenAI', label: 'OpenAI' }, { value: 'Anthropic', label: 'Anthropic' }]} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="baseUrl" label={t('provider.baseUrl')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+            <Input placeholder="https://api.openai.com" />
+          </Form.Item>
+          <Form.Item name="description" label={t('provider.description')} style={{ marginBottom: 0 }}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true} style={{ marginBottom: 0 }}>
+            <Switch />
+          </Form.Item>
+        </Space>
       </FormModal>
 
       <FormModal title={editingKey ? t('provider.editKey') : t('provider.addKey')} open={keyOpen} form={keyForm} editing={!!editingKey} submitting={submitting} onOk={editingKey ? handleUpdateKey : handleAddKey} onCancel={() => { setKeyOpen(false); setEditingKey(null); }}>

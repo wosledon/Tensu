@@ -89,7 +89,16 @@
     "syncFromProvider": "自动拉取模型",
     "syncSuccess": "已同步 {{total}} 个模型，新增 {{added}} 个",
     "syncError": "同步失败",
-    "selectProvider": "选择供应商"
+    "selectProvider": "选择供应商",
+    "basicInfo": "基础信息",
+    "capabilities": "模型能力",
+    "contextWindow": "上下文窗口",
+    "configuration": "配置",
+    "compression": "压缩启用",
+    "visionHint": "支持图像理解与生成",
+    "reasoningHint": "支持链式推理与复杂问题",
+    "toolUseHint": "支持函数调用与外部工具",
+    "thinkingHint": "支持显式推理模式输出"
   },
   "capability": {
     "title": "能力评分管理",

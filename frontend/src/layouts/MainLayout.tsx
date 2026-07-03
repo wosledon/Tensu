@@ -111,11 +111,12 @@ export default function MainLayout() {
         />
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 68 : 240, transition: 'margin-left 0.2s' }}>
+      <Layout style={{ marginLeft: collapsed ? 68 : 240, transition: 'margin-left 0.2s', minHeight: '100vh' }}>
         <Header style={{
           position: 'sticky',
           top: 0,
           zIndex: 99,
+          height: 56,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
