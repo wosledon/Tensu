@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota } from '../types';
 
 const api = axios.create({
   baseURL: '/api/admin',
@@ -173,4 +173,18 @@ export const settingsApi = {
     api.get<ApiResponse<{ key: string; value: string }>>(`/settings/${key}`).then(unwrap),
   set: (key: string, value: string) =>
     api.put<ApiResponse<void>>(`/settings/${key}`, { value }).then(unwrap),
+};
+
+// Quotas
+export const quotaApi = {
+  list: (params: PagedRequest & { scope?: string; orgId?: number }) =>
+    api.get<ApiResponse<PagedResult<Quota>>>('/quotas', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<Quota>>(`/quotas/${id}`).then(unwrap),
+  create: (data: Partial<Quota>) =>
+    api.post<ApiResponse<Quota>>('/quotas', data).then(unwrap),
+  update: (id: number, data: Partial<Quota>) =>
+    api.put<ApiResponse<Quota>>(`/quotas/${id}`, data).then(unwrap),
+  delete: (id: number) =>
+    api.delete<ApiResponse<void>>(`/quotas/${id}`).then(unwrap),
 };

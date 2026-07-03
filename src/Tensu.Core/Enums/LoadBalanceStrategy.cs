@@ -4,5 +4,6 @@ public enum LoadBalanceStrategy
 {
     RoundRobin = 0,
     Weighted = 1,
-    LowestLatency = 2
+    LowestLatency = 2,
+    Failover = 3
 }

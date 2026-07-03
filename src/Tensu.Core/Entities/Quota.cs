@@ -7,6 +7,7 @@ public class Quota
     public int? ApiKeyId { get; set; } // null = org-level quota
     public int? Rpm { get; set; } // requests per minute
     public int? Tpm { get; set; } // tokens per minute
+    public int? ConcurrentRequestLimit { get; set; }
     public long? DailyTokenLimit { get; set; }
     public long? MonthlyTokenLimit { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

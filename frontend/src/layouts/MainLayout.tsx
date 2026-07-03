@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Layout, Menu, Dropdown, Space, Button, Avatar } from 'antd';
 import {
   DashboardOutlined, ApiOutlined, DeploymentUnitOutlined, BranchesOutlined,
-  KeyOutlined, TeamOutlined, BarChartOutlined, SettingOutlined,
+  KeyOutlined, TeamOutlined, BarChartOutlined, SettingOutlined, ControlOutlined,
   SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, UserOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -20,24 +20,41 @@ export default function MainLayout() {
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  const menuItems = [
-    { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
-    { key: '/providers', icon: <ApiOutlined />, label: t('nav.providers') },
+  const allRoles = ['SuperAdmin', 'Admin', 'Developer', 'ReadOnly'];
+
+  const allMenuItems = [
+    { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard'), roles: allRoles },
+    { key: '/providers', icon: <ApiOutlined />, label: t('nav.providers'), roles: ['SuperAdmin', 'Admin'] },
     {
       key: 'models-group',
       icon: <DeploymentUnitOutlined />,
       label: t('nav.models'),
+      roles: ['SuperAdmin', 'Admin'],
       children: [
         { key: '/models', label: t('model.title') },
         { key: '/models/matrix', label: 'Capability Matrix' },
       ],
     },
-    { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels') },
-    { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys') },
-    { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations') },
-    { key: '/audit', icon: <BarChartOutlined />, label: t('nav.audit') },
-    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
+    { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels'), roles: ['SuperAdmin', 'Admin'] },
+    { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
+    { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations'), roles: ['SuperAdmin'] },
+    { key: '/quotas', icon: <ControlOutlined />, label: t('quota.title'), roles: ['SuperAdmin'] },
+    { key: '/audit', icon: <BarChartOutlined />, label: t('nav.audit'), roles: allRoles },
+    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), roles: ['SuperAdmin'] },
   ];
+
+  const filterMenuByRole = (items: typeof allMenuItems, role?: string) => {
+    return items
+      .filter((item) => item.roles.includes(role || ''))
+      .map((item) => ({
+        key: item.key,
+        icon: item.icon,
+        label: item.label,
+        children: item.children?.map((child) => ({ key: child.key, label: child.label })),
+      }));
+  };
+
+  const menuItems = filterMenuByRole(allMenuItems, user?.role);
 
   const themeItems = [
     { key: 'light', icon: <SunOutlined />, label: 'Light', onClick: () => setMode('light') },

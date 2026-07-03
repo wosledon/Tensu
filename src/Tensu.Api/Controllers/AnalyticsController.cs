@@ -20,7 +20,8 @@ public class AnalyticsController : AdminBaseController
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard([FromQuery] int? orgId)
     {
-        var result = await _service.GetDashboardAsync(orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetDashboardAsync(effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -33,7 +34,8 @@ public class AnalyticsController : AdminBaseController
     {
         if (from == default) from = DateTime.UtcNow.AddDays(-7);
         if (to == default) to = DateTime.UtcNow;
-        var result = await _service.GetUsageAsync(from, to, granularity, orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetUsageAsync(from, to, granularity, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -45,7 +47,8 @@ public class AnalyticsController : AdminBaseController
     {
         if (from == default) from = DateTime.UtcNow.AddDays(-30);
         if (to == default) to = DateTime.UtcNow;
-        var result = await _service.GetCostAsync(from, to, orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetCostAsync(from, to, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -57,7 +60,8 @@ public class AnalyticsController : AdminBaseController
     {
         if (from == default) from = DateTime.UtcNow.AddDays(-7);
         if (to == default) to = DateTime.UtcNow;
-        var result = await _service.GetPerformanceAsync(from, to, orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetPerformanceAsync(from, to, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -69,7 +73,8 @@ public class AnalyticsController : AdminBaseController
     {
         if (from == default) from = DateTime.UtcNow.AddDays(-7);
         if (to == default) to = DateTime.UtcNow;
-        var result = await _service.GetCacheStatsAsync(from, to, orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetCacheStatsAsync(from, to, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
     }
 }

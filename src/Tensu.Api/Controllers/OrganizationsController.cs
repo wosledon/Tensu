@@ -8,7 +8,7 @@ namespace Tensu.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/organizations")]
-[Authorize]
+[Authorize(Policy = "SuperAdmin")]
 public class OrganizationsController : AdminBaseController
 {
     private readonly OrganizationService _service;

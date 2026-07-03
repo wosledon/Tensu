@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Tensu.Api.Data;
 using Tensu.Api.Infrastructure;
 using Tensu.Api.Services;
+using Tensu.Core.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,14 +38,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SuperAdmin", policy => policy.RequireRole(UserRole.SuperAdmin.ToString()));
+    options.AddPolicy("Admin", policy => policy.RequireRole(UserRole.SuperAdmin.ToString(), UserRole.Admin.ToString()));
+    options.AddPolicy("Developer", policy => policy.RequireRole(UserRole.SuperAdmin.ToString(), UserRole.Admin.ToString(), UserRole.Developer.ToString()));
+    options.AddPolicy("ReadOnly", policy => policy.RequireAuthenticatedUser());
+});
 
 // Infrastructure
 builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<AuditChannel>();
 builder.Services.AddSingleton<LoadBalancer>();
-builder.Services.AddSingleton<RateLimiter>();
+builder.Services.AddScoped<RateLimiter>();
 builder.Services.AddSingleton<RetryPolicy>();
 builder.Services.AddSingleton<CompressionService>();
 builder.Services.AddSingleton<CacheService>();
@@ -59,10 +66,13 @@ builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ApiKeyService>();
 builder.Services.AddScoped<RouteModelService>();
+builder.Services.AddScoped<RoutingModelService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<QuotaService>();
 builder.Services.AddHostedService<HealthCheckBackgroundService>();
+builder.Services.AddHostedService<DataRetentionBackgroundService>();
 builder.Services.AddHttpClient();
 
 // Controllers
@@ -79,7 +89,7 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()
-              .WithExposedHeaders("X-Request-Id", "X-Cache", "X-Route-Model", "X-Upstream-Provider");
+              .WithExposedHeaders("X-Request-Id", "X-Cache", "X-Route-Model", "X-Upstream-Provider", "X-Routing-Model-Used");
     });
 });
 

@@ -40,7 +40,7 @@ export interface ProviderKey {
   name: string;
   keyValue: string;
   weight: number;
-  status: 'Active' | 'Disabled' | 'RateLimited' | 'Expired';
+  status: 'Active' | 'Degraded' | 'Inactive';
   rateLimitRpm?: number;
   rateLimitTpm?: number;
   createdAt: string;
@@ -132,9 +132,26 @@ export interface RouteModel {
   targetModel?: Model;
   fallbackModelId?: number;
   fallbackModel?: Model;
+  routingModelId?: number;
+  routingModel?: Model;
   isEnabled: boolean;
   rules: RouteRule[];
   createdAt: string;
+}
+
+export interface Quota {
+  id: number;
+  scope: 'org' | 'key' | 'model';
+  organizationId?: number;
+  apiKeyId?: number;
+  modelId?: number;
+  rpm?: number;
+  tpm?: number;
+  dailyTokenLimit?: number;
+  monthlyTokenLimit?: number;
+  concurrentRequestLimit?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RouteRule {

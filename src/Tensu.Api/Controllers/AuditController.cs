@@ -22,7 +22,8 @@ public class AuditController : AdminBaseController
         [FromQuery] PagedRequest request,
         [FromQuery] string? modelName)
     {
-        var result = await _service.GetListAsync(request, orgId: null, modelName: modelName);
+        var orgId = IsSuperAdmin ? (int?)null : CurrentOrgId;
+        var result = await _service.GetListAsync(request, orgId: orgId, modelName: modelName);
         return Ok(ApiResponse<object>.Success(result));
     }
 
@@ -31,6 +32,8 @@ public class AuditController : AdminBaseController
     {
         var log = await _service.GetByRequestIdAsync(requestId);
         if (log == null) return NotFound(ApiResponse.Error(40401, "Request log not found"));
+        if (!IsSuperAdmin && log.OrganizationId != CurrentOrgId)
+            return Forbid();
         return Ok(ApiResponse<object>.Success(log));
     }
 
@@ -43,7 +46,8 @@ public class AuditController : AdminBaseController
         if (from == default) from = DateTime.UtcNow.AddDays(-7);
         if (to == default) to = DateTime.UtcNow;
 
-        var summary = await _service.GetSummaryAsync(from, to, orgId);
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var summary = await _service.GetSummaryAsync(from, to, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(summary));
     }
 }

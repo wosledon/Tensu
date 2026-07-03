@@ -27,10 +27,11 @@ public class RetryPolicy
 
     /// <summary>
     /// Execute a request with retry logic.
-    /// The keySelector is called on each retry to potentially select a different key.
+    /// The provider is used to select a different key on each retry.
     /// </summary>
     public async Task<HttpResponseMessage?> ExecuteWithRetryAsync(
         Func<ProviderKey, Task<HttpResponseMessage>> requestFn,
+        Provider provider,
         ProviderKey initialKey,
         bool isStream,
         CancellationToken cancellationToken = default)
@@ -43,6 +44,7 @@ public class RetryPolicy
 
         HttpResponseMessage? lastResponse = null;
         var currentKey = initialKey;
+        var failedKeys = new HashSet<int> { initialKey.Id };
 
         for (var attempt = 0; attempt <= MaxRetries; attempt++)
         {
@@ -53,6 +55,19 @@ public class RetryPolicy
                     var delay = CalculateDelay(attempt);
                     _logger.LogInformation("Retry attempt {Attempt}/{MaxRetries} after {Delay}ms", attempt, MaxRetries, delay);
                     await Task.Delay(delay, cancellationToken);
+
+                    // Try to select a different key after a failure
+                    var nextKey = _loadBalancer.SelectKey(provider, failedKeys);
+                    if (nextKey != null)
+                    {
+                        currentKey = nextKey;
+                        failedKeys.Add(currentKey.Id);
+                    }
+                    else
+                    {
+                        _logger.LogError("No alternative keys available for provider {Provider} after failures", provider.Name);
+                        throw new InvalidOperationException($"No available keys for provider {provider.Name} after retry attempts");
+                    }
                 }
 
                 lastResponse = await requestFn(currentKey);
@@ -62,15 +77,18 @@ public class RetryPolicy
                     return lastResponse;
 
                 _logger.LogWarning("Request failed with {StatusCode}, attempt {Attempt}", lastResponse.StatusCode, attempt + 1);
+                failedKeys.Add(currentKey.Id);
             }
             catch (HttpRequestException ex)
             {
                 _logger.LogWarning(ex, "Request failed with exception, attempt {Attempt}", attempt + 1);
+                failedKeys.Add(currentKey.Id);
                 if (attempt == MaxRetries) throw;
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning("Request timed out, attempt {Attempt}", attempt + 1);
+                failedKeys.Add(currentKey.Id);
                 if (attempt == MaxRetries) throw;
             }
         }

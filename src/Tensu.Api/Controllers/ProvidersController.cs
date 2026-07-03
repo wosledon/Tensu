@@ -8,7 +8,7 @@ namespace Tensu.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/providers")]
-[Authorize]
+[Authorize(Policy = "Admin")]
 public class ProvidersController : AdminBaseController
 {
     private readonly ProviderService _service;

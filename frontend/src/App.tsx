@@ -15,6 +15,7 @@ const ModelMatrixPage = lazy(() => import('./pages/models/ModelMatrixPage'));
 const RouteModelsPage = lazy(() => import('./pages/routeModels/RouteModelsPage'));
 const ApiKeysPage = lazy(() => import('./pages/apiKeys/ApiKeysPage'));
 const OrganizationsPage = lazy(() => import('./pages/organizations/OrganizationsPage'));
+const QuotasPage = lazy(() => import('./pages/quotas/QuotasPage'));
 const AuditPage = lazy(() => import('./pages/audit/AuditPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
 
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="route-models" element={<Suspense fallback={<PageLoader />}><RouteModelsPage /></Suspense>} />
               <Route path="api-keys" element={<Suspense fallback={<PageLoader />}><ApiKeysPage /></Suspense>} />
               <Route path="organizations" element={<Suspense fallback={<PageLoader />}><OrganizationsPage /></Suspense>} />
+              <Route path="quotas" element={<Suspense fallback={<PageLoader />}><QuotasPage /></Suspense>} />
               <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
               <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
             </Route>

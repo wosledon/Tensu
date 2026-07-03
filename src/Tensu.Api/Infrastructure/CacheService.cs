@@ -57,6 +57,64 @@ public class CacheService
     }
 
     /// <summary>
+    /// Convert a cached SSE stream body into a non-stream JSON response.
+    /// </summary>
+    public static string ConvertStreamToNonStream(string sseBody)
+    {
+        var aggregatedContent = new StringBuilder();
+        var finishReason = "stop";
+
+        using var reader = new StringReader(sseBody);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (!line.StartsWith("data: ")) continue;
+
+            var data = line[6..];
+            if (data == "[DONE]") break;
+
+            try
+            {
+                var json = JsonDocument.Parse(data);
+                if (json.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                {
+                    var first = choices[0];
+                    if (first.TryGetProperty("delta", out var delta) &&
+                        delta.TryGetProperty("content", out var content))
+                    {
+                        aggregatedContent.Append(content.GetString());
+                    }
+                    else if (first.TryGetProperty("message", out var message) &&
+                             message.TryGetProperty("content", out var msgContent))
+                    {
+                        aggregatedContent.Append(msgContent.GetString());
+                    }
+
+                    if (first.TryGetProperty("finish_reason", out var fr) && fr.ValueKind != JsonValueKind.Null)
+                    {
+                        finishReason = fr.GetString() ?? finishReason;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        var response = new
+        {
+            choices = new[]
+            {
+                new
+                {
+                    message = new { role = "assistant", content = aggregatedContent.ToString() },
+                    finish_reason = finishReason
+                }
+            }
+        };
+
+        return JsonSerializer.Serialize(response, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+
+    /// <summary>
     /// Compute cache key from model name, messages, and parameters.
     /// </summary>
     public static string ComputeCacheKey(string model, string requestBody)

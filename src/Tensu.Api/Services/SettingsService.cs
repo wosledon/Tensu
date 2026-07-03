@@ -11,6 +11,17 @@ public class SettingsService
 {
     private readonly TensuDbContext _db;
 
+    private static readonly Dictionary<string, string> Defaults = new()
+    {
+        ["compression.enabled"] = "true",
+        ["cache.enabled"] = "false",
+        ["cache.ttlMinutes"] = "10",
+        ["rateLimit.defaultRpm"] = "60",
+        ["rateLimit.defaultTpm"] = "100000",
+        ["audit.dataRetentionDays"] = "30",
+        ["healthCheck.intervalMinutes"] = "5",
+    };
+
     public SettingsService(TensuDbContext db)
     {
         _db = db;
@@ -18,33 +29,53 @@ public class SettingsService
 
     public async Task<Dictionary<string, string>> GetAllAsync()
     {
-        // Using a simple approach: store settings as Organization-level or a dedicated table
-        // For now, return defaults and allow override via API
-        return new Dictionary<string, string>
-        {
-            ["compression.enabled"] = "true",
-            ["cache.enabled"] = "false",
-            ["cache.ttlMinutes"] = "10",
-            ["rateLimit.defaultRpm"] = "60",
-            ["rateLimit.defaultTpm"] = "100000",
-            ["audit.dataRetentionDays"] = "30",
-            ["healthCheck.intervalMinutes"] = "5",
-        };
+        var stored = await _db.Settings
+            .AsNoTracking()
+            .ToDictionaryAsync(s => s.Key, s => s.Value);
+
+        var merged = new Dictionary<string, string>(Defaults, StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in stored)
+            merged[kv.Key] = kv.Value;
+
+        return merged;
     }
 
     public async Task<string?> GetAsync(string key)
     {
-        var all = await GetAllAsync();
-        return all.TryGetValue(key, out var value) ? value : null;
+        if (string.IsNullOrEmpty(key)) return null;
+
+        var stored = await _db.Settings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == key);
+
+        if (stored != null) return stored.Value;
+
+        Defaults.TryGetValue(key, out var value);
+        return value;
     }
 
     public async Task SetAsync(string key, string value)
     {
-        // In a full implementation, this would write to a Settings table
-        // For now, this is a placeholder that validates the key exists
-        var all = await GetAllAsync();
-        if (!all.ContainsKey(key))
+        if (!Defaults.ContainsKey(key))
             throw new ArgumentException($"Unknown setting key: {key}");
-        // TODO: Persist to database
+
+        var existing = await _db.Settings.FirstOrDefaultAsync(s => s.Key == key);
+        if (existing != null)
+        {
+            existing.Value = value;
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            _db.Settings.Add(new Setting
+            {
+                Key = key,
+                Value = value,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _db.SaveChangesAsync();
     }
 }

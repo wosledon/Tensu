@@ -17,7 +17,11 @@ public class RouteModelService : BaseService
 
     public async Task<PagedResult<RouteModel>> GetListAsync(PagedRequest request)
     {
-        var query = _db.RouteModels.Include(r => r.TargetModel).Include(r => r.FallbackModel).AsQueryable();
+        var query = _db.RouteModels
+            .Include(r => r.TargetModel)
+            .Include(r => r.FallbackModel)
+            .Include(r => r.RoutingModel)
+            .AsQueryable();
 
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(r => r.Name.Contains(request.Keyword));
@@ -32,6 +36,7 @@ public class RouteModelService : BaseService
         return await _db.RouteModels
             .Include(r => r.TargetModel).ThenInclude(m => m!.Provider)
             .Include(r => r.FallbackModel)
+            .Include(r => r.RoutingModel)
             .Include(r => r.Rules).ThenInclude(r => r.TargetModel)
             .FirstOrDefaultAsync(r => r.Id == id);
     }
@@ -55,6 +60,7 @@ public class RouteModelService : BaseService
         rm.Mode = updated.Mode;
         rm.TargetModelId = updated.TargetModelId;
         rm.FallbackModelId = updated.FallbackModelId;
+        rm.RoutingModelId = updated.RoutingModelId;
         rm.IsEnabled = updated.IsEnabled;
         rm.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -94,6 +100,7 @@ public class RouteModelService : BaseService
         return await _db.RouteModels
             .Include(r => r.TargetModel).ThenInclude(m => m!.Provider)
             .Include(r => r.FallbackModel)
+            .Include(r => r.RoutingModel)
             .Include(r => r.Rules).ThenInclude(r => r.TargetModel).ThenInclude(m => m.Provider)
             .FirstOrDefaultAsync(r => r.Name == modelName && r.IsEnabled);
     }

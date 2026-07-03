@@ -8,7 +8,7 @@ namespace Tensu.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/models")]
-[Authorize]
+[Authorize(Policy = "Admin")]
 public class ModelsController : AdminBaseController
 {
     private readonly ModelService _service;

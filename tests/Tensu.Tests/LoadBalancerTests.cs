@@ -99,4 +99,71 @@ public class LoadBalancerTests
         var ordered = _lb.OrderByLatency(models);
         Assert.Equal(2, ordered[0].ProviderId); // Lower latency first
     }
+
+    [Fact]
+    public void SelectKey_ExcludesDegradedAndInactiveKeys()
+    {
+        var provider = new Provider
+        {
+            Id = 5,
+            KeyLoadBalanceStrategy = LoadBalanceStrategy.RoundRobin,
+            Keys =
+            [
+                new ProviderKey { Id = 1, Status = KeyStatus.Degraded, Weight = 1 },
+                new ProviderKey { Id = 2, Status = KeyStatus.Inactive, Weight = 1 },
+                new ProviderKey { Id = 3, Status = KeyStatus.Active, Weight = 1 },
+            ]
+        };
+
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(3, _lb.SelectKey(provider)!.Id);
+    }
+
+    [Fact]
+    public void SelectKey_Weighted_DistributesByWeight()
+    {
+        var provider = new Provider
+        {
+            Id = 6,
+            KeyLoadBalanceStrategy = LoadBalanceStrategy.Weighted,
+            Keys =
+            [
+                new ProviderKey { Id = 1, Status = KeyStatus.Active, Weight = 9 },
+                new ProviderKey { Id = 2, Status = KeyStatus.Active, Weight = 1 },
+            ]
+        };
+
+        var counts = new Dictionary<int, int> { [1] = 0, [2] = 0 };
+        for (var i = 0; i < 100; i++)
+        {
+            var key = _lb.SelectKey(provider)!;
+            counts[key.Id]++;
+        }
+
+        Assert.True(counts[1] > counts[2]);
+        Assert.True(counts[2] > 0);
+    }
+
+    [Fact]
+    public void SelectKey_Failover_CyclesKeys()
+    {
+        var provider = new Provider
+        {
+            Id = 7,
+            KeyLoadBalanceStrategy = LoadBalanceStrategy.Failover,
+            Keys =
+            [
+                new ProviderKey { Id = 1, Status = KeyStatus.Active, Weight = 1 },
+                new ProviderKey { Id = 2, Status = KeyStatus.Active, Weight = 1 },
+            ]
+        };
+
+        var selectedIds = new HashSet<int>();
+        for (var i = 0; i < 5; i++)
+            selectedIds.Add(_lb.SelectKey(provider)!.Id);
+
+        // Failover currently implemented as round-robin cycling
+        Assert.Contains(1, selectedIds);
+        Assert.Contains(2, selectedIds);
+    }
 }

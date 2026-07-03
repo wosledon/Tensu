@@ -7,7 +7,7 @@ namespace Tensu.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/settings")]
-[Authorize]
+[Authorize(Policy = "SuperAdmin")]
 public class SettingsController : AdminBaseController
 {
     private readonly SettingsService _service;

@@ -5,5 +5,7 @@ public enum KeyStatus
     Active = 0,
     Disabled = 1,
     RateLimited = 2,
-    Expired = 3
+    Expired = 3,
+    Degraded = 4,
+    Inactive = 5
 }

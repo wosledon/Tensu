@@ -15,9 +15,11 @@ public class TensuDbContext : DbContext
     public DbSet<ModelPricing> ModelPricings => Set<ModelPricing>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<Quota> Quotas => Set<Quota>();
+    public DbSet<RateLimitCounter> RateLimitCounters => Set<RateLimitCounter>();
     public DbSet<RouteModel> RouteModels => Set<RouteModel>();
     public DbSet<RouteRule> RouteRules => Set<RouteRule>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
+    public DbSet<Setting> Settings => Set<Setting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

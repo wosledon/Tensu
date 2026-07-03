@@ -16,17 +16,45 @@ public class LoadBalancer
 
     /// <summary>
     /// Select a key from the provider's active keys based on the provider's load balance strategy.
+    /// Degraded keys are excluded from normal selection and only used as a last resort.
     /// </summary>
     public ProviderKey? SelectKey(Provider provider)
     {
         var activeKeys = provider.Keys.Where(k => k.Status == KeyStatus.Active).ToList();
-        if (!activeKeys.Any()) return null;
+        if (activeKeys.Any()) return SelectKeyInternal(provider, activeKeys);
+
+        // Fallback to degraded keys if no active keys remain
+        var degradedKeys = provider.Keys.Where(k => k.Status == KeyStatus.Degraded).ToList();
+        if (degradedKeys.Any()) return SelectKeyInternal(provider, degradedKeys);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Select a key from the provider excluding the provided key ids.
+    /// Degraded keys are excluded unless no active keys remain.
+    /// </summary>
+    public ProviderKey? SelectKey(Provider provider, HashSet<int> excludeKeyIds)
+    {
+        var activeKeys = provider.Keys.Where(k => k.Status == KeyStatus.Active && !excludeKeyIds.Contains(k.Id)).ToList();
+        if (activeKeys.Any()) return SelectKeyInternal(provider, activeKeys);
+
+        var degradedKeys = provider.Keys.Where(k => k.Status == KeyStatus.Degraded && !excludeKeyIds.Contains(k.Id)).ToList();
+        if (degradedKeys.Any()) return SelectKeyInternal(provider, degradedKeys);
+
+        return null;
+    }
+
+    private ProviderKey? SelectKeyInternal(Provider provider, List<ProviderKey> keys)
+    {
+        if (!keys.Any()) return null;
 
         return provider.KeyLoadBalanceStrategy switch
         {
-            LoadBalanceStrategy.Weighted => SelectWeighted(activeKeys),
-            LoadBalanceStrategy.LowestLatency => SelectLowestLatency(activeKeys),
-            _ => SelectRoundRobin(activeKeys, provider.Id),
+            LoadBalanceStrategy.Weighted => SelectWeighted(keys),
+            LoadBalanceStrategy.LowestLatency => SelectLowestLatency(keys),
+            LoadBalanceStrategy.Failover => SelectFailover(keys, provider.Id),
+            _ => SelectRoundRobin(keys, provider.Id),
         };
     }
 
@@ -72,6 +100,12 @@ public class LoadBalancer
         var counter = _roundRobinCounters.AddOrUpdate(providerId, 1, (_, v) => v + 1);
         var index = counter % keys.Count;
         return keys[index];
+    }
+
+    private ProviderKey SelectFailover(List<ProviderKey> keys, int providerId)
+    {
+        // Failover: prefer the first healthy key in the list, cycling on retries
+        return SelectRoundRobin(keys, providerId);
     }
 
     private ProviderKey SelectWeighted(List<ProviderKey> keys)

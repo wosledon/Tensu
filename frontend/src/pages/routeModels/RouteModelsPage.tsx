@@ -57,6 +57,7 @@ export default function RouteModelsPage() {
     },
     { title: t('routeModel.target'), key: 'target', render: (_: any, r: RouteModel) => r.targetModel ? `${r.targetModel.provider?.name}-${r.targetModel.name}` : '-' },
     { title: t('routeModel.fallback'), key: 'fallback', render: (_: any, r: RouteModel) => r.fallbackModel ? `${r.fallbackModel.provider?.name}-${r.fallbackModel.name}` : '-' },
+    { title: t('routeModel.routingModel'), key: 'routingModel', render: (_: any, r: RouteModel) => r.routingModel ? `${r.routingModel.provider?.name}-${r.routingModel.name}` : '-' },
     { title: t('routeModel.rules'), key: 'rules', render: (_: any, r: RouteModel) => r.rules?.length || 0 },
     { title: t('common.enabled'), dataIndex: 'isEnabled', key: 'isEnabled', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.yes') : t('common.no')}</Tag> },
     {
@@ -95,6 +96,17 @@ export default function RouteModelsPage() {
         </Form.Item>
         <Form.Item name="fallbackModelId" label={t('routeModel.fallback')}>
           <Select options={modelOptions} allowClear showSearch optionFilterProp="label" />
+        </Form.Item>
+        <Form.Item noStyle shouldUpdate={(prev, cur) => prev.mode !== cur.mode}>
+          {({ getFieldValue }) => {
+            const mode = getFieldValue('mode');
+            if (mode !== 'Route') return null;
+            return (
+              <Form.Item name="routingModelId" label={t('routeModel.routingModel')} extra={t('routeModel.routingModelHint')}>
+                <Select options={modelOptions} allowClear showSearch optionFilterProp="label" />
+              </Form.Item>
+            );
+          }}
         </Form.Item>
         <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
       </FormModal>

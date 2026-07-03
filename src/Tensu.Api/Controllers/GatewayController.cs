@@ -17,6 +17,7 @@ public class GatewayController : ControllerBase
 {
     private readonly ApiKeyService _apiKeyService;
     private readonly RouteModelService _routeModelService;
+    private readonly RoutingModelService _routingModelService;
     private readonly ModelService _modelService;
     private readonly ProviderService _providerService;
     private readonly TensuDbContext _db;
@@ -26,12 +27,15 @@ public class GatewayController : ControllerBase
     private readonly RetryPolicy _retryPolicy;
     private readonly CompressionService _compression;
     private readonly CacheService _cache;
+    private readonly SettingsService _settingsService;
+    private readonly QuotaService _quotaService;
     private readonly ILogger<GatewayController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
 
     public GatewayController(
         ApiKeyService apiKeyService,
         RouteModelService routeModelService,
+        RoutingModelService routingModelService,
         ModelService modelService,
         ProviderService providerService,
         TensuDbContext db,
@@ -41,11 +45,14 @@ public class GatewayController : ControllerBase
         RetryPolicy retryPolicy,
         CompressionService compression,
         CacheService cache,
+        SettingsService settingsService,
+        QuotaService quotaService,
         ILogger<GatewayController> logger,
         IHttpClientFactory httpClientFactory)
     {
         _apiKeyService = apiKeyService;
         _routeModelService = routeModelService;
+        _routingModelService = routingModelService;
         _modelService = modelService;
         _providerService = providerService;
         _db = db;
@@ -55,6 +62,8 @@ public class GatewayController : ControllerBase
         _retryPolicy = retryPolicy;
         _compression = compression;
         _cache = cache;
+        _settingsService = settingsService;
+        _quotaService = quotaService;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
     }
@@ -84,7 +93,7 @@ public class GatewayController : ControllerBase
             return Unauthorized(new { error = new { message = "Invalid API key", type = "authentication_error" } });
 
         // ── 2. Rate limit check ──
-        var (allowed, retryAfter) = _rateLimiter.CheckRateLimit(apiKey.Id, apiKey.RateLimitRpm, apiKey.RateLimitTpm);
+        var (allowed, retryAfter) = await _rateLimiter.CheckRateLimitAsync(apiKey.Id, apiKey.RateLimitRpm, apiKey.RateLimitTpm);
         if (!allowed)
         {
             HttpContext.Response.Headers["Retry-After"] = retryAfter.ToString();
@@ -103,36 +112,35 @@ public class GatewayController : ControllerBase
         if (string.IsNullOrEmpty(requestedModel))
             return BadRequest(new { error = new { message = "Missing 'model' field", type = "invalid_request_error" } });
 
-        // ── 4. Cache check ──
-        var cacheKey = CacheService.ComputeCacheKey(requestedModel, requestBody);
-        var cacheHit = _cache.TryGet(cacheKey);
-        if (cacheHit.HasValue && cacheHit.Value.hit)
+        // ── Allowed models check ──
+        if (!IsModelAllowed(apiKey, requestedModel))
         {
-            HttpContext.Response.Headers["X-Cache"] = "HIT";
-            Response.ContentType = "application/json";
-            _rateLimiter.RecordRequest(apiKey.Id, 0);
-            await EnqueueAuditLog(Guid.NewGuid().ToString("N"), new Model { Name = requestedModel, Provider = new Provider { Name = "cache" } },
-                apiKey, cacheHit.Value.responseBody, 0, cacheHit.Value.isStream, RequestStatus.Success, cacheHit: true);
-            return Content(cacheHit.Value.responseBody, "application/json");
+            return StatusCode(403, new { error = new { message = $"Model '{requestedModel}' is not allowed for this API key", type = "forbidden_error" } });
         }
-        HttpContext.Response.Headers["X-Cache"] = "MISS";
+
+        // ── 4. Organization quota check ──
+        var estimatedTokens = CompressionService.EstimateTokens(requestBody);
+        var (quotaAllowed, quotaRetryAfter) = await _quotaService.CheckOrgQuotaAsync(apiKey.OrganizationId, estimatedTokens);
+        if (!quotaAllowed)
+        {
+            HttpContext.Response.Headers["Retry-After"] = quotaRetryAfter.ToString();
+            return StatusCode(429, new { error = new { message = "Token quota exceeded", type = "rate_limit_error", retry_after = quotaRetryAfter } });
+        }
 
         // ── 5. Route ──
-        var resolvedModelName = await ResolveModelAsync(requestedModel, requestBody);
+        var resolvedModelName = await ResolveModelAsync(requestedModel, requestBody, apiKey, requestId);
 
-        // ── 5. Find model + load balance ──
+        // ── 6. Find models ──
         var parts = resolvedModelName.Split('-', 2);
         if (parts.Length != 2)
             return BadRequest(new { error = new { message = $"Invalid model format: {resolvedModelName}. Expected 'Provider-Model'", type = "invalid_request_error" } });
 
-        // Support same-model across multiple providers
         var candidates = await _db.Models
             .Include(m => m.Provider).ThenInclude(p => p.Keys)
             .Include(m => m.Pricings)
             .Where(m => m.Name == parts[1] && m.Provider.Name == parts[0] && m.IsEnabled)
             .ToListAsync();
 
-        // Also check for same model name across different providers (same-name LB)
         if (!candidates.Any())
         {
             candidates = await _db.Models
@@ -145,99 +153,206 @@ public class GatewayController : ControllerBase
         if (!candidates.Any())
             return NotFound(new { error = new { message = $"Model '{resolvedModelName}' not found", type = "not_found_error" } });
 
-        // Use load balancer to select model + key
-        var selection = _loadBalancer.SelectModelWithKey(candidates, p => _loadBalancer.SelectKey(p));
-        if (selection == null)
-            return StatusCode(503, new { error = new { message = "No available providers or keys for this model", type = "service_unavailable_error" } });
+        // ── 7. Try providers with failover ──
+        var attemptedProviderIds = new HashSet<int>();
+        IActionResult? lastError = null;
 
-        var (model, selectedKey) = selection.Value;
-        var provider = model.Provider;
-        HttpContext.Response.Headers["X-Upstream-Provider"] = provider.Name;
-
-        // ── 6. Compression (before forwarding) ──
-        var compressionResult = _compression.Compress(requestBody);
-        var bodyToSend = compressionResult.Applied ? compressionResult.CompressedBody : requestBody;
-
-        // ── 7. Forward with retry ──
-        var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(60);
-        var upstreamUrl = $"{provider.BaseUrl.TrimEnd('/')}{path}";
-
-        try
+        while (candidates.Any())
         {
-            HttpResponseMessage? response;
+            var selection = _loadBalancer.SelectModelWithKey(candidates, p => _loadBalancer.SelectKey(p));
+            if (selection == null)
+                break;
 
-            if (isStream)
+            var (model, selectedKey) = selection.Value;
+            if (attemptedProviderIds.Contains(model.ProviderId))
             {
-                // Streaming: no retry, direct forward
-                var upstreamRequest = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, selectedKey);
-                response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead);
-                return await HandleStreamResponse(response, requestId, model, apiKey, sw);
+                candidates.Remove(model);
+                continue;
             }
-            else
+
+            attemptedProviderIds.Add(model.ProviderId);
+            candidates.Remove(model);
+
+            var result = await TryForwardToProviderAsync(model, selectedKey, protocol, path, requestId, apiKey, requestBody, requestedModel, estimatedTokens, isStream, sw);
+            if (result is ObjectResult { StatusCode: >= 500 } or StatusCodeResult { StatusCode: >= 500 })
             {
-                // Non-streaming: with retry
-                response = await _retryPolicy.ExecuteWithRetryAsync(
-                    async (key) =>
-                    {
-                        var req = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, key);
-                        return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-                    },
-                    selectedKey,
-                    isStream: false);
+                lastError = result;
+                continue;
+            }
 
-                sw.Stop();
+            return result;
+        }
 
-                if (response == null)
-                    return StatusCode(502, new { error = new { message = "All retry attempts failed", type = "proxy_error" } });
+        return lastError ?? StatusCode(503, new { error = new { message = "No available providers or keys for this model", type = "service_unavailable_error" } });
 
-                if (!response.IsSuccessStatusCode)
+        async Task<IActionResult> TryForwardToProviderAsync(
+            Model model, ProviderKey selectedKey, string protocol, string path,
+            string requestId, ApiKey apiKey, string requestBody, string requestedModel, int estimatedTokens, bool isStream, Stopwatch sw)
+        {
+            var provider = model.Provider;
+            HttpContext.Response.Headers["X-Upstream-Provider"] = provider.Name;
+
+            // ── Concurrency check ──
+            var concurrentLimit = await _quotaService.GetConcurrentRequestLimitAsync(apiKey.OrganizationId, apiKey.Id);
+            bool concurrencyAcquired = false;
+            if (concurrentLimit.HasValue)
+            {
+                concurrencyAcquired = await _rateLimiter.TryAcquireConcurrencyAsync(model.Id, concurrentLimit.Value);
+                if (!concurrencyAcquired)
                 {
-                    var errorBody = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning("Upstream error {StatusCode} after retries: {Body}", response.StatusCode, errorBody);
-                    await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
-                        RequestStatus.Failed, ((int)response.StatusCode).ToString(), errorBody);
-                    return StatusCode((int)response.StatusCode,
-                        new { error = new { message = "Upstream provider error", type = "upstream_error", upstream_status = (int)response.StatusCode } });
+                    return StatusCode(429, new { error = new { message = "Model concurrency limit exceeded", type = "rate_limit_error" } });
+                }
+            }
+
+            try
+            {
+                // ── Token estimation & compression ──
+                var inputTokens = CompressionService.EstimateTokens(requestBody);
+                var compressionResult = _compression.Compress(requestBody);
+                var compressionEnabled = await IsCompressionEnabledAsync();
+                var compressionApplied = compressionResult.Applied && compressionEnabled;
+                var compressionStrategy = compressionApplied ? compressionResult.Strategy : "none";
+                var inputTokensAfterCompression = compressionApplied ? compressionResult.CompressedTokenEstimate : inputTokens;
+                var bodyToSend = compressionApplied ? compressionResult.CompressedBody : requestBody;
+
+                // ── Cache check ──
+                var cacheEnabled = await IsCacheEnabledAsync();
+                var cacheKey = CacheService.ComputeCacheKey(requestedModel, requestBody);
+                var cacheTtl = await GetCacheTtlAsync();
+
+                if (cacheEnabled)
+                {
+                    var cacheHit = _cache.TryGet(cacheKey);
+                    if (cacheHit.HasValue && cacheHit.Value.hit)
+                    {
+                        HttpContext.Response.Headers["X-Cache"] = "HIT";
+                        _rateLimiter.RecordRequest(apiKey.Id, 0);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+
+                        var cachedResponse = cacheHit.Value.responseBody!;
+                        var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, cacheHit.Value.isStream);
+                        var (inputCost, outputCost) = ComputeCost(model, inputTokens, cachedOutputTokens);
+
+                        var responseToReturn = cacheHit.Value.isStream && !isStream
+                            ? CacheService.ConvertStreamToNonStream(cachedResponse)
+                            : cachedResponse;
+
+                        if (isStream && cacheHit.Value.isStream)
+                        {
+                            await WriteStreamCacheResponseAsync(cachedResponse, requestId, model, apiKey, sw,
+                                inputTokens, inputTokensAfterCompression, cachedOutputTokens, inputCost, outputCost,
+                                compressionStrategy, compressionApplied, requestBody);
+                            return new EmptyResult();
+                        }
+
+                        await EnqueueAuditLog(requestId, model, apiKey, responseToReturn, sw.ElapsedMilliseconds, isStream,
+                            RequestStatus.Success, inputTokens, inputTokensAfterCompression, cachedOutputTokens,
+                            inputCost, outputCost, compressionStrategy, compressionApplied, requestBody, cacheHit: true);
+                        Response.ContentType = isStream ? "text/event-stream" : "application/json";
+                        return Content(responseToReturn, Response.ContentType);
+                    }
                 }
 
-                var responseBody = await response.Content.ReadAsStringAsync();
+                HttpContext.Response.Headers["X-Cache"] = "MISS";
 
-                // Forward response headers
-                ForwardHeaders(response);
+                // ── Forward with retry ──
+                var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(60);
+                var upstreamUrl = $"{provider.BaseUrl.TrimEnd('/')}{path}";
 
-                // Record rate limit usage
-                _rateLimiter.RecordRequest(apiKey.Id, 0);
-                _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
+                try
+                {
+                    HttpResponseMessage? response;
 
-                // Cache the response
-                _cache.Set(cacheKey, responseBody, isStream: false);
+                    if (isStream)
+                    {
+                        var upstreamRequest = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, selectedKey);
+                        response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead);
+                        var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                        return streamResult;
+                    }
+                    else
+                    {
+                        response = await _retryPolicy.ExecuteWithRetryAsync(
+                            async (key) =>
+                            {
+                                var req = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, key);
+                                return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+                            },
+                            provider,
+                            selectedKey,
+                            isStream: false);
 
-                // Audit
-                await EnqueueAuditLog(requestId, model, apiKey, responseBody, sw.ElapsedMilliseconds, false, RequestStatus.Success);
+                        sw.Stop();
 
-                Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-                return Content(responseBody, "application/json");
+                        if (response == null)
+                            return StatusCode(502, new { error = new { message = "All retry attempts failed", type = "proxy_error" } });
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var errorBody = await response.Content.ReadAsStringAsync();
+                            _logger.LogWarning("Upstream error {StatusCode} after retries: {Body}", response.StatusCode, errorBody);
+                            await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
+                                RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
+                                ((int)response.StatusCode).ToString(), errorBody);
+                            await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                            return StatusCode((int)response.StatusCode,
+                                new { error = new { message = "Upstream provider error", type = "upstream_error", upstream_status = (int)response.StatusCode } });
+                        }
+
+                        var responseBody = await response.Content.ReadAsStringAsync();
+
+                        ForwardHeaders(response);
+
+                        _rateLimiter.RecordRequest(apiKey.Id, 0);
+                        _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
+
+                        var outputTokens = EstimateOutputTokensFromResponse(responseBody, isStream: false);
+                        var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+
+                        if (cacheEnabled)
+                            _cache.Set(cacheKey, responseBody, isStream: false, cacheTtl);
+
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, inputTokens + outputTokens);
+
+                        await EnqueueAuditLog(requestId, model, apiKey, responseBody, sw.ElapsedMilliseconds, false,
+                            RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                            compressionStrategy, compressionApplied, requestBody);
+
+                        Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                        return Content(responseBody, "application/json");
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    sw.Stop();
+                    await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
+                        RequestStatus.Timeout, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
+                        "TIMEOUT", "Request timed out");
+                    await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                    return StatusCode(408, new { error = new { message = "Request timed out", type = "timeout_error" } });
+                }
+                catch (Exception ex)
+                {
+                    sw.Stop();
+                    _logger.LogError(ex, "Error proxying request {RequestId}", requestId);
+                    await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
+                        RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
+                        "INTERNAL_ERROR", ex.Message);
+                    await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                    return StatusCode(502, new { error = new { message = "Bad gateway", type = "proxy_error" } });
+                }
             }
-        }
-        catch (TaskCanceledException)
-        {
-            sw.Stop();
-            await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
-                RequestStatus.Timeout, "TIMEOUT", "Request timed out");
-            return StatusCode(408, new { error = new { message = "Request timed out", type = "timeout_error" } });
-        }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            _logger.LogError(ex, "Error proxying request {RequestId}", requestId);
-            await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
-                RequestStatus.Failed, "INTERNAL_ERROR", ex.Message);
-            return StatusCode(502, new { error = new { message = "Bad gateway", type = "proxy_error" } });
+            finally
+            {
+                if (concurrencyAcquired)
+                    await _rateLimiter.ReleaseConcurrencyAsync(model.Id);
+            }
         }
     }
 
-    private async Task<string> ResolveModelAsync(string requestedModel, string requestBody)
+    private async Task<string> ResolveModelAsync(string requestedModel, string requestBody, ApiKey apiKey, string requestId)
     {
         var routeModel = await _routeModelService.ResolveAsync(requestedModel);
         if (routeModel == null) return requestedModel;
@@ -251,7 +366,21 @@ public class GatewayController : ControllerBase
             return target != null ? $"{target.Provider.Name}-{target.Name}" : requestedModel;
         }
 
-        // Route mode: rule-based
+        // Route mode: try LLM-based routing first, then fall back to rule engine
+        if (routeModel.Mode == RouteModelMode.Route && routeModel.RoutingModelId.HasValue)
+        {
+            var decision = await _routingModelService.RouteAsync(routeModel, requestBody, requestedModel);
+            if (decision != null)
+            {
+                HttpContext.Response.Headers["X-Routing-Model-Used"] = "true";
+                await EnqueueRoutingAuditLog(requestId, apiKey, routeModel, decision);
+                return decision.RecommendedModel;
+            }
+        }
+
+        HttpContext.Response.Headers["X-Routing-Model-Used"] = "false";
+
+        // Rule-based fallback
         foreach (var rule in routeModel.Rules.Where(r => r.IsEnabled).OrderBy(r => r.Priority))
         {
             if (EvaluateRule(rule, requestBody))
@@ -268,6 +397,51 @@ public class GatewayController : ControllerBase
         }
 
         return requestedModel;
+    }
+
+    private static bool IsModelAllowed(ApiKey apiKey, string modelName)
+    {
+        if (string.IsNullOrEmpty(apiKey.AllowedModels)) return true;
+
+        try
+        {
+            var allowed = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedModels);
+            if (allowed == null || !allowed.Any()) return true;
+            return allowed.Contains(modelName, StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private async Task EnqueueRoutingAuditLog(string requestId, ApiKey apiKey, RouteModel routeModel, RoutingModelService.RoutingDecision decision)
+    {
+        try
+        {
+            await _auditChannel.EnqueueAsync(new RequestLog
+            {
+                RequestId = $"{requestId}:routing",
+                Timestamp = DateTime.UtcNow,
+                ApiKeyId = apiKey.Id,
+                OrganizationId = apiKey.OrganizationId,
+                UserId = apiKey.UserId,
+                ModelName = $"routing:{routeModel.Name}",
+                ResolvedModelName = $"{decision.ProviderName}-{decision.RoutingModelName}",
+                ProviderName = decision.ProviderName,
+                InputTokens = decision.InputTokens,
+                OutputTokens = decision.OutputTokens,
+                Status = Core.Enums.RequestStatus.Success,
+                IsStream = false,
+                CacheHit = false,
+                CompressionApplied = false,
+                CompressionStrategy = "none"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enqueue routing audit log for {RequestId}", requestId);
+        }
     }
 
     private HttpRequestMessage BuildUpstreamRequest(string url, string body, Provider provider, ProviderKey key)
@@ -302,8 +476,108 @@ public class GatewayController : ControllerBase
                 Response.Headers[header.Key] = string.Join(", ", header.Value);
     }
 
+    private async Task<bool> IsCompressionEnabledAsync()
+    {
+        var value = await _settingsService.GetAsync("compression.enabled");
+        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<bool> IsCacheEnabledAsync()
+    {
+        var value = await _settingsService.GetAsync("cache.enabled");
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<TimeSpan?> GetCacheTtlAsync()
+    {
+        var value = await _settingsService.GetAsync("cache.ttlMinutes");
+        if (value != null && int.TryParse(value, out var minutes) && minutes > 0)
+            return TimeSpan.FromMinutes(minutes);
+        return TimeSpan.FromMinutes(10);
+    }
+
+    private int EstimateOutputTokensFromResponse(string responseBody, bool isStream)
+    {
+        if (string.IsNullOrEmpty(responseBody)) return 0;
+
+        if (!isStream)
+        {
+            try
+            {
+                var json = JsonDocument.Parse(responseBody);
+                if (json.RootElement.TryGetProperty("usage", out var usage))
+                {
+                    if (usage.TryGetProperty("completion_tokens", out var completionTokensProp) &&
+                        completionTokensProp.TryGetInt32(out var completionTokens))
+                        return completionTokens;
+                }
+            }
+            catch { }
+        }
+
+        // Fallback: estimate from content
+        if (isStream)
+            return CompressionService.EstimateTokens(CacheService.ConvertStreamToNonStream(responseBody));
+
+        try
+        {
+            var json = JsonDocument.Parse(responseBody);
+            var content = new StringBuilder();
+            if (json.RootElement.TryGetProperty("choices", out var choices))
+            {
+                foreach (var choice in choices.EnumerateArray())
+                {
+                    if (choice.TryGetProperty("message", out var message) &&
+                        message.TryGetProperty("content", out var msgContent))
+                    {
+                        content.Append(msgContent.GetString());
+                    }
+                    else if (choice.TryGetProperty("text", out var text))
+                    {
+                        content.Append(text.GetString());
+                    }
+                    else if (choice.TryGetProperty("delta", out var delta) &&
+                             delta.TryGetProperty("content", out var deltaContent))
+                    {
+                        content.Append(deltaContent.GetString());
+                    }
+                }
+            }
+            else if (json.RootElement.TryGetProperty("content", out var contentArray) && contentArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var block in contentArray.EnumerateArray())
+                {
+                    if (block.TryGetProperty("text", out var blockText))
+                        content.Append(blockText.GetString());
+                }
+            }
+            return CompressionService.EstimateTokens(content.ToString());
+        }
+        catch
+        {
+            return CompressionService.EstimateTokens(responseBody);
+        }
+    }
+
+    private static (decimal inputCost, decimal outputCost) ComputeCost(Model model, int inputTokens, int outputTokens)
+    {
+        var now = DateTime.UtcNow;
+        var pricing = (model.Pricings ?? [])
+            .Where(p => p.EffectiveFrom <= now && (p.EffectiveTo == null || p.EffectiveTo >= now))
+            .OrderByDescending(p => p.EffectiveFrom)
+            .FirstOrDefault();
+
+        if (pricing == null) return (0, 0);
+
+        var inputCost = inputTokens * pricing.InputPricePerMillionTokens / 1_000_000m;
+        var outputCost = outputTokens * pricing.OutputPricePerMillionTokens / 1_000_000m;
+        return (inputCost, outputCost);
+    }
+
     private async Task<IActionResult> HandleStreamResponse(
-        HttpResponseMessage response, string requestId, Model model, ApiKey apiKey, Stopwatch sw)
+        HttpResponseMessage response, string requestId, Model model, ApiKey apiKey, Stopwatch sw,
+        string requestBody, int inputTokens, int inputTokensAfterCompression, string compressionStrategy, bool compressionApplied,
+        string cacheKey, TimeSpan? cacheTtl, bool cacheEnabled)
     {
         sw.Stop();
 
@@ -311,7 +585,8 @@ public class GatewayController : ControllerBase
         {
             var errorBody = await response.Content.ReadAsStringAsync();
             await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
-                RequestStatus.Failed, ((int)response.StatusCode).ToString(), errorBody);
+                RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
+                ((int)response.StatusCode).ToString(), errorBody);
             return StatusCode((int)response.StatusCode,
                 new { error = new { message = "Upstream provider error", type = "upstream_error" } });
         }
@@ -324,6 +599,7 @@ public class GatewayController : ControllerBase
         var ttftSw = Stopwatch.StartNew();
         long ttftMs = 0;
         var aggregatedContent = new StringBuilder();
+        var aggregatedSse = new StringBuilder();
 
         try
         {
@@ -334,6 +610,8 @@ public class GatewayController : ControllerBase
             {
                 var line = await reader.ReadLineAsync();
                 if (line == null) break;
+
+                aggregatedSse.AppendLine(line);
 
                 if (line.StartsWith("data: ") && line.Length > 6)
                 {
@@ -362,16 +640,37 @@ public class GatewayController : ControllerBase
             sw.Stop();
             _rateLimiter.RecordRequest(apiKey.Id, 0);
             _loadBalancer.RecordLatency(model.ProviderId, sw.ElapsedMilliseconds);
+
+            var outputTokens = CompressionService.EstimateTokens(aggregatedContent.ToString());
+            var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+            var totalDurationSec = sw.ElapsedMilliseconds / 1000.0;
+            double? outputTokensPerSecond = totalDurationSec > 0 ? outputTokens / totalDurationSec : null;
+
+            var aggregatedSseBody = aggregatedSse.ToString();
+            if (cacheEnabled)
+                _cache.Set(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
+
             await EnqueueAuditLog(requestId, model, apiKey, aggregatedContent.ToString(), sw.ElapsedMilliseconds, true,
-                RequestStatus.Success, ttftMs: ttftMs);
+                RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                compressionStrategy, compressionApplied, requestBody, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond);
 
             return new EmptyResult();
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException)
         {
             sw.Stop();
+            var outputTokens = CompressionService.EstimateTokens(aggregatedContent.ToString());
+            var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+            var totalDurationSec = sw.ElapsedMilliseconds / 1000.0;
+            double? outputTokensPerSecond = totalDurationSec > 0 ? outputTokens / totalDurationSec : null;
+
+            var aggregatedSseBody = aggregatedSse.ToString();
+            if (cacheEnabled && aggregatedSseBody.Length > 0)
+                _cache.Set(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
+
             await EnqueueAuditLog(requestId, model, apiKey, aggregatedContent.ToString(), sw.ElapsedMilliseconds, true,
-                RequestStatus.Interrupted, "INTERRUPTED", ex.Message, ttftMs: ttftMs);
+                RequestStatus.Interrupted, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                compressionStrategy, compressionApplied, requestBody, "INTERRUPTED", ex.Message, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond);
             return new EmptyResult();
         }
     }
@@ -402,11 +701,46 @@ public class GatewayController : ControllerBase
         return false;
     }
 
+    private async Task WriteStreamCacheResponseAsync(
+        string cachedSseBody, string requestId, Model model, ApiKey apiKey, Stopwatch sw,
+        int inputTokens, int inputTokensAfterCompression, int outputTokens, decimal inputCost, decimal outputCost,
+        string compressionStrategy, bool compressionApplied, string requestBody)
+    {
+        Response.ContentType = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["Connection"] = "keep-alive";
+
+        var ttftSw = Stopwatch.StartNew();
+        long ttftMs = 0;
+
+        using var reader = new StringReader(cachedSseBody);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (ttftMs == 0) { ttftSw.Stop(); ttftMs = ttftSw.ElapsedMilliseconds; }
+            await Response.WriteAsync(line + "\n");
+            await Response.Body.FlushAsync();
+        }
+
+        sw.Stop();
+        var totalDurationSec = sw.ElapsedMilliseconds / 1000.0;
+        double? outputTokensPerSecond = totalDurationSec > 0 ? outputTokens / totalDurationSec : null;
+
+        await EnqueueAuditLog(requestId, model, apiKey, cachedSseBody, sw.ElapsedMilliseconds, true,
+            RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+            compressionStrategy, compressionApplied, requestBody, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, cacheHit: true);
+    }
+
     private async Task EnqueueAuditLog(
         string requestId, Model model, ApiKey apiKey,
         string? responseContent, long totalDurationMs, bool isStream,
-        RequestStatus status, string? errorCode = null, string? errorMessage = null, long ttftMs = 0,
-        bool cacheHit = false, bool compressionApplied = false)
+        RequestStatus status,
+        int inputTokens, int inputTokensAfterCompression, int outputTokens,
+        decimal inputCost, decimal outputCost,
+        string compressionStrategy, bool compressionApplied,
+        string? requestContent = null,
+        string? errorCode = null, string? errorMessage = null, long ttftMs = 0,
+        double? outputTokensPerSecond = null, bool cacheHit = false)
     {
         try
         {
@@ -421,15 +755,23 @@ public class GatewayController : ControllerBase
                 ResolvedModelName = $"{model.Provider.Name}-{model.Name}",
                 ProviderId = model.ProviderId,
                 ProviderName = model.Provider.Name,
-                InputTokensAfterCompression = null,
+                InputTokens = inputTokens,
+                InputTokensAfterCompression = inputTokensAfterCompression,
+                OutputTokens = outputTokens,
                 CacheHit = cacheHit,
-                CompressionApplied = compressionApplied,
                 TimeToFirstTokenMs = ttftMs > 0 ? ttftMs : null,
                 TotalDurationMs = totalDurationMs,
+                OutputTokensPerSecond = outputTokensPerSecond,
+                InputCost = inputCost,
+                OutputCost = outputCost,
+                Currency = "USD",
+                CompressionApplied = compressionApplied,
+                CompressionStrategy = compressionStrategy,
                 Status = status,
                 ErrorCode = errorCode,
                 ErrorMessage = errorMessage,
                 IsStream = isStream,
+                RequestContent = requestContent?.Length > 10000 ? requestContent[..10000] : requestContent,
                 ResponseContent = responseContent?.Length > 10000 ? responseContent[..10000] : responseContent
             });
         }

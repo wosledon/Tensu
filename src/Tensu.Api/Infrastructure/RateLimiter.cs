@@ -1,19 +1,21 @@
-using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
+using Tensu.Api.Data;
+using Tensu.Core.Entities;
 
 namespace Tensu.Api.Infrastructure;
 
 /// <summary>
-/// Rate limiter using sliding window counter.
-/// Checks RPM and TPM per API key. Uses in-memory counters (database-backed for multi-instance).
+/// Rate limiter using sliding window counters backed by the database for cross-instance consistency.
 /// </summary>
 public class RateLimiter
 {
-    private static readonly ConcurrentDictionary<string, SlidingWindow> _rpmWindows = new();
-    private static readonly ConcurrentDictionary<string, SlidingWindow> _tpmWindows = new();
+    private const int WindowSeconds = 60;
+    private readonly TensuDbContext _db;
     private readonly ILogger<RateLimiter> _logger;
 
-    public RateLimiter(ILogger<RateLimiter> logger)
+    public RateLimiter(TensuDbContext db, ILogger<RateLimiter> logger)
     {
+        _db = db;
         _logger = logger;
     }
 
@@ -21,36 +23,31 @@ public class RateLimiter
     /// Check if a request is allowed under the rate limit.
     /// Returns (allowed, retryAfterSeconds).
     /// </summary>
-    public (bool allowed, int retryAfterSeconds) CheckRateLimit(int apiKeyId, int? rpmLimit, int? tpmLimit, int estimatedTokens = 0)
+    public async Task<(bool allowed, int retryAfterSeconds)> CheckRateLimitAsync(int apiKeyId, int? rpmLimit, int? tpmLimit, int estimatedTokens = 0)
     {
         var keyPrefix = $"key:{apiKeyId}";
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddSeconds(-WindowSeconds);
 
-        // Check RPM
-        if (rpmLimit.HasValue && rpmLimit.Value > 0)
+        // Cleanup stale buckets before reading
+        await CleanupOldBucketsAsync(keyPrefix, cutoff);
+
+        var sum = await SumWindowAsync(keyPrefix, cutoff);
+
+        var currentRpm = sum.GetValueOrDefault("rpm");
+        if (rpmLimit.HasValue && rpmLimit.Value > 0 && currentRpm >= rpmLimit.Value)
         {
-            var rpmKey = $"{keyPrefix}:rpm";
-            var window = _rpmWindows.GetOrAdd(rpmKey, _ => new SlidingWindow(60));
-            var currentRpm = window.Count();
-            if (currentRpm >= rpmLimit.Value)
-            {
-                var retryAfter = window.SecondsUntilSlotAvailable();
-                _logger.LogWarning("Rate limit exceeded for API key {ApiKeyId}: RPM {Current}/{Limit}", apiKeyId, currentRpm, rpmLimit.Value);
-                return (false, retryAfter);
-            }
+            var retryAfter = await GetSecondsUntilSlotAvailable($"{keyPrefix}:rpm", cutoff, now);
+            _logger.LogWarning("Rate limit exceeded for API key {ApiKeyId}: RPM {Current}/{Limit}", apiKeyId, currentRpm, rpmLimit.Value);
+            return (false, retryAfter);
         }
 
-        // Check TPM
-        if (tpmLimit.HasValue && tpmLimit.Value > 0 && estimatedTokens > 0)
+        var currentTpm = sum.GetValueOrDefault("tpm");
+        if (tpmLimit.HasValue && tpmLimit.Value > 0 && estimatedTokens > 0 && currentTpm + estimatedTokens > tpmLimit.Value)
         {
-            var tpmKey = $"{keyPrefix}:tpm";
-            var window = _tpmWindows.GetOrAdd(tpmKey, _ => new SlidingWindow(60));
-            var currentTpm = window.Total();
-            if (currentTpm + estimatedTokens > tpmLimit.Value)
-            {
-                var retryAfter = window.SecondsUntilSlotAvailable();
-                _logger.LogWarning("TPM limit exceeded for API key {ApiKeyId}: TPM {Current}+{Estimated}/{Limit}", apiKeyId, currentTpm, estimatedTokens, tpmLimit.Value);
-                return (false, retryAfter);
-            }
+            var retryAfter = await GetSecondsUntilSlotAvailable($"{keyPrefix}:tpm", cutoff, now);
+            _logger.LogWarning("TPM limit exceeded for API key {ApiKeyId}: TPM {Current}+{Estimated}/{Limit}", apiKeyId, currentTpm, estimatedTokens, tpmLimit.Value);
+            return (false, retryAfter);
         }
 
         return (true, 0);
@@ -61,68 +58,198 @@ public class RateLimiter
     /// </summary>
     public void RecordRequest(int apiKeyId, int tokensUsed)
     {
-        var keyPrefix = $"key:{apiKeyId}";
-
-        var rpmKey = $"{keyPrefix}:rpm";
-        _rpmWindows.GetOrAdd(rpmKey, _ => new SlidingWindow(60)).Increment(1);
-
-        var tpmKey = $"{keyPrefix}:tpm";
-        _tpmWindows.GetOrAdd(tpmKey, _ => new SlidingWindow(60)).Increment(tokensUsed);
+        // Signature remains synchronous to keep existing callers unchanged.
+        // The DB work is small and happens after the upstream response is received.
+        IncrementAsync($"key:{apiKeyId}:rpm", 1).GetAwaiter().GetResult();
+        IncrementAsync($"key:{apiKeyId}:tpm", tokensUsed).GetAwaiter().GetResult();
     }
 
     /// <summary>
-    /// Sliding window counter using 1-second buckets.
+    /// Increment the per-second bucket for the given scope.
     /// </summary>
-    private class SlidingWindow
+    public async Task IncrementAsync(string scope, int delta)
     {
-        private readonly int _windowSeconds;
-        private readonly ConcurrentDictionary<long, int> _buckets = new();
-        private long _totalValue;
+        if (delta <= 0) return;
 
-        public SlidingWindow(int windowSeconds)
+        var bucket = GetBucketStart(DateTime.UtcNow);
+        var maxRetries = 3;
+        for (var attempt = 0; attempt < maxRetries; attempt++)
         {
-            _windowSeconds = windowSeconds;
-        }
-
-        private long CurrentSecond => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-        public void Increment(int value)
-        {
-            var second = CurrentSecond;
-            _buckets.AddOrUpdate(second, value, (_, existing) => existing + value);
-            Interlocked.Add(ref _totalValue, value);
-            Cleanup();
-        }
-
-        public int Count()
-        {
-            Cleanup();
-            var cutoff = CurrentSecond - _windowSeconds;
-            return _buckets.Where(kv => kv.Key > cutoff).Sum(kv => kv.Value);
-        }
-
-        public int Total()
-        {
-            Cleanup();
-            var cutoff = CurrentSecond - _windowSeconds;
-            return _buckets.Where(kv => kv.Key > cutoff).Sum(kv => kv.Value);
-        }
-
-        public int SecondsUntilSlotAvailable()
-        {
-            Cleanup();
-            var cutoff = CurrentSecond - _windowSeconds;
-            var oldest = _buckets.Keys.Where(k => k > cutoff).DefaultIfEmpty(CurrentSecond).Min();
-            return Math.Max(1, (int)(oldest + _windowSeconds - CurrentSecond));
-        }
-
-        private void Cleanup()
-        {
-            var cutoff = CurrentSecond - _windowSeconds - 1;
-            foreach (var key in _buckets.Keys.Where(k => k <= cutoff))
+            try
             {
-                _buckets.TryRemove(key, out _);
+                var existing = await _db.RateLimitCounters
+                    .FirstOrDefaultAsync(c => c.Scope == scope && c.WindowStart == bucket);
+
+                if (existing != null)
+                {
+                    existing.Value += delta;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    _db.RateLimitCounters.Add(new RateLimitCounter
+                    {
+                        Scope = scope,
+                        WindowStart = bucket,
+                        WindowSeconds = WindowSeconds,
+                        Value = delta,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+
+                await _db.SaveChangesAsync();
+                return;
+            }
+            catch (DbUpdateException ex) when (IsUniqueConflict(ex))
+            {
+                _logger.LogWarning(ex, "Concurrent rate limit counter update for {Scope}, attempt {Attempt}", scope, attempt + 1);
+                if (attempt < maxRetries - 1)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(10 * (attempt + 1)));
+                }
             }
         }
     }
+
+    /// <summary>
+    /// Try to acquire a concurrency slot for the model. Returns true if a slot was acquired.
+    /// Call ReleaseConcurrencyAsync in a finally block to release the slot.
+    /// </summary>
+    public async Task<bool> TryAcquireConcurrencyAsync(int modelId, int limit)
+    {
+        if (limit <= 0) return true;
+
+        var scope = $"model:{modelId}:concurrent";
+        var maxRetries = 3;
+        for (var attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                var counter = await _db.RateLimitCounters
+                    .FirstOrDefaultAsync(c => c.Scope == scope);
+
+                if (counter == null)
+                {
+                    _db.RateLimitCounters.Add(new RateLimitCounter
+                    {
+                        Scope = scope,
+                        WindowStart = DateTime.UtcNow.Date,
+                        WindowSeconds = int.MaxValue,
+                        Value = 1,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                    await _db.SaveChangesAsync();
+                    return true;
+                }
+
+                if (counter.Value >= limit)
+                {
+                    _logger.LogWarning("Concurrency limit exceeded for model {ModelId}: {Current}/{Limit}", modelId, counter.Value, limit);
+                    return false;
+                }
+
+                counter.Value += 1;
+                counter.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrent concurrency counter update for model {ModelId}, attempt {Attempt}", modelId, attempt + 1);
+                if (attempt < maxRetries - 1) await Task.Delay(TimeSpan.FromMilliseconds(10 * (attempt + 1)));
+            }
+            catch (DbUpdateException ex) when (IsUniqueConflict(ex))
+            {
+                _logger.LogWarning(ex, "Concurrent concurrency counter insert for model {ModelId}, attempt {Attempt}", modelId, attempt + 1);
+                if (attempt < maxRetries - 1) await Task.Delay(TimeSpan.FromMilliseconds(10 * (attempt + 1)));
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Release a concurrency slot acquired for the model.
+    /// </summary>
+    public async Task ReleaseConcurrencyAsync(int modelId)
+    {
+        var scope = $"model:{modelId}:concurrent";
+        var maxRetries = 3;
+        for (var attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                var counter = await _db.RateLimitCounters
+                    .FirstOrDefaultAsync(c => c.Scope == scope);
+
+                if (counter != null)
+                {
+                    counter.Value = Math.Max(0, counter.Value - 1);
+                    counter.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
+                return;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrent concurrency counter release for model {ModelId}, attempt {Attempt}", modelId, attempt + 1);
+                if (attempt < maxRetries - 1) await Task.Delay(TimeSpan.FromMilliseconds(10 * (attempt + 1)));
+            }
+        }
+    }
+
+    private async Task<Dictionary<string, long>> SumWindowAsync(string keyPrefix, DateTime cutoff)
+    {
+        var rpmScope = $"{keyPrefix}:rpm";
+        var tpmScope = $"{keyPrefix}:tpm";
+
+        var rpmSum = await _db.RateLimitCounters
+            .Where(c => c.Scope == rpmScope && c.WindowStart >= cutoff)
+            .SumAsync(c => (long?)c.Value) ?? 0;
+
+        var tpmSum = await _db.RateLimitCounters
+            .Where(c => c.Scope == tpmScope && c.WindowStart >= cutoff)
+            .SumAsync(c => (long?)c.Value) ?? 0;
+
+        return new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["rpm"] = rpmSum,
+            ["tpm"] = tpmSum
+        };
+    }
+
+    private async Task CleanupOldBucketsAsync(string keyPrefix, DateTime cutoff)
+    {
+        try
+        {
+            await _db.RateLimitCounters
+                .Where(c => c.Scope.StartsWith(keyPrefix) && c.WindowStart < cutoff)
+                .ExecuteDeleteAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to cleanup old rate limit buckets for {KeyPrefix}", keyPrefix);
+        }
+    }
+
+    private async Task<int> GetSecondsUntilSlotAvailable(string scope, DateTime cutoff, DateTime now)
+    {
+        var oldest = await _db.RateLimitCounters
+            .Where(c => c.Scope == scope && c.WindowStart >= cutoff)
+            .OrderBy(c => c.WindowStart)
+            .Select(c => c.WindowStart)
+            .FirstOrDefaultAsync();
+        if (oldest == default) return 1;
+        return Math.Max(1, (int)(oldest.AddSeconds(WindowSeconds) - now).TotalSeconds + 1);
+    }
+
+    private static DateTime GetBucketStart(DateTime timestamp) =>
+        new DateTime(timestamp.Year, timestamp.Month, timestamp.Day, timestamp.Hour, timestamp.Minute, timestamp.Second, DateTimeKind.Utc);
+
+    private static bool IsUniqueConflict(DbUpdateException ex) =>
+        ex.InnerException is System.Data.Common.DbException dbEx &&
+        (dbEx.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
+         dbEx.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
 }
