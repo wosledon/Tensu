@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './pages/auth/LoginPage';
+import OAuthCallbackPage from './pages/auth/OAuthCallbackPage';
 import './i18n';
 
 // Lazy-loaded pages for code splitting
@@ -12,6 +13,7 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'));
 const ProvidersPage = lazy(() => import('./pages/providers/ProvidersPage'));
 const ModelsPage = lazy(() => import('./pages/models/ModelsPage'));
 const ModelMatrixPage = lazy(() => import('./pages/models/ModelMatrixPage'));
+const ModelCapabilitiesPage = lazy(() => import('./pages/models/ModelCapabilitiesPage'));
 const RouteModelsPage = lazy(() => import('./pages/routeModels/RouteModelsPage'));
 const ApiKeysPage = lazy(() => import('./pages/apiKeys/ApiKeysPage'));
 const OrganizationsPage = lazy(() => import('./pages/organizations/OrganizationsPage'));
@@ -41,11 +43,13 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
             <Route path="/" element={<RequireAuth><MainLayout /></RequireAuth>}>
               <Route index element={<Suspense fallback={<PageLoader />}><DashboardPage /></Suspense>} />
               <Route path="providers" element={<Suspense fallback={<PageLoader />}><ProvidersPage /></Suspense>} />
               <Route path="models" element={<Suspense fallback={<PageLoader />}><ModelsPage /></Suspense>} />
               <Route path="models/matrix" element={<Suspense fallback={<PageLoader />}><ModelMatrixPage /></Suspense>} />
+              <Route path="models/capabilities" element={<Suspense fallback={<PageLoader />}><ModelCapabilitiesPage /></Suspense>} />
               <Route path="route-models" element={<Suspense fallback={<PageLoader />}><RouteModelsPage /></Suspense>} />
               <Route path="api-keys" element={<Suspense fallback={<PageLoader />}><ApiKeysPage /></Suspense>} />
               <Route path="organizations" element={<Suspense fallback={<PageLoader />}><OrganizationsPage /></Suspense>} />

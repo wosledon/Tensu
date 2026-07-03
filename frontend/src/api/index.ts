@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider } from '../types';
 
 const api = axios.create({
   baseURL: '/api/admin',
@@ -37,6 +37,7 @@ export const authApi = {
   me: () => api.get<ApiResponse<CurrentUser>>('/auth/me').then(unwrap),
   changePassword: (oldPassword: string, newPassword: string) =>
     api.post<ApiResponse<void>>('/auth/change-password', { oldPassword, newPassword }).then(unwrap),
+  oauthProviders: () => api.get<ApiResponse<OAuthProvider[]>>('/auth/oauth/providers').then(unwrap),
 };
 
 // Providers
@@ -73,6 +74,26 @@ export const modelApi = {
     api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricings`, data).then(unwrap),
   allEnabled: () =>
     api.get<ApiResponse<Model[]>>('/models/all-enabled').then(unwrap),
+};
+
+// Model Capabilities
+export const modelCapabilityApi = {
+  list: (params: PagedRequest & { modelId?: number; dimension?: string }) =>
+    api.get<ApiResponse<PagedResult<ModelCapability>>>('/model-capabilities', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<ModelCapability>>(`/model-capabilities/${id}`).then(unwrap),
+  create: (data: Partial<ModelCapability>) =>
+    api.post<ApiResponse<ModelCapability>>('/model-capabilities', data).then(unwrap),
+  update: (id: number, data: Partial<ModelCapability>) =>
+    api.put<ApiResponse<ModelCapability>>(`/model-capabilities/${id}`, data).then(unwrap),
+  delete: (id: number) =>
+    api.delete<ApiResponse<void>>(`/model-capabilities/${id}`).then(unwrap),
+  import: (data: Partial<ModelCapability>[]) =>
+    api.post<ApiResponse<ModelCapability[]>>('/model-capabilities/import', data).then(unwrap),
+  matrix: (providerId?: number) =>
+    api.get<ApiResponse<ModelCapabilityMatrix>>('/model-capabilities/matrix', { params: { providerId } }).then(unwrap),
+  autoEvaluate: (modelId: number, dimensions: string[]) =>
+    api.post<ApiResponse<{ modelId: number; modelName: string; results: { dimension: string; score?: number; message: string }[] }>>(`/model-capabilities/${modelId}/auto-evaluate`, dimensions).then(unwrap),
 };
 
 // Organizations

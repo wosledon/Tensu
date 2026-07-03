@@ -12,6 +12,8 @@ public class User
     public string? DisplayName { get; set; }
     public UserRole Role { get; set; } = UserRole.Developer;
     public string AuthProvider { get; set; } = "local"; // local, oauth, oidc
+    public string? ExternalId { get; set; }
+    public string? PictureUrl { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

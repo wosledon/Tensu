@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Form, Input, Button, Card, Typography, message } from 'antd';
+import { useState, useEffect } from 'react';
+import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { authApi } from '../../api';
+import type { OAuthProvider } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +14,15 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [providers, setProviders] = useState<OAuthProvider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
+
+  useEffect(() => {
+    authApi.oauthProviders()
+      .then(setProviders)
+      .catch(() => setProviders([]))
+      .finally(() => setProvidersLoading(false));
+  }, []);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -60,7 +70,20 @@ export default function LoginPage() {
           </Form.Item>
         </Form>
 
-        <div style={{ textAlign: 'center' }}>
+        {providers.length > 0 && (
+          <>
+            <Divider plain>{t('auth.orContinueWith')}</Divider>
+            {providers.map((p) => (
+              <a key={p.id} href={`/api/admin/auth/oauth/${p.name}`} style={{ display: 'block', marginBottom: 8 }}>
+                <Button block loading={providersLoading}>
+                  {t('auth.loginWithProvider', { provider: p.displayName || p.name })}
+                </Button>
+              </a>
+            ))}
+          </>
+        )}
+
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
           <Text type="secondary" style={{ fontSize: 12 }}>Default: admin / admin123</Text>
         </div>
       </Card>

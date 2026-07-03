@@ -1,134 +1,137 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Tag, Space, Select, Button } from 'antd';
+import { Card, Table, Tag, Space, Select, Button, Row, Col } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { modelApi, providerApi } from '../../api';
+import ReactECharts from 'echarts-for-react';
+import { modelCapabilityApi, providerApi } from '../../api';
 import { PageHeader } from '../../components';
-import type { Model, Provider } from '../../types';
+import type { Provider, ModelCapabilityMatrix } from '../../types';
 
 export default function ModelMatrixPage() {
   const { t } = useTranslation();
-  const [models, setModels] = useState<Model[]>([]);
+  const [matrix, setMatrix] = useState<ModelCapabilityMatrix | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [providerFilter, setProviderFilter] = useState<number | undefined>();
-  const [capabilityFilter, setCapabilityFilter] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<number | undefined>();
+
+  const fetchMatrix = async (providerId?: number) => {
+    setLoading(true);
+    try {
+      const data = await modelCapabilityApi.matrix(providerId);
+      setMatrix(data);
+      if (data.models.length > 0) setSelectedModel(data.models[0].modelId);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    Promise.all([
-      modelApi.allEnabled(),
-      providerApi.list({ page: 1, pageSize: 100 }),
-    ]).then(([m, p]) => {
-      setModels(m);
-      setProviders(p.items);
-    }).finally(() => setLoading(false));
+    providerApi.list({ page: 1, pageSize: 100 }).then((p) => setProviders(p.items));
+    fetchMatrix();
   }, []);
 
-  const filtered = models.filter((m) => {
-    if (providerFilter && m.providerId !== providerFilter) return false;
-    if (capabilityFilter.includes('vision') && !m.supportsVision) return false;
-    if (capabilityFilter.includes('reasoning') && !m.supportsReasoning) return false;
-    if (capabilityFilter.includes('toolUse') && !m.supportsToolUse) return false;
-    if (capabilityFilter.includes('thinking') && !m.supportsThinking) return false;
-    return true;
-  });
+  useEffect(() => {
+    fetchMatrix(providerFilter);
+  }, [providerFilter]);
 
-  // Build radar chart data: group by capability
-  const capabilities = [
-    { key: 'vision', label: t('model.vision'), icon: '👁' },
-    { key: 'reasoning', label: t('model.reasoning'), icon: '🧠' },
-    { key: 'toolUse', label: t('model.toolUse'), icon: '🔧' },
-    { key: 'thinking', label: t('model.thinking'), icon: '💭' },
-  ];
+  const dimensions = matrix?.dimensions ?? [];
+
+  const radarOption = {
+    tooltip: { trigger: 'item' },
+    legend: { data: matrix?.models.map((m) => `${m.providerName}-${m.modelName}`) ?? [] },
+    radar: {
+      indicator: dimensions.map((d) => ({ name: d, max: 100 })),
+      radius: '65%',
+    },
+    series: [
+      {
+        type: 'radar',
+        data: matrix?.models.map((m) => ({
+          value: dimensions.map((d) => m.scores[d] ?? 0),
+          name: `${m.providerName}-${m.modelName}`,
+        })) ?? [],
+      },
+    ],
+  };
+
+  const selected = matrix?.models.find((m) => m.modelId === selectedModel);
 
   const columns = [
     {
-      title: t('model.name'), key: 'name', sorter: (a: Model, b: Model) => a.name.localeCompare(b.name),
-      render: (_: any, r: Model) => (
+      title: t('model.name'),
+      key: 'name',
+      sorter: (a: ModelCapabilityMatrix['models'][0], b: ModelCapabilityMatrix['models'][0]) => a.modelName.localeCompare(b.modelName),
+      render: (_: any, r: ModelCapabilityMatrix['models'][0]) => (
         <Space>
-          <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{r.provider?.name}-{r.name}</span>
-          {r.displayName && <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>({r.displayName})</span>}
+          <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{r.providerName}-{r.modelName}</span>
         </Space>
       ),
     },
-    { title: t('model.provider'), key: 'provider', render: (_: any, r: Model) => <Tag>{r.provider?.name}</Tag> },
-    {
-      title: t('model.vision'), key: 'vision', width: 80, align: 'center' as const,
-      render: (_: any, r: Model) => r.supportsVision ? <Tag color="blue">✓</Tag> : <Tag>—</Tag>,
-    },
-    {
-      title: t('model.reasoning'), key: 'reasoning', width: 80, align: 'center' as const,
-      render: (_: any, r: Model) => r.supportsReasoning ? <Tag color="purple">✓</Tag> : <Tag>—</Tag>,
-    },
-    {
-      title: t('model.toolUse'), key: 'toolUse', width: 80, align: 'center' as const,
-      render: (_: any, r: Model) => r.supportsToolUse ? <Tag color="green">✓</Tag> : <Tag>—</Tag>,
-    },
-    {
-      title: t('model.thinking'), key: 'thinking', width: 80, align: 'center' as const,
-      render: (_: any, r: Model) => r.supportsThinking ? <Tag color="orange">✓</Tag> : <Tag>—</Tag>,
-    },
-    {
-      title: t('model.inputContext'), key: 'inputCtx', width: 120, align: 'right' as const,
-      sorter: (a: Model, b: Model) => a.inputContextSize - b.inputContextSize,
-      render: (_: any, r: Model) => <span style={{ fontFamily: 'monospace' }}>{(r.inputContextSize / 1000).toFixed(0)}K</span>,
-    },
-    {
-      title: t('model.outputContext'), key: 'outputCtx', width: 120, align: 'right' as const,
-      sorter: (a: Model, b: Model) => a.outputContextSize - b.outputContextSize,
-      render: (_: any, r: Model) => <span style={{ fontFamily: 'monospace' }}>{(r.outputContextSize / 1000).toFixed(0)}K</span>,
-    },
-    {
-      title: t('model.pricing'), key: 'pricing', width: 180,
-      render: (_: any, r: Model) => {
-        const p = r.pricings?.[0];
-        if (!p) return <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>;
-        return (
-          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>
-            ${p.inputPricePerMillionTokens} / ${p.outputPricePerMillionTokens}
-          </span>
+    ...dimensions.map((d) => ({
+      title: d,
+      key: d,
+      width: 100,
+      align: 'center' as const,
+      render: (_: any, r: ModelCapabilityMatrix['models'][0]) => {
+        const score = r.scores[d];
+        return score !== undefined ? (
+          <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>{score.toFixed(1)}</span>
+        ) : (
+          <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>
         );
       },
+    })),
+    {
+      title: t('capability.overallScore'),
+      key: 'overall',
+      width: 120,
+      align: 'right' as const,
+      sorter: (a: ModelCapabilityMatrix['models'][0], b: ModelCapabilityMatrix['models'][0]) => a.overallScore - b.overallScore,
+      render: (_: any, r: ModelCapabilityMatrix['models'][0]) => (
+        <Tag color={r.overallScore >= 80 ? 'green' : r.overallScore >= 60 ? 'orange' : 'red'}>
+          <span style={{ fontFamily: 'monospace' }}>{r.overallScore.toFixed(1)}</span>
+        </Tag>
+      ),
     },
   ];
 
-  // Capability coverage summary
-  const coverage = capabilities.map((cap) => {
-    const key = `supports${cap.key.charAt(0).toUpperCase() + cap.key.slice(1)}` as keyof Model;
-    const count = models.filter((m) => m[key]).length;
-    return { ...cap, count, total: models.length, pct: models.length > 0 ? Math.round(count / models.length * 100) : 0 };
-  });
-
   return (
     <div>
-      <PageHeader title={t('model.title') + ' - ' + 'Capability Matrix'} />
+      <PageHeader title={t('model.title') + ' - ' + t('capability.matrixTitle')} />
 
-      {/* Capability coverage cards */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-        {coverage.map((cap) => (
-          <Card
-            key={cap.key}
-            hoverable
-            style={{
-              flex: '1 1 200px', borderRadius: 18, cursor: 'pointer',
-              border: capabilityFilter.includes(cap.key) ? '2px solid var(--ant-color-primary)' : undefined,
-            }}
-            onClick={() => {
-              setCapabilityFilter((prev) =>
-                prev.includes(cap.key) ? prev.filter((k) => k !== cap.key) : [...prev, cap.key]
-              );
-            }}
-          >
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{cap.icon}</div>
-              <div style={{ fontSize: 13, color: 'var(--ant-color-text-secondary)', marginBottom: 4 }}>{cap.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 600, fontFamily: 'monospace' }}>{cap.count}<span style={{ fontSize: 14, fontWeight: 400, color: 'var(--ant-color-text-secondary)' }}>/{cap.total}</span></div>
-              <div style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>{cap.pct}%</div>
-            </div>
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col xs={24} lg={16}>
+          <Card style={{ borderRadius: 18 }} loading={loading}>
+            <ReactECharts option={radarOption} style={{ height: 400 }} />
           </Card>
-        ))}
-      </div>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card style={{ borderRadius: 18 }} title={t('capability.modelDetail')} loading={loading}>
+            {selected ? (
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+                  {selected.providerName}-{selected.modelName}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('capability.overallScore')}:</span>{' '}
+                  <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 18 }}>{selected.overallScore.toFixed(1)}</span>
+                </div>
+                {dimensions.map((d) => (
+                  <div key={d} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{d}</span>
+                    <span style={{ fontFamily: 'monospace' }}>
+                      {selected.scores[d] !== undefined ? selected.scores[d].toFixed(1) : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
+            )}
+          </Card>
+        </Col>
+      </Row>
 
-      {/* Filters */}
       <Card style={{ borderRadius: 18, marginBottom: 24 }}>
         <Space wrap>
           <Select
@@ -138,33 +141,29 @@ export default function ModelMatrixPage() {
             options={providers.map((p) => ({ value: p.id, label: `${p.name} (${p.protocol})` }))}
             onChange={(v) => setProviderFilter(v)}
           />
-          <Select
-            mode="multiple"
-            allowClear
-            placeholder="Capabilities"
-            style={{ width: 300 }}
-            options={capabilities.map((c) => ({ value: c.key, label: `${c.icon} ${c.label}` }))}
-            onChange={(v) => setCapabilityFilter(v)}
-          />
-          {(providerFilter || capabilityFilter.length > 0) && (
-            <Button onClick={() => { setProviderFilter(undefined); setCapabilityFilter([]); }}>{t('common.reset')}</Button>
+          {providerFilter && (
+            <Button onClick={() => setProviderFilter(undefined)}>{t('common.reset')}</Button>
           )}
           <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
-            {filtered.length} / {models.length} models
+            {matrix?.models.length ?? 0} models
           </span>
         </Space>
       </Card>
 
-      {/* Matrix table */}
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns}
-          dataSource={filtered}
-          rowKey="id"
+          dataSource={matrix?.models ?? []}
+          rowKey="modelId"
           loading={loading}
           pagination={false}
           scroll={{ x: 1000 }}
           size="middle"
+          rowSelection={{
+            type: 'radio',
+            selectedRowKeys: selectedModel ? [selectedModel] : [],
+            onChange: (keys) => setSelectedModel(keys[0] as number),
+          }}
         />
       </Card>
     </div>

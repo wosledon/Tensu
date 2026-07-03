@@ -44,7 +44,10 @@
     "password": "密码",
     "loginTitle": "登录 Tensu",
     "loginSubtitle": "大模型网关平台",
-    "invalidCredentials": "用户名或密码错误"
+    "invalidCredentials": "用户名或密码错误",
+    "loginWithProvider": "使用 {provider} 登录",
+    "orContinueWith": "或使用以下方式",
+    "oauthError": "OAuth 登录失败：{error}"
   },
   "provider": {
     "title": "供应商管理",
@@ -81,6 +84,20 @@
     "cachedPrice": "缓存单价",
     "currency": "币种",
     "perMillion": "/百万 token"
+  },
+  "capability": {
+    "title": "能力评分管理",
+    "matrixTitle": "能力评估矩阵",
+    "dimension": "能力维度",
+    "score": "评分",
+    "source": "来源",
+    "evidence": "证据/备注",
+    "evaluatedAt": "评估时间",
+    "overallScore": "综合评分",
+    "modelDetail": "模型详情",
+    "autoEvaluate": "自动评估",
+    "dimensions": "评估维度",
+    "autoEvaluateHint": "仅 Latency / Throughput / CostEfficiency 支持基于历史日志的自动评估"
   },
   "routeModel": {
     "title": "路由模型",

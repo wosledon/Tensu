@@ -51,6 +51,7 @@ builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<AuditChannel>();
 builder.Services.AddSingleton<LoadBalancer>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<RateLimiter>();
 builder.Services.AddSingleton<RetryPolicy>();
 builder.Services.AddScoped<CompressionService>();
@@ -61,8 +62,11 @@ builder.Services.AddHostedService<AuditBackgroundService>();
 
 // Business services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<OAuthProviderService>();
+builder.Services.AddScoped<OAuthService>();
 builder.Services.AddScoped<ProviderService>();
 builder.Services.AddScoped<ModelService>();
+builder.Services.AddScoped<ModelCapabilityService>();
 builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ApiKeyService>();

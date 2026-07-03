@@ -44,7 +44,10 @@
     "password": "Password",
     "loginTitle": "Sign in to Tensu",
     "loginSubtitle": "LLM Gateway Platform",
-    "invalidCredentials": "Invalid username or password"
+    "invalidCredentials": "Invalid username or password",
+    "loginWithProvider": "Continue with {provider}",
+    "orContinueWith": "or continue with",
+    "oauthError": "OAuth login failed: {error}"
   },
   "provider": {
     "title": "Providers",
@@ -81,6 +84,20 @@
     "cachedPrice": "Cached Price",
     "currency": "Currency",
     "perMillion": "/1M tokens"
+  },
+  "capability": {
+    "title": "Capability Scores",
+    "matrixTitle": "Capability Matrix",
+    "dimension": "Dimension",
+    "score": "Score",
+    "source": "Source",
+    "evidence": "Evidence",
+    "evaluatedAt": "Evaluated At",
+    "overallScore": "Overall Score",
+    "modelDetail": "Model Detail",
+    "autoEvaluate": "Auto Evaluate",
+    "dimensions": "Dimensions",
+    "autoEvaluateHint": "Only Latency / Throughput / CostEfficiency can be auto-evaluated from request logs"
   },
   "routeModel": {
     "title": "Route Models",

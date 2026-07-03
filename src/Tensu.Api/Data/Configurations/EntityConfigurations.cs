@@ -40,6 +40,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(200);
         builder.Property(e => e.Role).HasColumnName("role").HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.AuthProvider).HasColumnName("auth_provider").HasMaxLength(50);
+        builder.Property(e => e.ExternalId).HasColumnName("external_id").HasMaxLength(200);
+        builder.Property(e => e.PictureUrl).HasColumnName("picture_url").HasMaxLength(500);
         builder.Property(e => e.IsActive).HasColumnName("is_active");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
@@ -396,5 +398,51 @@ public class ArchivedRequestLogConfiguration : IEntityTypeConfiguration<Archived
         builder.HasIndex(e => e.Timestamp);
         builder.HasIndex(e => e.OrganizationId);
         builder.HasIndex(e => e.ModelName);
+    }
+}
+
+public class OAuthProviderConfiguration : IEntityTypeConfiguration<OAuthProvider>
+{
+    public void Configure(EntityTypeBuilder<OAuthProvider> builder)
+    {
+        builder.ToTable("oauth_providers");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(200);
+        builder.Property(e => e.Protocol).HasColumnName("protocol").HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(e => e.ClientId).HasColumnName("client_id").HasMaxLength(500).IsRequired();
+        builder.Property(e => e.ClientSecret).HasColumnName("client_secret").HasMaxLength(2000).IsRequired();
+        builder.Property(e => e.AuthorizationEndpoint).HasColumnName("authorization_endpoint").HasMaxLength(1000);
+        builder.Property(e => e.TokenEndpoint).HasColumnName("token_endpoint").HasMaxLength(1000);
+        builder.Property(e => e.UserInfoEndpoint).HasColumnName("userinfo_endpoint").HasMaxLength(1000);
+        builder.Property(e => e.Issuer).HasColumnName("issuer").HasMaxLength(500);
+        builder.Property(e => e.Scope).HasColumnName("scope").HasMaxLength(500).IsRequired();
+        builder.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.Name).IsUnique();
+    }
+}
+
+public class ModelCapabilityConfiguration : IEntityTypeConfiguration<ModelCapability>
+{
+    public void Configure(EntityTypeBuilder<ModelCapability> builder)
+    {
+        builder.ToTable("model_capabilities");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.ModelId).HasColumnName("model_id");
+        builder.Property(e => e.Dimension).HasColumnName("dimension").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Score).HasColumnName("score").HasPrecision(6, 2);
+        builder.Property(e => e.Source).HasColumnName("source").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Evidence).HasColumnName("evidence").HasMaxLength(2000);
+        builder.Property(e => e.EvaluatedAt).HasColumnName("evaluated_at");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasOne(e => e.Model).WithMany(m => m.Capabilities).HasForeignKey(e => e.ModelId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(e => new { e.ModelId, e.Dimension }).IsUnique();
     }
 }

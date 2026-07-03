@@ -32,7 +32,8 @@ export default function MainLayout() {
       roles: ['SuperAdmin', 'Admin'],
       children: [
         { key: '/models', label: t('model.title') },
-        { key: '/models/matrix', label: 'Capability Matrix' },
+        { key: '/models/matrix', label: t('capability.matrixTitle') },
+        { key: '/models/capabilities', label: t('capability.title') },
       ],
     },
     { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels'), roles: ['SuperAdmin', 'Admin'] },

@@ -80,6 +80,30 @@ export interface ModelPricing {
   effectiveTo?: string;
 }
 
+export interface ModelCapability {
+  id: number;
+  modelId: number;
+  model?: Model;
+  dimension: string;
+  score: number;
+  source: string;
+  evidence?: string;
+  evaluatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModelCapabilityMatrix {
+  dimensions: string[];
+  models: {
+    modelId: number;
+    modelName: string;
+    providerName: string;
+    scores: Record<string, number>;
+    overallScore: number;
+  }[];
+}
+
 export interface Organization {
   id: number;
   parentId?: number;
@@ -99,10 +123,29 @@ export interface User {
   username: string;
   email?: string;
   displayName?: string;
+  pictureUrl?: string;
   role: 'SuperAdmin' | 'Admin' | 'Developer' | 'ReadOnly';
   isActive: boolean;
   lastLoginAt?: string;
   createdAt: string;
+}
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  email?: string;
+  displayName?: string;
+  pictureUrl?: string;
+  role: string;
+  organizationId: number;
+  organization?: string;
+}
+
+export interface OAuthProvider {
+  id: number;
+  name: string;
+  displayName?: string;
+  protocol: 'OAuth2' | 'OIDC';
 }
 
 export interface ApiKey {

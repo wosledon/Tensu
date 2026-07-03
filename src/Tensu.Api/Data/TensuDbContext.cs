@@ -9,10 +9,12 @@ public class TensuDbContext : DbContext
 
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<OAuthProvider> OAuthProviders => Set<OAuthProvider>();
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<ProviderKey> ProviderKeys => Set<ProviderKey>();
     public DbSet<Model> Models => Set<Model>();
     public DbSet<ModelPricing> ModelPricings => Set<ModelPricing>();
+    public DbSet<ModelCapability> ModelCapabilities => Set<ModelCapability>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<Quota> Quotas => Set<Quota>();
     public DbSet<RateLimitCounter> RateLimitCounters => Set<RateLimitCounter>();

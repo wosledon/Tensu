@@ -22,4 +22,5 @@ public class Model
     // Navigation
     public Provider Provider { get; set; } = null!;
     public ICollection<ModelPricing> Pricings { get; set; } = [];
+    public ICollection<ModelCapability> Capabilities { get; set; } = [];
 }
