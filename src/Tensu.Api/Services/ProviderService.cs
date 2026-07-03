@@ -3,6 +3,7 @@ using Tensu.Api.Data;
 using Tensu.Api.Infrastructure;
 using Tensu.Core.Common;
 using Tensu.Core.Entities;
+using Tensu.Core.Enums;
 
 namespace Tensu.Api.Services;
 
@@ -17,7 +18,7 @@ public class ProviderService : BaseService
         _encryption = encryption;
     }
 
-    public async Task<PagedResult<Provider>> GetListAsync(PagedRequest request)
+    public async Task<PagedResult<object>> GetListAsync(PagedRequest request)
     {
         var query = _db.Providers.Include(p => p.Keys).Include(p => p.Models).AsQueryable();
 
@@ -26,13 +27,65 @@ public class ProviderService : BaseService
 
         query = ApplyPaging(query, request, out var total);
         var items = await query.ToListAsync();
-        return ToPagedResult(items, total, request);
+        return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
+    }
+
+    private static object MapToListDto(Provider p)
+    {
+        return new
+        {
+            p.Id,
+            p.Name,
+            p.Protocol,
+            p.BaseUrl,
+            p.Description,
+            p.HealthStatus,
+            p.IsEnabled,
+            p.KeyLoadBalanceStrategy,
+            p.CreatedAt,
+            p.UpdatedAt,
+            p.LastHealthCheckAt,
+            Keys = p.Keys.Select(k => new
+            {
+                k.Id,
+                k.ProviderId,
+                k.Name,
+                k.Weight,
+                k.Status,
+                k.RateLimitRpm,
+                k.RateLimitTpm,
+                k.CreatedAt,
+                k.UpdatedAt,
+                k.LastHealthCheckAt,
+                KeyValue = "***"
+            }).ToList(),
+            Models = p.Models.Select(m => new
+            {
+                m.Id,
+                m.ProviderId,
+                m.Name,
+                m.DisplayName,
+                m.SupportsVision,
+                m.SupportsReasoning,
+                m.SupportsToolUse,
+                m.SupportsThinking,
+                m.InputContextSize,
+                m.OutputContextSize,
+                m.IsEnabled
+            }).ToList()
+        };
     }
 
     public async Task<Provider?> GetByIdAsync(int id)
     {
         return await _db.Providers.Include(p => p.Keys).Include(p => p.Models)
+            .ThenInclude(m => m.Pricings)
             .FirstOrDefaultAsync(p => p.Id == id);
+    }
+
+    public object MapToDetailDto(Provider p)
+    {
+        return MapToListDto(p);
     }
 
     public async Task<Provider> CreateAsync(Provider provider)
@@ -85,6 +138,36 @@ public class ProviderService : BaseService
         return key;
     }
 
+    public async Task<ProviderKey?> UpdateKeyAsync(int providerId, int keyId, ProviderKey updated)
+    {
+        var key = await _db.ProviderKeys.FirstOrDefaultAsync(k => k.Id == keyId && k.ProviderId == providerId);
+        if (key == null) return null;
+
+        key.Name = updated.Name;
+        key.Weight = updated.Weight;
+        key.Status = updated.Status;
+        key.RateLimitRpm = updated.RateLimitRpm;
+        key.RateLimitTpm = updated.RateLimitTpm;
+        key.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return key;
+    }
+
+    public async Task<ProviderKey?> UpdateKeyFieldsAsync(int providerId, int keyId, string? name = null, string? status = null, int? weight = null, int? rateLimitRpm = null, int? rateLimitTpm = null)
+    {
+        var key = await _db.ProviderKeys.FirstOrDefaultAsync(k => k.Id == keyId && k.ProviderId == providerId);
+        if (key == null) return null;
+
+        if (name != null) key.Name = name;
+        if (status != null && Enum.TryParse<KeyStatus>(status, true, out var parsedStatus)) key.Status = parsedStatus;
+        if (weight.HasValue) key.Weight = weight.Value;
+        if (rateLimitRpm.HasValue) key.RateLimitRpm = rateLimitRpm;
+        if (rateLimitTpm.HasValue) key.RateLimitTpm = rateLimitTpm;
+        key.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return key;
+    }
+
     public async Task<bool> DeleteKeyAsync(int providerId, int keyId)
     {
         var key = await _db.ProviderKeys.FirstOrDefaultAsync(k => k.Id == keyId && k.ProviderId == providerId);
@@ -95,4 +178,12 @@ public class ProviderService : BaseService
     }
 
     public string DecryptKey(string encryptedKey) => _encryption.Decrypt(encryptedKey);
+
+    public async Task<ProviderKey?> GetActiveKeyAsync(int providerId)
+    {
+        return await _db.ProviderKeys
+            .Where(k => k.ProviderId == providerId && k.Status == KeyStatus.Active)
+            .OrderBy(k => k.Id)
+            .FirstOrDefaultAsync();
+    }
 }

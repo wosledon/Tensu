@@ -58,7 +58,9 @@
     "healthStatus": "健康状态",
     "keyStrategy": "密钥策略",
     "keys": "密钥列表",
+    "manageKeys": "管理密钥",
     "addKey": "添加密钥",
+    "editKey": "编辑密钥",
     "keyName": "密钥名称",
     "keyValue": "密钥值",
     "weight": "权重",
@@ -83,7 +85,11 @@
     "outputPrice": "输出单价",
     "cachedPrice": "缓存单价",
     "currency": "币种",
-    "perMillion": "/百万 token"
+    "perMillion": "/百万 token",
+    "syncFromProvider": "自动拉取模型",
+    "syncSuccess": "已同步 {{total}} 个模型，新增 {{added}} 个",
+    "syncError": "同步失败",
+    "selectProvider": "选择供应商"
   },
   "capability": {
     "title": "能力评分管理",

@@ -54,6 +54,8 @@ export const providerApi = {
     api.delete<ApiResponse<void>>(`/providers/${id}`).then(unwrap),
   addKey: (providerId: number, data: Partial<ProviderKey>) =>
     api.post<ApiResponse<ProviderKey>>(`/providers/${providerId}/keys`, data).then(unwrap),
+  updateKey: (providerId: number, keyId: number, data: Partial<ProviderKey>) =>
+    api.put<ApiResponse<ProviderKey>>(`/providers/${providerId}/keys/${keyId}`, data).then(unwrap),
   deleteKey: (providerId: number, keyId: number) =>
     api.delete<ApiResponse<void>>(`/providers/${providerId}/keys/${keyId}`).then(unwrap),
 };
@@ -72,6 +74,8 @@ export const modelApi = {
     api.delete<ApiResponse<void>>(`/models/${id}`).then(unwrap),
   addPricing: (modelId: number, data: Partial<ModelPricing>) =>
     api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricings`, data).then(unwrap),
+  syncFromProvider: (providerId: number) =>
+    api.post<ApiResponse<{ added: number; existing: number; total: number }>>(`/models/sync/${providerId}`).then(unwrap),
   allEnabled: () =>
     api.get<ApiResponse<Model[]>>('/models/all-enabled').then(unwrap),
 };

@@ -58,7 +58,9 @@
     "healthStatus": "Health",
     "keyStrategy": "Key Strategy",
     "keys": "Keys",
+    "manageKeys": "Manage Keys",
     "addKey": "Add Key",
+    "editKey": "Edit Key",
     "keyName": "Key Name",
     "keyValue": "Key Value",
     "weight": "Weight",
@@ -83,7 +85,11 @@
     "outputPrice": "Output Price",
     "cachedPrice": "Cached Price",
     "currency": "Currency",
-    "perMillion": "/1M tokens"
+    "perMillion": "/1M tokens",
+    "syncFromProvider": "Sync Models from Provider",
+    "syncSuccess": "Synced {{total}} models, {{added}} new",
+    "syncError": "Sync failed",
+    "selectProvider": "Select Provider"
   },
   "capability": {
     "title": "Capability Scores",

@@ -55,7 +55,31 @@ public class HealthCheckBackgroundService : BackgroundService
 
         foreach (var provider in providers)
         {
-            var (providerStatus, latencyMs) = await CheckProviderBaseUrlAsync(provider, ct);
+            var keyStatuses = provider.Keys
+                .Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired)
+                .Select(k => k.Status)
+                .ToList();
+
+            ProviderHealthStatus providerStatus;
+            if (!keyStatuses.Any())
+            {
+                providerStatus = ProviderHealthStatus.Unhealthy;
+            }
+            else if (keyStatuses.All(s => s is KeyStatus.Inactive or KeyStatus.Expired))
+            {
+                providerStatus = ProviderHealthStatus.Unhealthy;
+            }
+            else if (keyStatuses.Any(s => s is KeyStatus.Active or KeyStatus.Degraded))
+            {
+                providerStatus = keyStatuses.Any(s => s == KeyStatus.Active)
+                    ? ProviderHealthStatus.Healthy
+                    : ProviderHealthStatus.Degraded;
+            }
+            else
+            {
+                providerStatus = ProviderHealthStatus.Degraded;
+            }
+
             provider.LastHealthCheckAt = DateTime.UtcNow;
             provider.HealthStatus = providerStatus;
 
@@ -68,34 +92,6 @@ public class HealthCheckBackgroundService : BackgroundService
         }
 
         await db.SaveChangesAsync(ct);
-    }
-
-    private async Task<(ProviderHealthStatus status, long latencyMs)> CheckProviderBaseUrlAsync(Provider provider, CancellationToken ct)
-    {
-        var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(10);
-
-        try
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            var response = await client.GetAsync(provider.BaseUrl, ct);
-            sw.Stop();
-
-            var latencyMs = sw.ElapsedMilliseconds;
-            var status = response.IsSuccessStatusCode
-                ? ProviderHealthStatus.Healthy
-                : ProviderHealthStatus.Degraded;
-
-            _logger.LogDebug("Health check for {Provider}: {Status} ({Latency}ms)",
-                provider.Name, status, latencyMs);
-
-            return (status, latencyMs);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Health check failed for provider {Provider}", provider.Name);
-            return (ProviderHealthStatus.Unhealthy, 0);
-        }
     }
 
     private async Task<KeyStatus> CheckProviderKeyAsync(
@@ -114,7 +110,10 @@ public class HealthCheckBackgroundService : BackgroundService
         var request = new HttpRequestMessage(HttpMethod.Get, healthUrl);
         try
         {
-            var decryptedKey = encryption.Decrypt(key.KeyValue);
+            var decryptedKey = encryption.Decrypt(key.KeyValue).Trim();
+            if (string.IsNullOrWhiteSpace(decryptedKey))
+                return KeyStatus.Inactive;
+
             if (provider.Protocol == ProtocolType.OpenAI)
                 request.Headers.Add("Authorization", $"Bearer {decryptedKey}");
             else

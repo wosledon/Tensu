@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Tensu.Api.Services;
 using Tensu.Core.Common;
 using Tensu.Core.Entities;
+using Tensu.Core.Enums;
 
 namespace Tensu.Api.Controllers;
 
@@ -30,7 +31,7 @@ public class ProvidersController : AdminBaseController
     {
         var provider = await _service.GetByIdAsync(id);
         if (provider == null) return NotFound(ApiResponse.Error(40401, "Provider not found"));
-        return Ok(ApiResponse<object>.Success(provider));
+        return Ok(ApiResponse<object>.Success(_service.MapToDetailDto(provider)));
     }
 
     [HttpPost]
@@ -63,13 +64,70 @@ public class ProvidersController : AdminBaseController
         }
     }
 
+    public record AddKeyRequest(string Name, string KeyValue, int Weight = 1, int? RateLimitRpm = null, int? RateLimitTpm = null);
+
     [HttpPost("{id}/keys")]
-    public async Task<IActionResult> AddKey(int id, [FromBody] ProviderKey key)
+    public async Task<IActionResult> AddKey(int id, [FromBody] AddKeyRequest request)
     {
+        var provider = await _service.GetByIdAsync(id);
+        if (provider == null) return NotFound(ApiResponse.Error(40401, "Provider not found"));
+
+        var key = new ProviderKey
+        {
+            ProviderId = id,
+            Name = request.Name,
+            KeyValue = request.KeyValue,
+            Weight = request.Weight,
+            RateLimitRpm = request.RateLimitRpm,
+            RateLimitTpm = request.RateLimitTpm,
+            Status = KeyStatus.Active
+        };
+
         var created = await _service.AddKeyAsync(id, key);
-        // Don't return the encrypted key value
-        created.KeyValue = "***";
-        return Ok(ApiResponse<object>.Success(created));
+        // Don't return the encrypted key value and break object cycles
+        var response = new
+        {
+            created.Id,
+            created.ProviderId,
+            created.Name,
+            created.Weight,
+            created.Status,
+            created.RateLimitRpm,
+            created.RateLimitTpm,
+            created.CreatedAt,
+            created.UpdatedAt,
+            created.LastHealthCheckAt,
+            KeyValue = "***"
+        };
+        return Ok(ApiResponse<object>.Success(response));
+    }
+
+    public record UpdateKeyRequest(string Name, string? Status = null, int? Weight = null, int? RateLimitRpm = null, int? RateLimitTpm = null);
+
+    [HttpPut("{providerId}/keys/{keyId}")]
+    public async Task<IActionResult> UpdateKey(int providerId, int keyId, [FromBody] UpdateKeyRequest request)
+    {
+        var provider = await _service.GetByIdAsync(providerId);
+        if (provider == null) return NotFound(ApiResponse.Error(40401, "Provider not found"));
+
+        var updated = await _service.UpdateKeyFieldsAsync(providerId, keyId, request.Name, request.Status, request.Weight, request.RateLimitRpm, request.RateLimitTpm);
+        if (updated == null) return NotFound(ApiResponse.Error(40401, "Key not found"));
+
+        var response = new
+        {
+            updated.Id,
+            updated.ProviderId,
+            updated.Name,
+            updated.Weight,
+            updated.Status,
+            updated.RateLimitRpm,
+            updated.RateLimitTpm,
+            updated.CreatedAt,
+            updated.UpdatedAt,
+            updated.LastHealthCheckAt,
+            KeyValue = "***"
+        };
+        return Ok(ApiResponse<object>.Success(response));
     }
 
     [HttpDelete("{providerId}/keys/{keyId}")]

@@ -35,8 +35,9 @@ public class RoutingModelServiceTests : IDisposable
         services.AddSingleton(_db);
         services.AddSingleton<CacheService>(sp => new CacheService(new Mock<ILogger<CacheService>>().Object));
         services.AddSingleton<LoadBalancer>();
+        services.AddHttpClient();
         services.AddScoped<ProviderService>(sp => new ProviderService(_db, _encryption));
-        services.AddScoped<ModelService>(sp => new ModelService(_db));
+        services.AddScoped<ModelService>(sp => new ModelService(_db, sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ProviderService>()));
         _provider = services.BuildServiceProvider();
         _cache = _provider.GetRequiredService<CacheService>();
     }

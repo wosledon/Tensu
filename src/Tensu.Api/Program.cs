@@ -101,6 +101,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddOpenApi();
 
+builder.WebHost.UseUrls("http://0.0.0.0:5000");
+
 var app = builder.Build();
 
 // Auto-migrate and seed on startup

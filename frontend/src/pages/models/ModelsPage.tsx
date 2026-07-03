@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip } from 'antd';
+import { useState, useCallback, useEffect } from 'react';
+import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, message } from 'antd';
 import { EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelApi, providerApi } from '../../api';
@@ -26,6 +26,27 @@ export default function ModelsPage() {
   const ensureProviders = async () => {
     if (!providers.length) {
       try { setProviders((await providerApi.list({ page: 1, pageSize: 100 })).items); } catch {}
+    }
+  };
+
+  const [syncProviderId, setSyncProviderId] = useState<number>();
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    ensureProviders();
+  }, []);
+
+  const handleSync = async () => {
+    if (!syncProviderId) return;
+    setSyncing(true);
+    try {
+      const result = await modelApi.syncFromProvider(syncProviderId);
+      message.success(t('model.syncSuccess', { added: result.added, total: result.total }));
+      fetchData();
+    } catch {
+      message.error(t('model.syncError'));
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -84,7 +105,26 @@ export default function ModelsPage() {
 
   return (
     <div>
-      <PageHeader title={t('model.title')} onCreate={async () => { await ensureProviders(); openCreate(); }} />
+      <PageHeader
+        title={t('model.title')}
+        extra={
+          <Space>
+            <Select
+              placeholder={t('model.selectProvider')}
+              options={providerOptions}
+              value={syncProviderId}
+              onChange={setSyncProviderId}
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 220 }}
+            />
+            <Button loading={syncing} disabled={!syncProviderId} onClick={handleSync}>
+              {t('model.syncFromProvider')}
+            </Button>
+          </Space>
+        }
+        onCreate={async () => { await ensureProviders(); openCreate(); }}
+      />
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns} dataSource={data} rowKey="id" loading={loading}

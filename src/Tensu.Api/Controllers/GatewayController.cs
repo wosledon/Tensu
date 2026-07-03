@@ -414,7 +414,10 @@ public class GatewayController : ControllerBase
         {
             if (routeModel.TargetModelId == null) return requestedModel;
             var target = await _modelService.GetByIdAsync(routeModel.TargetModelId.Value);
-            return target != null ? $"{target.Provider.Name}-{target.Name}" : requestedModel;
+            if (target == null) return requestedModel;
+            var providerName = GetNestedValue(target, "Provider.Name") ?? string.Empty;
+            var modelName = GetNestedValue(target, "Name") ?? string.Empty;
+            return string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(modelName) ? requestedModel : $"{providerName}-{modelName}";
         }
 
         // Route mode: try LLM-based routing first, then fall back to rule engine
@@ -437,17 +440,39 @@ public class GatewayController : ControllerBase
             if (EvaluateRule(rule, requestBody))
             {
                 var target = await _modelService.GetByIdAsync(rule.TargetModelId);
-                if (target != null) return $"{target.Provider.Name}-{target.Name}";
+                if (target == null) continue;
+                var providerName = GetNestedValue(target, "Provider.Name") ?? string.Empty;
+                var modelName = GetNestedValue(target, "Name") ?? string.Empty;
+                if (!string.IsNullOrEmpty(providerName) && !string.IsNullOrEmpty(modelName))
+                    return $"{providerName}-{modelName}";
             }
         }
 
         if (routeModel.FallbackModelId.HasValue)
         {
             var fallback = await _modelService.GetByIdAsync(routeModel.FallbackModelId.Value);
-            if (fallback != null) return $"{fallback.Provider.Name}-{fallback.Name}";
+            if (fallback == null) return requestedModel;
+            var providerName = GetNestedValue(fallback, "Provider.Name") ?? string.Empty;
+            var modelName = GetNestedValue(fallback, "Name") ?? string.Empty;
+            return string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(modelName) ? requestedModel : $"{providerName}-{modelName}";
         }
 
         return requestedModel;
+    }
+
+    private static string? GetNestedValue(object? source, string path)
+    {
+        if (source == null) return null;
+        var current = source;
+        foreach (var part in path.Split('.'))
+        {
+            if (current == null) return null;
+            var type = current.GetType();
+            var prop = type.GetProperty(part, System.Reflection.BindingFlags.IgnoreCase | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (prop == null) return null;
+            current = prop.GetValue(current);
+        }
+        return current?.ToString();
     }
 
     private static bool IsModelAllowed(ApiKey apiKey, string modelName)

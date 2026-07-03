@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Http;
 using Tensu.Api.Services;
 using Tensu.Core.Common;
 using Tensu.Core.Entities;
@@ -40,10 +41,29 @@ public class ModelsController : AdminBaseController
         return Ok(ApiResponse<object>.Success(created));
     }
 
+    public record UpdateModelRequest(string Name, string? DisplayName = null, string? Description = null, bool SupportsVision = false, bool SupportsReasoning = false, bool SupportsToolUse = false, bool SupportsThinking = false, string? ThinkingStrengths = null, int InputContextSize = 0, int OutputContextSize = 0, bool IsEnabled = true, bool CompressionEnabled = true);
+
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Model model)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateModelRequest request)
     {
-        var updated = await _service.UpdateAsync(id, model);
+        var model = await _service.GetByIdAsync(id);
+        if (model == null) return NotFound(ApiResponse.Error(40401, "Model not found"));
+
+        var updated = await _service.UpdateAsync(id, new Model
+        {
+            Name = request.Name,
+            DisplayName = request.DisplayName,
+            Description = request.Description,
+            SupportsVision = request.SupportsVision,
+            SupportsReasoning = request.SupportsReasoning,
+            SupportsToolUse = request.SupportsToolUse,
+            SupportsThinking = request.SupportsThinking,
+            ThinkingStrengths = request.ThinkingStrengths,
+            InputContextSize = request.InputContextSize,
+            OutputContextSize = request.OutputContextSize,
+            IsEnabled = request.IsEnabled,
+            CompressionEnabled = request.CompressionEnabled,
+        });
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Model not found"));
         return Ok(ApiResponse<object>.Success(updated));
     }
@@ -54,6 +74,28 @@ public class ModelsController : AdminBaseController
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Model not found"));
         return Ok(ApiResponse.Success());
+    }
+
+    [HttpPost("sync/{providerId}")]
+    public async Task<IActionResult> Sync(int providerId)
+    {
+        try
+        {
+            var result = await _service.SyncModelsFromProviderAsync(providerId);
+            return Ok(ApiResponse<object>.Success(new { added = result.Added, existing = result.Existing, total = result.Total }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse.Error(40001, ex.Message));
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(ApiResponse.Error(40002, ex.Message));
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(ApiResponse.Error(40003, ex.Message));
+        }
     }
 
     [HttpPost("{id}/pricings")]
@@ -67,7 +109,7 @@ public class ModelsController : AdminBaseController
     public async Task<IActionResult> GetCurrentPricing(int id)
     {
         var pricing = await _service.GetCurrentPricingAsync(id);
-        return Ok(ApiResponse<object>.Success(pricing));
+        return Ok(ApiResponse<object>.Success(pricing!));
     }
 
     [HttpGet("all-enabled")]
