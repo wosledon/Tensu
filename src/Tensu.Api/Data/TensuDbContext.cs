@@ -19,7 +19,10 @@ public class TensuDbContext : DbContext
     public DbSet<RouteModel> RouteModels => Set<RouteModel>();
     public DbSet<RouteRule> RouteRules => Set<RouteRule>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
+    public DbSet<ArchivedRequestLog> ArchivedRequestLogs => Set<ArchivedRequestLog>();
     public DbSet<Setting> Settings => Set<Setting>();
+    public DbSet<CompressionMapping> CompressionMappings => Set<CompressionMapping>();
+    public DbSet<SemanticCacheEntry> SemanticCacheEntries => Set<SemanticCacheEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -6,5 +6,6 @@ public enum RequestStatus
     Failed = 1,
     Timeout = 2,
     Interrupted = 3,
-    RateLimited = 4
+    RateLimited = 4,
+    Forbidden = 5
 }

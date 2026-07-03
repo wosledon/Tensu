@@ -213,6 +213,43 @@ public class RateLimitCounterConfiguration : IEntityTypeConfiguration<RateLimitC
     }
 }
 
+public class CompressionMappingConfiguration : IEntityTypeConfiguration<CompressionMapping>
+{
+    public void Configure(EntityTypeBuilder<CompressionMapping> builder)
+    {
+        builder.ToTable("compression_mappings");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.DecompressionKey).HasColumnName("decompression_key").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Strategy).HasColumnName("strategy").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.OriginalBody).HasColumnName("original_body");
+        builder.Property(e => e.CompressedBody).HasColumnName("compressed_body").IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => e.DecompressionKey).IsUnique();
+    }
+}
+
+public class SemanticCacheEntryConfiguration : IEntityTypeConfiguration<SemanticCacheEntry>
+{
+    public void Configure(EntityTypeBuilder<SemanticCacheEntry> builder)
+    {
+        builder.ToTable("semantic_cache_entries");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.Model).HasColumnName("model").HasMaxLength(200).IsRequired();
+        builder.Property(e => e.Embedding).HasColumnName("embedding").IsRequired();
+        builder.Property(e => e.RequestBody).HasColumnName("request_body").IsRequired();
+        builder.Property(e => e.ResponseBody).HasColumnName("response_body").IsRequired();
+        builder.Property(e => e.IsStream).HasColumnName("is_stream");
+        builder.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => e.Model);
+        builder.HasIndex(e => e.ExpiresAt);
+    }
+}
+
 public class RouteModelConfiguration : IEntityTypeConfiguration<RouteModel>
 {
     public void Configure(EntityTypeBuilder<RouteModel> builder)
@@ -277,6 +314,7 @@ public class RequestLogConfiguration : IEntityTypeConfiguration<RequestLog>
         builder.Property(e => e.InputTokensAfterCompression).HasColumnName("input_tokens_after_compression");
         builder.Property(e => e.OutputTokens).HasColumnName("output_tokens");
         builder.Property(e => e.CacheHit).HasColumnName("cache_hit");
+        builder.Property(e => e.SemanticCacheHit).HasColumnName("semantic_cache_hit");
         builder.Property(e => e.TimeToFirstTokenMs).HasColumnName("time_to_first_token_ms");
         builder.Property(e => e.TotalDurationMs).HasColumnName("total_duration_ms");
         builder.Property(e => e.OutputTokensPerSecond).HasColumnName("output_tokens_per_second").HasPrecision(10, 2);
@@ -285,6 +323,7 @@ public class RequestLogConfiguration : IEntityTypeConfiguration<RequestLog>
         builder.Property(e => e.Currency).HasColumnName("currency").HasMaxLength(10);
         builder.Property(e => e.CompressionApplied).HasColumnName("compression_applied");
         builder.Property(e => e.CompressionStrategy).HasColumnName("compression_strategy").HasMaxLength(100);
+        builder.Property(e => e.CompressionMappingKey).HasColumnName("compression_mapping_key").HasMaxLength(100);
         builder.Property(e => e.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
         builder.Property(e => e.ErrorCode).HasColumnName("error_code").HasMaxLength(50);
         builder.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
@@ -313,5 +352,49 @@ public class SettingConfiguration : IEntityTypeConfiguration<Setting>
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(e => e.Key).IsUnique();
+    }
+}
+
+public class ArchivedRequestLogConfiguration : IEntityTypeConfiguration<ArchivedRequestLog>
+{
+    public void Configure(EntityTypeBuilder<ArchivedRequestLog> builder)
+    {
+        builder.ToTable("archived_request_logs");
+        builder.HasKey(e => e.RequestId);
+        builder.Property(e => e.RequestId).HasColumnName("request_id").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Timestamp).HasColumnName("timestamp");
+        builder.Property(e => e.ApiKeyId).HasColumnName("api_key_id");
+        builder.Property(e => e.OrganizationId).HasColumnName("organization_id");
+        builder.Property(e => e.UserId).HasColumnName("user_id");
+        builder.Property(e => e.ModelName).HasColumnName("model_name").HasMaxLength(200).IsRequired();
+        builder.Property(e => e.ResolvedModelName).HasColumnName("resolved_model_name").HasMaxLength(200);
+        builder.Property(e => e.ProviderId).HasColumnName("provider_id");
+        builder.Property(e => e.ProviderName).HasColumnName("provider_name").HasMaxLength(200);
+        builder.Property(e => e.InputTokens).HasColumnName("input_tokens");
+        builder.Property(e => e.InputTokensAfterCompression).HasColumnName("input_tokens_after_compression");
+        builder.Property(e => e.OutputTokens).HasColumnName("output_tokens");
+        builder.Property(e => e.CacheHit).HasColumnName("cache_hit");
+        builder.Property(e => e.SemanticCacheHit).HasColumnName("semantic_cache_hit");
+        builder.Property(e => e.TimeToFirstTokenMs).HasColumnName("time_to_first_token_ms");
+        builder.Property(e => e.TotalDurationMs).HasColumnName("total_duration_ms");
+        builder.Property(e => e.OutputTokensPerSecond).HasColumnName("output_tokens_per_second").HasPrecision(10, 2);
+        builder.Property(e => e.InputCost).HasColumnName("input_cost").HasPrecision(18, 8);
+        builder.Property(e => e.OutputCost).HasColumnName("output_cost").HasPrecision(18, 8);
+        builder.Property(e => e.Currency).HasColumnName("currency").HasMaxLength(10);
+        builder.Property(e => e.CompressionApplied).HasColumnName("compression_applied");
+        builder.Property(e => e.CompressionStrategy).HasColumnName("compression_strategy").HasMaxLength(100);
+        builder.Property(e => e.CompressionMappingKey).HasColumnName("compression_mapping_key").HasMaxLength(100);
+        builder.Property(e => e.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
+        builder.Property(e => e.ErrorCode).HasColumnName("error_code").HasMaxLength(50);
+        builder.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
+        builder.Property(e => e.RetryCount).HasColumnName("retry_count");
+        builder.Property(e => e.IsStream).HasColumnName("is_stream");
+        builder.Property(e => e.RequestContent).HasColumnName("request_content");
+        builder.Property(e => e.ResponseContent).HasColumnName("response_content");
+
+        builder.HasIndex(e => e.RequestId).IsUnique();
+        builder.HasIndex(e => e.Timestamp);
+        builder.HasIndex(e => e.OrganizationId);
+        builder.HasIndex(e => e.ModelName);
     }
 }

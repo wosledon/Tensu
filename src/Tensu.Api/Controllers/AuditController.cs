@@ -37,6 +37,26 @@ public class AuditController : AdminBaseController
         return Ok(ApiResponse<object>.Success(log));
     }
 
+    [HttpGet("archived")]
+    [Authorize(Policy = "SuperAdmin")]
+    public async Task<IActionResult> GetArchived(
+        [FromQuery] PagedRequest request,
+        [FromQuery] string? modelName,
+        [FromQuery] int? orgId)
+    {
+        var result = await _service.GetArchivedListAsync(request, orgId: orgId, modelName: modelName);
+        return Ok(ApiResponse<object>.Success(result));
+    }
+
+    [HttpGet("archived/{requestId}")]
+    [Authorize(Policy = "SuperAdmin")]
+    public async Task<IActionResult> GetArchivedById(string requestId)
+    {
+        var log = await _service.GetArchivedByRequestIdAsync(requestId);
+        if (log == null) return NotFound(ApiResponse.Error(40401, "Archived request log not found"));
+        return Ok(ApiResponse<object>.Success(log));
+    }
+
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummary(
         [FromQuery] DateTime from,

@@ -14,12 +14,27 @@ public class SettingsService
     private static readonly Dictionary<string, string> Defaults = new()
     {
         ["compression.enabled"] = "true",
+        ["compression.saveMapping"] = "true",
+        ["compression.maxMappingSize"] = "10000",
         ["cache.enabled"] = "false",
         ["cache.ttlMinutes"] = "10",
+        ["semanticCache.enabled"] = "false",
+        ["semanticCache.threshold"] = "0.9",
+        ["semanticCache.ttlMinutes"] = "30",
+        ["semanticCache.maxEntries"] = "1000",
         ["rateLimit.defaultRpm"] = "60",
         ["rateLimit.defaultTpm"] = "100000",
         ["audit.dataRetentionDays"] = "30",
+        ["audit.archiveBeforeDelete"] = "true",
+        ["audit.retentionArchivedDays"] = "365",
         ["healthCheck.intervalMinutes"] = "5",
+        ["anomaly.usageSpikeMultiplier"] = "2.0",
+        ["anomaly.usageDropMultiplier"] = "0.5",
+        ["anomaly.costSpikeMultiplier"] = "2.0",
+        ["anomaly.latencySpikeMultiplier"] = "2.0",
+        ["anomaly.errorRateThreshold"] = "0.1",
+        ["anomaly.rateLimitThreshold"] = "0.05",
+        ["anomaly.providerSuccessRateThreshold"] = "0.95",
     };
 
     public SettingsService(TensuDbContext db)

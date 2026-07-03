@@ -61,4 +61,30 @@ public class AuditService : BaseService
             CompressionSavedTokens = logs.Sum(r => (r.InputTokens ?? 0) - (r.InputTokensAfterCompression ?? r.InputTokens ?? 0))
         };
     }
+
+    public async Task<PagedResult<ArchivedRequestLog>> GetArchivedListAsync(PagedRequest request, int? orgId = null, string? modelName = null)
+    {
+        var query = _db.ArchivedRequestLogs.AsQueryable();
+
+        if (orgId.HasValue)
+            query = query.Where(r => r.OrganizationId == orgId.Value);
+
+        if (!string.IsNullOrEmpty(modelName))
+            query = query.Where(r => r.ModelName == modelName);
+
+        if (!string.IsNullOrEmpty(request.Keyword))
+            query = query.Where(r => r.RequestId.Contains(request.Keyword) || r.ModelName.Contains(request.Keyword));
+
+        if (string.IsNullOrEmpty(request.SortBy))
+            query = query.OrderByDescending(r => r.Timestamp);
+
+        query = ApplyPaging(query, request, out var total);
+        var items = await query.ToListAsync();
+        return ToPagedResult(items, total, request);
+    }
+
+    public async Task<ArchivedRequestLog?> GetArchivedByRequestIdAsync(string requestId)
+    {
+        return await _db.ArchivedRequestLogs.FirstOrDefaultAsync(r => r.RequestId == requestId);
+    }
 }

@@ -79,6 +79,91 @@ public class AnalyticsService
     }
 
     /// <summary>
+    /// Get system health overview: provider status, today's error/rate-limit/cache metrics,
+    /// and top models / API keys by request volume.
+    /// </summary>
+    public async Task<object> GetHealthAsync(int? orgId = null)
+    {
+        var today = DateTime.UtcNow.Date;
+
+        var query = _db.RequestLogs.Where(r => r.Timestamp >= today);
+        if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
+
+        var todayLogs = await query.ToListAsync();
+
+        var total = todayLogs.Count;
+        var success = todayLogs.Count(r => r.Status == Core.Enums.RequestStatus.Success);
+        var failed = todayLogs.Count(r => r.Status == Core.Enums.RequestStatus.Failed);
+        var timeout = todayLogs.Count(r => r.Status == Core.Enums.RequestStatus.Timeout);
+        var interrupted = todayLogs.Count(r => r.Status == Core.Enums.RequestStatus.Interrupted);
+        var rateLimited = todayLogs.Count(r => r.Status == Core.Enums.RequestStatus.RateLimited);
+        var cacheHits = todayLogs.Count(r => r.CacheHit);
+
+        var errorRate = total > 0 ? (double)(failed + timeout) / total : 0;
+        var rateLimitRate = total > 0 ? (double)rateLimited / total : 0;
+        var cacheHitRate = total > 0 ? (double)cacheHits / total : 0;
+        var avgLatency = todayLogs.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).Average();
+
+        var providerNames = todayLogs.Select(r => r.ProviderName ?? "unknown").Distinct();
+        var providerEntities = await _db.Providers.AsNoTracking().ToListAsync();
+
+        var providers = providerNames.Select(name =>
+        {
+            var logs = todayLogs.Where(r => (r.ProviderName ?? "unknown") == name).ToList();
+            var pEntity = providerEntities.FirstOrDefault(p => p.Name == name);
+            var pTotal = logs.Count;
+            var pSuccess = pTotal > 0 ? (double)logs.Count(r => r.Status == Core.Enums.RequestStatus.Success) / pTotal : 0;
+            var pLatency = logs.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).Average();
+
+            return new
+            {
+                name,
+                healthStatus = pEntity?.HealthStatus.ToString() ?? "Unknown",
+                isEnabled = pEntity?.IsEnabled ?? true,
+                successRate = pSuccess,
+                avgLatency = pLatency,
+                lastHealthCheckAt = pEntity?.LastHealthCheckAt,
+                requests = pTotal
+            };
+        }).OrderByDescending(p => p.requests).ToList();
+
+        var topModels = todayLogs
+            .GroupBy(r => r.ModelName)
+            .Select(g => new { model = g.Key, requests = g.Count() })
+            .OrderByDescending(x => x.requests)
+            .Take(5)
+            .ToList();
+
+        var topApiKeys = todayLogs
+            .Where(r => r.ApiKeyId.HasValue)
+            .GroupBy(r => r.ApiKeyId!.Value)
+            .Select(g => new { apiKeyId = g.Key, requests = g.Count() })
+            .OrderByDescending(x => x.requests)
+            .Take(5)
+            .ToList();
+
+        return new
+        {
+            today = new
+            {
+                totalRequests = total,
+                success,
+                failed,
+                timeout,
+                interrupted,
+                rateLimited,
+                errorRate = Math.Round(errorRate * 100, 2),
+                rateLimitRate = Math.Round(rateLimitRate * 100, 2),
+                cacheHitRate = Math.Round(cacheHitRate * 100, 2),
+                avgLatency = Math.Round(avgLatency, 1)
+            },
+            providers,
+            topModels,
+            topApiKeys
+        };
+    }
+
+    /// <summary>
     /// Get usage statistics over a time range.
     /// </summary>
     public async Task<object> GetUsageAsync(DateTime from, DateTime to, string granularity = "day", int? orgId = null)
@@ -249,7 +334,11 @@ public class AnalyticsService
     private static double Percentile(List<double> sorted, int percentile)
     {
         if (sorted.Count == 0) return 0;
-        var index = (int)Math.Ceiling(percentile / 100.0 * sorted.Count) - 1;
-        return Math.Round(sorted[Math.Max(0, Math.Min(index, sorted.Count - 1))], 1);
+        var index = (percentile / 100.0) * (sorted.Count - 1);
+        var lower = (int)Math.Floor(index);
+        var upper = (int)Math.Ceiling(index);
+        if (lower == upper) return sorted[lower];
+        var weight = index - lower;
+        return sorted[lower] * (1 - weight) + sorted[upper] * weight;
     }
 }

@@ -2,21 +2,26 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using Tensu.Api.Data;
+using Tensu.Core.Entities;
 
 namespace Tensu.Api.Infrastructure;
 
 /// <summary>
 /// Context Compression Service (CCR - Convertible/Reversible Compression).
 /// Applies lossless compression before forwarding to upstream provider.
-/// Preserves a mapping for full restoration.
+/// Persists a mapping so the original body can be restored.
 /// </summary>
 public class CompressionService
 {
     private readonly ILogger<CompressionService> _logger;
+    private readonly TensuDbContext _db;
 
-    public CompressionService(ILogger<CompressionService> logger)
+    public CompressionService(ILogger<CompressionService> logger, TensuDbContext db)
     {
         _logger = logger;
+        _db = db;
     }
 
     /// <summary>
@@ -33,9 +38,10 @@ public class CompressionService
 
     /// <summary>
     /// Compress a request body if beneficial. Returns the (possibly compressed) body
-    /// along with token estimates and the strategy used.
+    /// along with token estimates and the strategy used. When compression is applied,
+    /// a mapping is persisted so the original body can be restored later.
     /// </summary>
-    public CompressionResult Compress(string requestBody)
+    public async Task<CompressionResult> CompressAsync(string requestBody, CancellationToken cancellationToken = default)
     {
         var originalTokens = EstimateTokens(requestBody);
 
@@ -48,8 +54,8 @@ public class CompressionService
             // Only apply compression if we save at least 5% tokens
             if (compressedTokens < originalTokens * 0.95)
             {
-                // Verify reversibility: can we decompress back?
                 var decompressionKey = ComputeHash(compressed);
+                await PersistMappingAsync(requestBody, compressed, "json-structure", decompressionKey, cancellationToken);
                 return new CompressionResult(
                     compressed, originalTokens, compressedTokens,
                     "json-structure", Applied: true, decompressionKey);
@@ -67,6 +73,7 @@ public class CompressionService
             var templateTokens = EstimateTokens(templateCompressed);
             if (templateTokens < originalTokens * 0.95)
             {
+                await PersistMappingAsync(requestBody, templateCompressed, "log-template", templateKey, cancellationToken);
                 return new CompressionResult(
                     templateCompressed, originalTokens, templateTokens,
                     "log-template", Applied: true, templateKey);
@@ -81,15 +88,73 @@ public class CompressionService
     }
 
     /// <summary>
-    /// Decompress a previously compressed body using the decompression key.
+    /// Decompress a previously compressed body using the decompression key and strategy.
+    /// Returns null if no mapping exists or the original body was too large to store in full.
     /// </summary>
-    public string? Decompress(string compressedBody, string strategy, string decompressionKey)
+    public async Task<string?> DecompressAsync(string compressedBody, string strategy, string decompressionKey, CancellationToken cancellationToken = default)
     {
-        // In a real implementation, we'd store the mapping in a cache/DB.
-        // For now, the CCR strategies we use (JSON key shortening, whitespace removal)
-        // are reversible by re-parsing with the original schema.
-        // Log templates require stored mappings.
-        return null; // Placeholder - full restoration requires cached mappings
+        var mapping = await _db.CompressionMappings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.DecompressionKey == decompressionKey && m.Strategy == strategy, cancellationToken);
+
+        if (mapping == null)
+        {
+            _logger.LogWarning("No compression mapping found for key {Key} and strategy {Strategy}", decompressionKey, strategy);
+            return null;
+        }
+
+        // If the original body was too large to store in full, we cannot restore it.
+        if (string.IsNullOrEmpty(mapping.OriginalBody))
+        {
+            _logger.LogWarning("Compression mapping for key {Key} exists but original body was not stored", decompressionKey);
+            return null;
+        }
+
+        return mapping.OriginalBody;
+    }
+
+    private async Task PersistMappingAsync(string requestBody, string compressedBody, string strategy, string decompressionKey, CancellationToken cancellationToken)
+    {
+        const int defaultMaxMappingSize = 10000;
+        var maxMappingSizeSetting = await _db.Settings
+            .AsNoTracking()
+            .Where(s => s.Key == "compression.maxMappingSize")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+        var maxMappingSize = int.TryParse(maxMappingSizeSetting, out var parsed) ? parsed : defaultMaxMappingSize;
+
+        // For very large bodies we do not store the full original body in the mapping.
+        // The compressed request is still forwarded upstream, and the audit log records
+        // the original token estimate. Full restoration is only supported for small bodies.
+        if (requestBody.Length > maxMappingSize)
+        {
+            _logger.LogInformation(
+                "Request body length {Length} exceeds max mapping size {MaxMappingSize}; storing compressed body only.",
+                requestBody.Length, maxMappingSize);
+        }
+
+        var mapping = await _db.CompressionMappings
+            .FirstOrDefaultAsync(m => m.DecompressionKey == decompressionKey && m.Strategy == strategy, cancellationToken);
+
+        if (mapping != null)
+        {
+            mapping.CompressedBody = compressedBody;
+            mapping.OriginalBody = requestBody.Length <= maxMappingSize ? requestBody : null;
+            mapping.CreatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            _db.CompressionMappings.Add(new CompressionMapping
+            {
+                DecompressionKey = decompressionKey,
+                Strategy = strategy,
+                CompressedBody = compressedBody,
+                OriginalBody = requestBody.Length <= maxMappingSize ? requestBody : null,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>

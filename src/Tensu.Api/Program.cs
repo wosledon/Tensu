@@ -53,9 +53,10 @@ builder.Services.AddSingleton<AuditChannel>();
 builder.Services.AddSingleton<LoadBalancer>();
 builder.Services.AddScoped<RateLimiter>();
 builder.Services.AddSingleton<RetryPolicy>();
-builder.Services.AddSingleton<CompressionService>();
+builder.Services.AddScoped<CompressionService>();
 builder.Services.AddSingleton<CacheService>();
 builder.Services.AddSingleton<MetricsCollector>();
+builder.Services.AddScoped<IpWhitelistService>();
 builder.Services.AddHostedService<AuditBackgroundService>();
 
 // Business services
@@ -69,6 +70,7 @@ builder.Services.AddScoped<RouteModelService>();
 builder.Services.AddScoped<RoutingModelService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<AnomalyDetectionService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<QuotaService>();
 builder.Services.AddHostedService<HealthCheckBackgroundService>();

@@ -11,10 +11,12 @@ namespace Tensu.Api.Controllers;
 public class AnalyticsController : AdminBaseController
 {
     private readonly AnalyticsService _service;
+    private readonly AnomalyDetectionService _anomalyService;
 
-    public AnalyticsController(AnalyticsService service)
+    public AnalyticsController(AnalyticsService service, AnomalyDetectionService anomalyService)
     {
         _service = service;
+        _anomalyService = anomalyService;
     }
 
     [HttpGet("dashboard")]
@@ -76,5 +78,26 @@ public class AnalyticsController : AdminBaseController
         var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
         var result = await _service.GetCacheStatsAsync(from, to, effectiveOrgId);
         return Ok(ApiResponse<object>.Success(result));
+    }
+
+    [HttpGet("health")]
+    public async Task<IActionResult> Health([FromQuery] int? orgId = null)
+    {
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetHealthAsync(effectiveOrgId);
+        return Ok(ApiResponse<object>.Success(result));
+    }
+
+    [HttpGet("anomalies")]
+    public async Task<IActionResult> Anomalies(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] int? orgId = null)
+    {
+        if (from == default) from = DateTime.UtcNow.AddDays(-1);
+        if (to == default) to = DateTime.UtcNow;
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _anomalyService.DetectAsync(from, to, effectiveOrgId);
+        return Ok(ApiResponse<List<AnomalyResult>>.Success(result));
     }
 }
