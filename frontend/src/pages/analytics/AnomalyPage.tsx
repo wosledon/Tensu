@@ -4,6 +4,7 @@ import { ExportOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { analyticsApi } from '../../api';
 import { exportTableToCsv } from '../../utils/export';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -37,6 +38,7 @@ export default function AnomalyPage() {
     baselineValue: number;
     detectedAt: string;
   } | null>(null);
+  const navigate = useNavigate();
 
   const fetchData = async () => {
     setLoading(true);
@@ -61,6 +63,18 @@ export default function AnomalyPage() {
     return 'default';
   };
 
+  const renderDimension = (dimension: string) => {
+    if (dimension.startsWith('model:')) {
+      const modelName = dimension.slice('model:'.length);
+      return <a onClick={(e) => { e.stopPropagation(); navigate(`/models?keyword=${encodeURIComponent(modelName)}`); }} style={{ fontFamily: 'monospace', cursor: 'pointer' }}>{dimension}</a>;
+    }
+    if (dimension.startsWith('provider:')) {
+      const providerName = dimension.slice('provider:'.length);
+      return <a onClick={(e) => { e.stopPropagation(); navigate(`/providers?keyword=${encodeURIComponent(providerName)}`); }} style={{ fontFamily: 'monospace', cursor: 'pointer' }}>{dimension}</a>;
+    }
+    return <span style={{ fontFamily: 'monospace' }}>{dimension}</span>;
+  };
+
   const severityCounts = data.reduce((acc, cur) => {
     acc[cur.severity] = (acc[cur.severity] || 0) + 1;
     return acc;
@@ -76,7 +90,7 @@ export default function AnomalyPage() {
       width: 110,
       render: (v: string) => <Tag color={severityColor(v)}>{v}</Tag>,
     },
-    { title: t('analytics.dimension', 'Dimension'), dataIndex: 'dimension', key: 'dimension', width: 220, render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
+    { title: t('analytics.dimension', 'Dimension'), dataIndex: 'dimension', key: 'dimension', width: 240, render: (v: string) => renderDimension(v) },
     { title: t('analytics.message', 'Message'), dataIndex: 'message', key: 'message', ellipsis: true },
     {
       title: t('analytics.currentValue', 'Current'),
@@ -211,7 +225,7 @@ export default function AnomalyPage() {
               <Tag color={severityColor(selectedRow.severity)}>{selectedRow.severity}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('analytics.dimension', 'Dimension')}>
-              <span style={{ fontFamily: 'monospace' }}>{selectedRow.dimension}</span>
+              {renderDimension(selectedRow.dimension)}
             </Descriptions.Item>
             <Descriptions.Item label={t('analytics.message', 'Message')}>{selectedRow.message}</Descriptions.Item>
             <Descriptions.Item label={t('analytics.currentValue', 'Current')}>
