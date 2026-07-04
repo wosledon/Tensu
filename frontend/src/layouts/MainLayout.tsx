@@ -72,14 +72,14 @@ export default function MainLayout() {
   const menuItems = filterMenuByRole(allMenuItems, user?.role);
 
   const themeItems = [
-    { key: 'light', icon: <SunOutlined />, label: 'Light', onClick: () => setMode('light') },
-    { key: 'dark', icon: <MoonOutlined />, label: 'Dark', onClick: () => setMode('dark') },
-    { key: 'system', icon: <DesktopOutlined />, label: 'System', onClick: () => setMode('system') },
+    { key: 'light', icon: <SunOutlined />, label: t('settings.themeLight'), onClick: () => setMode('light') },
+    { key: 'dark', icon: <MoonOutlined />, label: t('settings.themeDark'), onClick: () => setMode('dark') },
+    { key: 'system', icon: <DesktopOutlined />, label: t('settings.themeSystem'), onClick: () => setMode('system') },
   ];
 
   const langItems = [
-    { key: 'zh-CN', label: '中文', onClick: () => { i18n.changeLanguage('zh-CN'); localStorage.setItem('tensu-lang', 'zh-CN'); } },
-    { key: 'en-US', label: 'English', onClick: () => { i18n.changeLanguage('en-US'); localStorage.setItem('tensu-lang', 'en-US'); } },
+    { key: 'zh-CN', label: t('settings.languageChinese'), onClick: () => { i18n.changeLanguage('zh-CN'); localStorage.setItem('tensu-lang', 'zh-CN'); } },
+    { key: 'en-US', label: t('settings.languageEnglish'), onClick: () => { i18n.changeLanguage('en-US'); localStorage.setItem('tensu-lang', 'en-US'); } },
   ];
 
   const userItems = [

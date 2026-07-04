@@ -314,7 +314,12 @@
     "rateLimitHint": "Default rate limits applied to API keys without explicit limits.",
     "anomalyHint": "Thresholds used by anomaly detection. Values are relative multipliers or absolute rates depending on the metric.",
     "auditHint": "Request-level audit logs older than this will be cleaned up automatically.",
-    "days": "days"
+    "days": "days",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "languageEnglish": "English",
+    "languageChinese": "Chinese"
   },
   "dashboard": {
     "title": "Dashboard",

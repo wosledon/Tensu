@@ -314,7 +314,12 @@
     "rateLimitHint": "应用于没有显式限制的 API 密钥的默认速率限制。",
     "anomalyHint": "异常检测使用的阈值。数值根据指标类型为相对倍数或绝对比率。",
     "auditHint": "超过保留天数的请求级审计日志将被自动清理。",
-    "days": "天"
+    "days": "天",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "languageEnglish": "英文",
+    "languageChinese": "中文"
   },
   "dashboard": {
     "title": "总览",
