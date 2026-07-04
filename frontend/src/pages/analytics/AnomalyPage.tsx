@@ -53,7 +53,7 @@ export default function AnomalyPage() {
       setTotal(result.total);
       setLastRefreshed(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load anomalies');
+      setError(err instanceof Error ? err.message : t('analytics.loadError', 'Failed to load anomalies'));
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export default function AnomalyPage() {
 
   const copyDetails = async () => {
     if (!selectedRow) return;
-    const text = `Type: ${selectedRow.type}\nSeverity: ${selectedRow.severity}\nDimension: ${selectedRow.dimension}\nMessage: ${selectedRow.message}\nCurrent: ${selectedRow.currentValue}\nBaseline: ${selectedRow.baselineValue}\nTime: ${new Date(selectedRow.detectedAt).toLocaleString()}`;
+    const text = `${t('analytics.type', 'Type')}: ${selectedRow.type}\n${t('common.status', 'Severity')}: ${selectedRow.severity}\n${t('analytics.dimension', 'Dimension')}: ${selectedRow.dimension}\n${t('analytics.message', 'Message')}: ${selectedRow.message}\n${t('analytics.currentValue', 'Current')}: ${selectedRow.currentValue}\n${t('analytics.baselineValue', 'Baseline')}: ${selectedRow.baselineValue}\n${t('analytics.timestamp', 'Time')}: ${new Date(selectedRow.detectedAt).toLocaleString()}`;
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -180,9 +180,9 @@ export default function AnomalyPage() {
             style={{ width: 140 }}
             placeholder={t('analytics.severity')}
             options={[
-              { value: 'Critical', label: 'Critical' },
-              { value: 'High', label: 'High' },
-              { value: 'Medium', label: 'Medium' },
+              { value: 'Critical', label: t('analytics.severityLevel.Critical') },
+              { value: 'High', label: t('analytics.severityLevel.High') },
+              { value: 'Medium', label: t('analytics.severityLevel.Medium') },
             ]}
           />
           <Select
@@ -192,15 +192,15 @@ export default function AnomalyPage() {
             style={{ width: 160 }}
             placeholder={t('analytics.type')}
             options={[
-              { value: 'UsageSpike', label: 'UsageSpike' },
-              { value: 'UsageDrop', label: 'UsageDrop' },
-              { value: 'CostSpike', label: 'CostSpike' },
-              { value: 'TokenSpike', label: 'TokenSpike' },
-              { value: 'TokenDrop', label: 'TokenDrop' },
-              { value: 'LatencySpike', label: 'LatencySpike' },
-              { value: 'ErrorRateSpike', label: 'ErrorRateSpike' },
-              { value: 'RateLimitSpike', label: 'RateLimitSpike' },
-              { value: 'ProviderDegraded', label: 'ProviderDegraded' },
+              { value: 'UsageSpike', label: t('analytics.anomalyType.UsageSpike') },
+              { value: 'UsageDrop', label: t('analytics.anomalyType.UsageDrop') },
+              { value: 'CostSpike', label: t('analytics.anomalyType.CostSpike') },
+              { value: 'TokenSpike', label: t('analytics.anomalyType.TokenSpike') },
+              { value: 'TokenDrop', label: t('analytics.anomalyType.TokenDrop') },
+              { value: 'LatencySpike', label: t('analytics.anomalyType.LatencySpike') },
+              { value: 'ErrorRateSpike', label: t('analytics.anomalyType.ErrorRateSpike') },
+              { value: 'RateLimitSpike', label: t('analytics.anomalyType.RateLimitSpike') },
+              { value: 'ProviderDegraded', label: t('analytics.anomalyType.ProviderDegraded') },
             ]}
           />
           <Button type="primary" onClick={fetchData}>{t('common.search')}</Button>
@@ -220,7 +220,7 @@ export default function AnomalyPage() {
             ]}
           />
           <Button icon={<ExportOutlined />} onClick={handleExport}>{t('common.export', 'Export')}</Button>
-          {lastRefreshed && <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>Last refreshed: {lastRefreshed.toLocaleTimeString()}</span>}
+          {lastRefreshed && <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>{t('analytics.lastRefreshed', 'Last refreshed')}: {lastRefreshed.toLocaleTimeString()}</span>}
         </Space>
       </Card>
 
@@ -230,7 +230,7 @@ export default function AnomalyPage() {
           <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
             {['Critical', 'High', 'Medium'].map((sev) => (
               <Col key={sev} xs={24} sm={8}>
-                <Card style={{ borderRadius: 18 }}>
+                <Card style={{ borderRadius: 18, cursor: 'pointer' }} onClick={() => { setSeverity(sev); setPage(1); }}>
                   <Statistic title={<Tag color={severityColor(sev)}>{sev}</Tag>} value={severityCounts[sev] || 0} />
                 </Card>
               </Col>
@@ -262,7 +262,7 @@ export default function AnomalyPage() {
         width={720}
         footer={
           <Button icon={<CopyOutlined />} onClick={copyDetails}>
-            {copied ? 'Copied' : t('common.copy', 'Copy')}
+            {copied ? t('common.copied') : t('common.copy')}
           </Button>
         }
       >

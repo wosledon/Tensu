@@ -261,7 +261,25 @@
     "baselineValue": "Baseline",
     "timestamp": "Timestamp",
     "severity": "Severity",
-    "noMatch": "No matching anomalies"
+    "noMatch": "No matching anomalies",
+    "loadError": "Failed to load anomalies",
+    "lastRefreshed": "Last refreshed",
+    "severityLevel": {
+      "Critical": "Critical",
+      "High": "High",
+      "Medium": "Medium"
+    },
+    "anomalyType": {
+      "UsageSpike": "Usage Spike",
+      "UsageDrop": "Usage Drop",
+      "CostSpike": "Cost Spike",
+      "TokenSpike": "Token Spike",
+      "TokenDrop": "Token Drop",
+      "LatencySpike": "Latency Spike",
+      "ErrorRateSpike": "Error Rate Spike",
+      "RateLimitSpike": "Rate Limit Spike",
+      "ProviderDegraded": "Provider Degraded"
+    }
   },
   "settings": {
     "title": "Settings",
