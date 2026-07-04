@@ -213,10 +213,10 @@ export default function AnomalyPage() {
             style={{ width: 120 }}
             placeholder={t('common.refresh', 'Refresh')}
             options={[
-              { value: 15, label: '15s' },
-              { value: 30, label: '30s' },
-              { value: 60, label: '1m' },
-              { value: 120, label: '2m' },
+              { value: 15, label: t('analytics.refreshInterval.15') },
+              { value: 30, label: t('analytics.refreshInterval.30') },
+              { value: 60, label: t('analytics.refreshInterval.60') },
+              { value: 120, label: t('analytics.refreshInterval.120') },
             ]}
           />
           <Button icon={<ExportOutlined />} onClick={handleExport}>{t('common.export', 'Export')}</Button>
@@ -231,7 +231,7 @@ export default function AnomalyPage() {
             {['Critical', 'High', 'Medium'].map((sev) => (
               <Col key={sev} xs={24} sm={8}>
                 <Card style={{ borderRadius: 18, cursor: 'pointer' }} onClick={() => { setSeverity(sev); setPage(1); }}>
-                  <Statistic title={<Tag color={severityColor(sev)}>{sev}</Tag>} value={severityCounts[sev] || 0} />
+                  <Statistic title={<Tag color={severityColor(sev)}>{t(`analytics.severityLevel.${sev}`)}</Tag>} value={severityCounts[sev] || 0} />
                 </Card>
               </Col>
             ))}

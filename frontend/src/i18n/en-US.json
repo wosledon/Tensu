@@ -279,6 +279,12 @@
       "ErrorRateSpike": "Error Rate Spike",
       "RateLimitSpike": "Rate Limit Spike",
       "ProviderDegraded": "Provider Degraded"
+    },
+    "refreshInterval": {
+      "15": "15s",
+      "30": "30s",
+      "60": "1m",
+      "120": "2m"
     }
   },
   "settings": {

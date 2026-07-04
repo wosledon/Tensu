@@ -279,6 +279,12 @@
       "ErrorRateSpike": "错误率突增",
       "RateLimitSpike": "限流突增",
       "ProviderDegraded": "供应商降级"
+    },
+    "refreshInterval": {
+      "15": "15秒",
+      "30": "30秒",
+      "60": "1分钟",
+      "120": "2分钟"
     }
   },
   "settings": {
