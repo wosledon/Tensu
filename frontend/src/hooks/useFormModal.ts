@@ -5,12 +5,16 @@ interface UseFormModalOptions<T> {
   createFn: (data: Partial<T>) => Promise<T>;
   updateFn?: (id: number, data: Partial<T>) => Promise<T>;
   onSuccess?: () => void;
+  transformRecord?: (record: T) => T;
+  transformSubmit?: (values: Partial<T>) => Partial<T>;
 }
 
 export function useFormModal<T extends { id?: number }>({
   createFn,
   updateFn,
   onSuccess,
+  transformRecord,
+  transformSubmit,
 }: UseFormModalOptions<T>) {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
@@ -24,8 +28,9 @@ export function useFormModal<T extends { id?: number }>({
   };
 
   const openEdit = (record: T) => {
-    setEditing(record);
-    form.setFieldsValue(record);
+    const transformed = transformRecord ? transformRecord(record) : record;
+    setEditing(transformed);
+    form.setFieldsValue(transformed);
     setOpen(true);
   };
 
@@ -38,11 +43,12 @@ export function useFormModal<T extends { id?: number }>({
   const submit = async () => {
     try {
       const values = await form.validateFields();
+      const payload = transformSubmit ? transformSubmit(values) : values;
       setSubmitting(true);
       if (editing?.id && updateFn) {
-        await updateFn(editing.id, values);
+        await updateFn(editing.id, payload);
       } else {
-        await createFn(values);
+        await createFn(payload);
       }
       close();
       onSuccess?.();

@@ -12,18 +12,19 @@ public class LoadBalancer
 {
     private static readonly ConcurrentDictionary<int, int> _roundRobinCounters = new();
     private static readonly ConcurrentDictionary<int, double> _providerLatency = new(); // providerId -> avg latency ms
+    private static readonly ConcurrentDictionary<int, double> _keyLatency = new(); // keyId -> avg latency ms
     private static readonly object _lock = new();
 
     /// <summary>
-    /// Select a key from the provider's active keys based on the provider's load balance strategy.
-    /// Degraded keys are excluded from normal selection and only used as a last resort.
+    /// Select a key from the provider based on health status.
+    /// Healthy keys are preferred; degraded keys are used as fallback when no healthy keys remain.
+    /// Unhealthy/inactive keys are excluded.
     /// </summary>
     public ProviderKey? SelectKey(Provider provider)
     {
-        var activeKeys = provider.Keys.Where(k => k.Status == KeyStatus.Active).ToList();
-        if (activeKeys.Any()) return SelectKeyInternal(provider, activeKeys);
+        var healthyKeys = provider.Keys.Where(k => k.Status == KeyStatus.Active).ToList();
+        if (healthyKeys.Any()) return SelectKeyInternal(provider, healthyKeys);
 
-        // Fallback to degraded keys if no active keys remain
         var degradedKeys = provider.Keys.Where(k => k.Status == KeyStatus.Degraded).ToList();
         if (degradedKeys.Any()) return SelectKeyInternal(provider, degradedKeys);
 
@@ -32,14 +33,18 @@ public class LoadBalancer
 
     /// <summary>
     /// Select a key from the provider excluding the provided key ids.
-    /// Degraded keys are excluded unless no active keys remain.
+    /// Healthy keys are preferred; degraded keys are used as fallback when no healthy keys remain.
     /// </summary>
     public ProviderKey? SelectKey(Provider provider, HashSet<int> excludeKeyIds)
     {
-        var activeKeys = provider.Keys.Where(k => k.Status == KeyStatus.Active && !excludeKeyIds.Contains(k.Id)).ToList();
-        if (activeKeys.Any()) return SelectKeyInternal(provider, activeKeys);
+        var healthyKeys = provider.Keys
+            .Where(k => k.Status == KeyStatus.Active && !excludeKeyIds.Contains(k.Id))
+            .ToList();
+        if (healthyKeys.Any()) return SelectKeyInternal(provider, healthyKeys);
 
-        var degradedKeys = provider.Keys.Where(k => k.Status == KeyStatus.Degraded && !excludeKeyIds.Contains(k.Id)).ToList();
+        var degradedKeys = provider.Keys
+            .Where(k => k.Status == KeyStatus.Degraded && !excludeKeyIds.Contains(k.Id))
+            .ToList();
         if (degradedKeys.Any()) return SelectKeyInternal(provider, degradedKeys);
 
         return null;
@@ -95,6 +100,15 @@ public class LoadBalancer
             existing * 0.7 + latencyMs * 0.3); // exponential moving average
     }
 
+    /// <summary>
+    /// Record latency for a specific key to improve key-level lowest-latency selection.
+    /// </summary>
+    public void RecordKeyLatency(int keyId, double latencyMs)
+    {
+        _keyLatency.AddOrUpdate(keyId, latencyMs, (_, existing) =>
+            existing * 0.7 + latencyMs * 0.3);
+    }
+
     private ProviderKey SelectRoundRobin(List<ProviderKey> keys, int providerId)
     {
         var counter = _roundRobinCounters.AddOrUpdate(providerId, 1, (_, v) => v + 1);
@@ -125,9 +139,22 @@ public class LoadBalancer
 
     private ProviderKey SelectLowestLatency(List<ProviderKey> keys)
     {
-        // For keys within the same provider, just use round-robin
-        // Lowest-latency is more useful across providers
-        return keys[0];
+        if (keys.Count == 1) return keys[0];
+
+        var best = keys[0];
+        var bestLatency = _keyLatency.TryGetValue(best.Id, out var l0) ? l0 : double.MaxValue;
+
+        foreach (var key in keys.Skip(1))
+        {
+            var latency = _keyLatency.TryGetValue(key.Id, out var l) ? l : double.MaxValue;
+            if (latency < bestLatency)
+            {
+                best = key;
+                bestLatency = latency;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>

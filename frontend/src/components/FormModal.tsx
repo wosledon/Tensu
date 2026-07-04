@@ -29,7 +29,7 @@ export default function FormModal({
       onCancel={onCancel}
       confirmLoading={submitting}
       width={width}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         {children}

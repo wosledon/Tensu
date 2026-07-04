@@ -98,11 +98,18 @@ public class ModelsController : AdminBaseController
         }
     }
 
-    [HttpPost("{id}/pricings")]
-    public async Task<IActionResult> AddPricing(int id, [FromBody] ModelPricing pricing)
+    [HttpPost("{modelId}/pricing")]
+    public async Task<IActionResult> AddPricing(int modelId, [FromBody] ModelPricing pricing)
     {
-        var created = await _service.AddPricingAsync(id, pricing);
+        var created = await _service.AddPricingAsync(modelId, pricing);
         return Ok(ApiResponse<object>.Success(created));
+    }
+
+    [HttpGet("{modelId}/pricing")]
+    public async Task<IActionResult> GetPricingHistory(int modelId)
+    {
+        var history = await _service.GetPricingHistoryAsync(modelId);
+        return Ok(ApiResponse<object>.Success(history));
     }
 
     [HttpGet("{id}/pricings/current")]
@@ -117,5 +124,74 @@ public class ModelsController : AdminBaseController
     {
         var models = await _service.GetAllEnabledAsync();
         return Ok(ApiResponse<object>.Success(models));
+    }
+
+    public record BatchIdsRequest(int[] Ids);
+
+    [HttpDelete("batch")]
+    public async Task<IActionResult> BatchDelete([FromBody] BatchIdsRequest request)
+    {
+        var ids = request.Ids ?? Array.Empty<int>();
+        if (ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var deleted = await _service.DeleteAsync(id);
+                results.Add(new { id, success = deleted });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/enable")]
+    public async Task<IActionResult> BatchEnable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var modelObj = await _service.GetByIdAsync(id);
+                if (modelObj is not Model model) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                model.IsEnabled = true;
+                await _service.UpdateAsync(id, model);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/disable")]
+    public async Task<IActionResult> BatchDisable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var modelObj = await _service.GetByIdAsync(id);
+                if (modelObj is not Model model) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                model.IsEnabled = false;
+                await _service.UpdateAsync(id, model);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
     }
 }

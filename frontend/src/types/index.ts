@@ -208,6 +208,16 @@ export interface RouteRule {
   isEnabled: boolean;
 }
 
+export interface AnomalyResult {
+  type: string;
+  severity: string;
+  dimension: string;
+  message: string;
+  currentValue: number;
+  baselineValue: number;
+  detectedAt: string;
+}
+
 export interface RequestLog {
   id: number;
   requestId: string;
@@ -230,6 +240,8 @@ export interface RequestLog {
   errorCode?: string;
   errorMessage?: string;
   isStream: boolean;
+  requestContent?: string;
+  responseContent?: string;
 }
 
 export interface LoginRequest {

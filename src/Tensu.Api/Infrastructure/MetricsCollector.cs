@@ -18,9 +18,11 @@ public class MetricsCollector
     private long _totalTokensIn;
     private long _totalTokensOut;
     private double _totalLatencyMs;
+    private readonly ConcurrentQueue<long> _latencySamples = new();
     private readonly ConcurrentDictionary<string, long> _modelRequests = new();
     private readonly ConcurrentDictionary<string, long> _providerErrors = new();
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
+    private const int MaxLatencySamples = 10000;
 
     public void RecordRequest(string model, string provider, bool success, bool cacheHit, long latencyMs, int tokensIn, int tokensOut, bool rateLimited)
     {
@@ -40,6 +42,43 @@ public class MetricsCollector
         _modelRequests.AddOrUpdate(model, 1, (_, v) => v + 1);
         if (!success)
             _providerErrors.AddOrUpdate(provider, 1, (_, v) => v + 1);
+
+        // Record latency sample for percentile calculation
+        _latencySamples.Enqueue(latencyMs);
+        while (_latencySamples.Count > MaxLatencySamples)
+        {
+            _latencySamples.TryDequeue(out _);
+        }
+    }
+
+    /// <summary>
+    /// Get P99 latency from recent samples.
+    /// </summary>
+    public double GetP99LatencyMs()
+    {
+        if (_latencySamples.IsEmpty)
+            return 0;
+
+        var samples = _latencySamples.ToArray();
+        Array.Sort(samples);
+        var p99Index = (int)Math.Ceiling(samples.Length * 0.99) - 1;
+        p99Index = Math.Max(0, Math.Min(p99Index, samples.Length - 1));
+        return samples[p99Index];
+    }
+
+    /// <summary>
+    /// Get P95 latency from recent samples.
+    /// </summary>
+    public double GetP95LatencyMs()
+    {
+        if (_latencySamples.IsEmpty)
+            return 0;
+
+        var samples = _latencySamples.ToArray();
+        Array.Sort(samples);
+        var p95Index = (int)Math.Ceiling(samples.Length * 0.95) - 1;
+        p95Index = Math.Max(0, Math.Min(p95Index, samples.Length - 1));
+        return samples[p95Index];
     }
 
     /// <summary>

@@ -1,23 +1,94 @@
 import { useState, useCallback } from 'react';
-import { Table, Form, Input, Select, DatePicker, Space, Card, Button, message } from 'antd';
-import { DeleteOutlined, StopOutlined, CopyOutlined } from '@ant-design/icons';
+import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App } from 'antd';
+import { DeleteOutlined, StopOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiKeyApi, orgApi } from '../../api';
 import { useCrudList, useConfirmDelete } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
 import type { ApiKey, Organization } from '../../types';
 import dayjs from 'dayjs';
+import { exportTableToCsv } from '../../utils/export';
+
+function isValidIpOrCidr(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+
+  const ipv4Cidr = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+  const ipv6Cidr = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(\/\d{1,3})?$/;
+  const ipv6Bracketed = /^\[([0-9a-fA-F:]+)\](?:\/\d{1,3})?$/;
+
+  if (ipv4Cidr.test(trimmed)) {
+    const parts = trimmed.split('/');
+    const ip = parts[0];
+    const cidr = parts[1];
+    const octets = ip.split('.');
+    if (octets.length !== 4) return false;
+    if (octets.some((o) => Number(o) > 255)) return false;
+    if (cidr !== undefined && (Number(cidr) < 0 || Number(cidr) > 32)) return false;
+    return true;
+  }
+
+  if (trimmed.startsWith('[')) {
+    if (ipv6Bracketed.test(trimmed)) return true;
+    return false;
+  }
+
+  if (ipv6Cidr.test(trimmed)) {
+    const parts = trimmed.split('/');
+    const cidr = parts[1];
+    if (cidr !== undefined && (Number(cidr) < 0 || Number(cidr) > 128)) return false;
+    return true;
+  }
+
+  return false;
+}
+
+const ipWhitelistValidator = (_: unknown, value: string) => {
+  if (!value || !value.trim()) return Promise.resolve();
+  const entries = value.split(/[,\n；;]/).map((s) => s.trim()).filter(Boolean);
+  const invalid = entries.find((entry) => !isValidIpOrCidr(entry));
+  if (invalid) {
+    return Promise.reject(new Error('Invalid IP or CIDR: ' + invalid));
+  }
+  return Promise.resolve();
+};
 
 export default function ApiKeysPage() {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [form] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => apiKeyApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<ApiKey, any>({ fetchFn });
   const { handleDelete } = useConfirmDelete(apiKeyApi.delete, fetchData);
+
+  const handleBatchDelete = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await apiKeyApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchRevoke = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await apiKeyApi.batchRevoke(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
 
   const ensureOrgs = async () => {
     if (!orgs.length) {
@@ -55,6 +126,10 @@ export default function ApiKeysPage() {
     },
     { title: t('apiKey.expiresAt'), dataIndex: 'expiresAt', key: 'expiresAt', render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-' },
     {
+      title: t('apiKey.ipWhitelist'), dataIndex: 'ipWhitelist', key: 'ipWhitelist', ellipsis: true,
+      render: (v: string) => v ? <span style={{ fontFamily: 'monospace' }}>{v}</span> : '-',
+    },
+    {
       title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 120,
       render: (_: any, r: ApiKey) => (
         <Space>
@@ -67,18 +142,39 @@ export default function ApiKeysPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('api-keys', columns, data);
+  };
+
   return (
     <div>
       <PageHeader
         title={t('apiKey.title')}
         onCreate={async () => { await ensureOrgs(); form.resetFields(); setCreatedKey(null); setModalOpen(true); }}
         onSearch={setKeyword}
+        extra={
+          <Space>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>
+              {t('common.export', 'Export')}
+            </Button>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button onClick={handleBatchRevoke}>{t('apiKey.revoke')}</Button>
+                <Button danger onClick={handleBatchDelete}>{t('common.delete')}</Button>
+              </>
+            )}
+          </Space>
+        }
       />
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns} dataSource={data} rowKey="id" loading={loading}
           pagination={{ current: params.page, pageSize: params.pageSize, total, showSizeChanger: true, onChange: setPage }}
           scroll={{ x: 700 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+          }}
         />
       </Card>
 
@@ -105,6 +201,9 @@ export default function ApiKeysPage() {
             </Form.Item>
             <Form.Item name="expiresAt" label={t('apiKey.expiresAt')}><DatePicker style={{ width: '100%' }} /></Form.Item>
             <Form.Item name="allowedModels" label={t('apiKey.allowedModels')}><Input.TextArea rows={2} placeholder="model1,model2 (empty = all)" /></Form.Item>
+            <Form.Item name="ipWhitelist" label={t('apiKey.ipWhitelist')} rules={[{ validator: ipWhitelistValidator }]}>
+              <Input.TextArea rows={2} placeholder="e.g. 192.168.1.0/24, 10.0.0.1, ::1" />
+            </Form.Item>
             <Form.Item name="rateLimitRpm" label="RPM"><Input type="number" /></Form.Item>
           </>
         )}

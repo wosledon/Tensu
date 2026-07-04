@@ -1,18 +1,21 @@
 import { useState, useCallback } from 'react';
-import { Table, Form, Input, Select, InputNumber, Switch, Space, Tag, Card, Button } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Form, Input, Select, InputNumber, Switch, Space, Tag, Card, Button, App } from 'antd';
+import { EditOutlined, DeleteOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { routeModelApi, modelApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, FormModal } from '../../components';
 import type { RouteModel, Model } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 export default function RouteModelsPage() {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [models, setModels] = useState<Model[]>([]);
   const [ruleOpen, setRuleOpen] = useState(false);
   const [ruleTarget, setRuleTarget] = useState<RouteModel | null>(null);
   const [ruleForm] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => routeModelApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<RouteModel, any>({ fetchFn });
@@ -22,6 +25,42 @@ export default function RouteModelsPage() {
     onSuccess: fetchData,
   });
   const { handleDelete } = useConfirmDelete(routeModelApi.delete, fetchData);
+
+  const handleBatchDelete = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await routeModelApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchEnable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await routeModelApi.batchEnable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchDisable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await routeModelApi.batchDisable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
 
   const ensureModels = async () => {
     if (!models.length) {
@@ -74,14 +113,40 @@ export default function RouteModelsPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('route-models', columns, data);
+  };
+
   return (
     <div>
-      <PageHeader title={t('routeModel.title')} onCreate={async () => { await ensureModels(); openCreate(); }} onSearch={setKeyword} />
+      <PageHeader
+        title={t('routeModel.title')}
+        onCreate={async () => { await ensureModels(); openCreate(); }}
+        onSearch={setKeyword}
+        extra={
+          <Space>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>
+              {t('common.export', 'Export')}
+            </Button>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button onClick={handleBatchEnable}>{t('common.enable')}</Button>
+                <Button onClick={handleBatchDisable}>{t('common.disable')}</Button>
+                <Button danger onClick={handleBatchDelete}>{t('common.delete')}</Button>
+              </>
+            )}
+          </Space>
+        }
+      />
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns} dataSource={data} rowKey="id" loading={loading}
           pagination={{ current: params.page, pageSize: params.pageSize, total, showSizeChanger: true, onChange: setPage }}
           scroll={{ x: 900 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+          }}
         />
       </Card>
 

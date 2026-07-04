@@ -151,6 +151,29 @@ public class ModelService : BaseService
             .FirstOrDefaultAsync();
     }
 
+    public async Task<List<object>> GetPricingHistoryAsync(int modelId)
+    {
+        return await _db.ModelPricings
+            .Where(p => p.ModelId == modelId)
+            .OrderByDescending(p => p.EffectiveFrom)
+            .Select(p => new
+            {
+                p.Id,
+                p.ModelId,
+                p.InputPricePerMillionTokens,
+                p.OutputPricePerMillionTokens,
+                p.CachedInputPricePerMillionTokens,
+                p.ThinkingPricePerMillionTokens,
+                p.Currency,
+                p.ExchangeRate,
+                p.EffectiveFrom,
+                p.EffectiveTo,
+                p.CreatedAt
+            })
+            .Cast<object>()
+            .ToListAsync();
+    }
+
     public async Task<List<object>> GetAllEnabledAsync()
     {
         return await _db.Models.Where(m => m.IsEnabled)

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Tensu.Api.Data;
 using Tensu.Api.Infrastructure;
 using Tensu.Core.Entities;
@@ -7,15 +8,15 @@ using Tensu.Core.Enums;
 namespace Tensu.Api.Services;
 
 /// <summary>
-/// Background service that periodically checks provider health and individual key health.
-/// Updates Provider and ProviderKey status based on response latency and status codes.
+/// Background service that periodically checks provider health and individual key health
+/// with configurable probe strategies, automatic failover, and state machine transitions.
 /// </summary>
 public class HealthCheckBackgroundService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<HealthCheckBackgroundService> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
+    private readonly TimeSpan _defaultInterval = TimeSpan.FromMinutes(5);
 
     public HealthCheckBackgroundService(
         IServiceScopeFactory scopeFactory,
@@ -39,7 +40,9 @@ public class HealthCheckBackgroundService : BackgroundService
             {
                 _logger.LogError(ex, "Error during health check cycle");
             }
-            await Task.Delay(_interval, stoppingToken);
+
+            var interval = _defaultInterval;
+            await Task.Delay(interval, stoppingToken);
         }
     }
 
@@ -48,6 +51,8 @@ public class HealthCheckBackgroundService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
         var encryption = scope.ServiceProvider.GetRequiredService<EncryptionService>();
+        var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+
         var providers = await db.Providers
             .Include(p => p.Keys)
             .Where(p => p.IsEnabled)
@@ -55,43 +60,75 @@ public class HealthCheckBackgroundService : BackgroundService
 
         foreach (var provider in providers)
         {
+            var providerResult = await CheckProviderAsync(provider, encryption, settings, ct);
+            provider.HealthStatus = providerResult.Status;
+            provider.LastHealthCheckAt = DateTime.UtcNow;
+
             foreach (var key in provider.Keys)
             {
-                var keyStatus = await CheckProviderKeyAsync(provider, key, encryption, ct);
-                key.Status = keyStatus;
+                key.Status = providerResult.KeyResults.GetValueOrDefault(key.Id, key.Status);
                 key.LastHealthCheckAt = DateTime.UtcNow;
             }
-
-            var keyStatuses = provider.Keys
-                .Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired)
-                .Select(k => k.Status)
-                .ToList();
-
-            ProviderHealthStatus providerStatus;
-            if (!keyStatuses.Any())
-            {
-                providerStatus = ProviderHealthStatus.Unhealthy;
-            }
-            else if (keyStatuses.All(s => s is KeyStatus.Inactive or KeyStatus.Expired))
-            {
-                providerStatus = ProviderHealthStatus.Unhealthy;
-            }
-            else if (keyStatuses.Any(s => s is KeyStatus.Active or KeyStatus.Degraded))
-            {
-                providerStatus = keyStatuses.Any(s => s == KeyStatus.Active)
-                    ? ProviderHealthStatus.Healthy
-                    : ProviderHealthStatus.Degraded;
-            }
-            else
-            {
-                providerStatus = ProviderHealthStatus.Degraded;
-            }
-
-            provider.LastHealthCheckAt = DateTime.UtcNow;
-            provider.HealthStatus = providerStatus;
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task<(ProviderHealthStatus Status, Dictionary<int, KeyStatus> KeyResults)> CheckProviderAsync(
+        Provider provider,
+        EncryptionService encryption,
+        SettingsService settings,
+        CancellationToken ct)
+    {
+        var keyResults = new Dictionary<int, KeyStatus>();
+        var activeKeys = provider.Keys.Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired).ToList();
+
+        if (!activeKeys.Any())
+        {
+            return (ProviderHealthStatus.Unhealthy, keyResults);
+        }
+
+        var healthyCount = 0;
+        var degradedCount = 0;
+        var unhealthyCount = 0;
+
+        foreach (var key in activeKeys)
+        {
+            var keyStatus = await CheckProviderKeyAsync(provider, key, encryption, ct);
+            keyResults[key.Id] = keyStatus;
+
+            switch (keyStatus)
+            {
+                case KeyStatus.Active:
+                    healthyCount++;
+                    break;
+                case KeyStatus.Degraded:
+                    degradedCount++;
+                    break;
+                default:
+                    unhealthyCount++;
+                    break;
+            }
+        }
+
+        var total = activeKeys.Count;
+        var healthyRatio = (double)healthyCount / total;
+
+        ProviderHealthStatus providerStatus;
+        if (healthyRatio >= 0.6)
+        {
+            providerStatus = ProviderHealthStatus.Healthy;
+        }
+        else if (healthyRatio >= 0.2 || degradedCount > 0)
+        {
+            providerStatus = ProviderHealthStatus.Degraded;
+        }
+        else
+        {
+            providerStatus = ProviderHealthStatus.Unhealthy;
+        }
+
+        return (providerStatus, keyResults);
     }
 
     private async Task<KeyStatus> CheckProviderKeyAsync(
@@ -108,6 +145,7 @@ public class HealthCheckBackgroundService : BackgroundService
 
         var healthUrl = $"{provider.BaseUrl.TrimEnd('/')}/v1/models";
         var request = new HttpRequestMessage(HttpMethod.Get, healthUrl);
+
         try
         {
             var decryptedKey = encryption.Decrypt(key.KeyValue).Trim();

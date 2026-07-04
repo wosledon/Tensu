@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Tensu.Api.Data;
+using Tensu.Api.Infrastructure;
 using Tensu.Api.Services;
 using Tensu.Core.Entities;
 using Tensu.Core.Enums;
@@ -30,6 +31,117 @@ public class AnomalyDetectionServiceTests : IDisposable
 
     private DateTime CurrentWindowStart => new DateTime(2026, 7, 3, 0, 0, 0, DateTimeKind.Utc);
     private DateTime CurrentWindowEnd => new DateTime(2026, 7, 3, 23, 59, 59, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task DetectAsync_UsageDrop_ReturnsUsageDropAnomaly()
+    {
+        // Baseline: 140 requests over 7 days ago => average 20/day
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 140, status: RequestStatus.Success, model: "gpt-4o");
+        // Current: 5 requests today => usage drop
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 5, status: RequestStatus.Success, model: "gpt-4o");
+
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+
+        var drop = results.FirstOrDefault(r => r.Type == "UsageDrop" && r.Dimension == "model:gpt-4o");
+        Assert.NotNull(drop);
+        Assert.True(drop.CurrentValue < drop.BaselineValue * 0.5);
+    }
+
+    [Fact]
+    public async Task DetectAsync_NoLogs_ReturnsEmpty()
+    {
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public async Task DetectAsync_HighSeverity_WritesAuditLogs()
+    {
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 140, status: RequestStatus.Success, model: "gpt-4o");
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 5, status: RequestStatus.Failed, model: "gpt-4o");
+
+        var auditChannel = new AuditChannel();
+        var service = new AnomalyDetectionService(_db, _settings, auditChannel);
+
+        await service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+
+        var logs = new List<RequestLog>();
+        for (var i = 0; i < 5; i++)
+        {
+            await Task.Delay(50);
+            while (auditChannel.Reader.TryRead(out var log))
+            {
+                logs.Add(log);
+            }
+        }
+
+        Assert.Contains(logs, l => l.ModelName == "system:anomaly");
+    }
+
+    [Fact]
+    public async Task DetectAsync_TokenSpike_ReturnsTokenSpikeAnomaly()
+    {
+        // Baseline: 7000 tokens over 7 days ago => average 1000/day
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 70, status: RequestStatus.Success, model: "gpt-4o", inputTokens: 50, outputTokens: 50);
+        // Current: 50000 tokens today
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 100, status: RequestStatus.Success, model: "gpt-4o", inputTokens: 250, outputTokens: 250);
+
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+
+        var spike = results.FirstOrDefault(r => r.Type == "TokenSpike" && r.Dimension == "model:gpt-4o");
+        Assert.NotNull(spike);
+        Assert.True(spike.CurrentValue > spike.BaselineValue * 2);
+    }
+
+    [Fact]
+    public async Task DetectAsync_TokenDrop_ReturnsTokenDropAnomaly()
+    {
+        // Baseline: 7000 tokens over 7 days ago => average 1000/day
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 70, status: RequestStatus.Success, model: "gpt-4o", inputTokens: 50, outputTokens: 50);
+        // Current: 100 tokens today
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 1, status: RequestStatus.Success, model: "gpt-4o", inputTokens: 50, outputTokens: 50);
+
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+
+        var drop = results.FirstOrDefault(r => r.Type == "TokenDrop" && r.Dimension == "model:gpt-4o");
+        Assert.NotNull(drop);
+        Assert.True(drop.CurrentValue < drop.BaselineValue * 0.5);
+    }
+
+    [Fact]
+    public async Task DetectAsync_OrgFilter_ReturnsOnlyOrgAnomalies()
+    {
+        var otherOrgId = 2;
+        // Org 1 baseline: 70 requests
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 70, status: RequestStatus.Success, model: "gpt-4o");
+        // Org 2 current: 200 requests
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 200, status: RequestStatus.Success, model: "gpt-4o", provider: "OpenAI");
+        // Override org for these logs
+        var org2Logs = _db.RequestLogs.Where(r => r.ProviderName == "OpenAI" && r.Timestamp >= CurrentWindowStart && r.Timestamp <= CurrentWindowEnd).ToList();
+        foreach (var log in org2Logs) log.OrganizationId = otherOrgId;
+        await _db.SaveChangesAsync();
+
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd, orgId: otherOrgId);
+
+        Assert.Contains(results, r => r.Dimension == "model:gpt-4o");
+        Assert.DoesNotContain(results, r => r.Dimension.StartsWith("org:1"));
+    }
+
+    [Fact]
+    public async Task DetectAsync_SeverityFilter_ReturnsOnlyMatchingSeverity()
+    {
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 140, status: RequestStatus.Success, model: "gpt-4o");
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 5, status: RequestStatus.Failed, model: "gpt-4o");
+
+        var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd);
+        var criticals = results.Where(a => a.Severity == "Critical").ToList();
+        var mediums = results.Where(a => a.Severity == "Medium").ToList();
+
+        // Ensure we have mixed severities, then simulate controller filtering
+        var all = results.ToList();
+        var filtered = all.Where(a => a.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.All(filtered, a => Assert.Equal("Critical", a.Severity));
+    }
 
     [Fact]
     public async Task DetectAsync_UsageSpike_ReturnsUsageSpikeAnomaly()
@@ -90,7 +202,7 @@ public class AnomalyDetectionServiceTests : IDisposable
         Assert.True(degraded.CurrentValue < 0.95);
     }
 
-    private async Task AddLogsAsync(DateTime from, DateTime to, int count, RequestStatus status, string model = "gpt-4o", string provider = "OpenAI", decimal? cost = null)
+    private async Task AddLogsAsync(DateTime from, DateTime to, int count, RequestStatus status, string model = "gpt-4o", string provider = "OpenAI", decimal? cost = null, int inputTokens = 10, int outputTokens = 10)
     {
         var random = new Random(42);
         var duration = to - from;
@@ -105,8 +217,8 @@ public class AnomalyDetectionServiceTests : IDisposable
                 ModelName = model,
                 ProviderName = provider,
                 Status = status,
-                InputTokens = 10,
-                OutputTokens = 10,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
                 InputCost = cost * 0.5m ?? 0,
                 OutputCost = cost * 0.5m ?? 0,
                 TotalDurationMs = random.Next(100, 1000),

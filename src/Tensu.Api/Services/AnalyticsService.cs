@@ -103,6 +103,8 @@ public class AnalyticsService
         var rateLimitRate = total > 0 ? (double)rateLimited / total : 0;
         var cacheHitRate = total > 0 ? (double)cacheHits / total : 0;
         var avgLatency = todayLogs.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).Average();
+        var p95Latency = Percentile(todayLogs.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).ToList(), 95);
+        var p99Latency = Percentile(todayLogs.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).ToList(), 99);
 
         var providerNames = todayLogs.Select(r => r.ProviderName ?? "unknown").Distinct();
         var providerEntities = await _db.Providers.AsNoTracking().ToListAsync();
@@ -155,7 +157,9 @@ public class AnalyticsService
                 errorRate = Math.Round(errorRate * 100, 2),
                 rateLimitRate = Math.Round(rateLimitRate * 100, 2),
                 cacheHitRate = Math.Round(cacheHitRate * 100, 2),
-                avgLatency = Math.Round(avgLatency, 1)
+                avgLatency = Math.Round(avgLatency, 1),
+                p95Latency = Math.Round(p95Latency, 1),
+                p99Latency = Math.Round(p99Latency, 1)
             },
             providers,
             topModels,

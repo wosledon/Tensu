@@ -1,13 +1,14 @@
 import { useCallback } from 'react';
-import { Modal, message } from 'antd';
+import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 export function useConfirmDelete(deleteFn: (id: number) => Promise<void>, onSuccess?: () => void) {
   const { t } = useTranslation();
+  const { message, modal } = App.useApp();
 
   const handleDelete = useCallback(
     (id: number) => {
-      Modal.confirm({
+      modal.confirm({
         title: t('common.deleteConfirm'),
         okType: 'danger',
         okText: t('common.confirm'),

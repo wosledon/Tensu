@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
 import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, ThunderboltOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelCapabilityApi, modelApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, FormModal } from '../../components';
 import type { ModelCapability, Model } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 const dimensions = ['Reasoning', 'Code', 'Vision', 'Math', 'ToolUse', 'Multilingual', 'Safety', 'Latency', 'Throughput', 'CostEfficiency'];
 const sources = ['benchmark', 'manual', 'synthetic', 'custom'];
@@ -81,9 +82,21 @@ export default function ModelCapabilitiesPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('model-capabilities', columns, data);
+  };
+
   return (
     <div>
-      <PageHeader title={t('capability.title')} onCreate={async () => { await ensureModels(); openCreate(); }} />
+      <PageHeader
+        title={t('capability.title')}
+        onCreate={async () => { await ensureModels(); openCreate(); }}
+        extra={
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            {t('common.export', 'Export')}
+          </Button>
+        }
+      />
       <Card style={{ borderRadius: 18, marginBottom: 24 }}>
         <Space wrap>
           <Select

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Spin, message } from 'antd';
+import { Spin, App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -9,6 +9,7 @@ export default function OAuthCallbackPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { t } = useTranslation();
+  const { message } = App.useApp();
 
   useEffect(() => {
     const token = searchParams.get('token');

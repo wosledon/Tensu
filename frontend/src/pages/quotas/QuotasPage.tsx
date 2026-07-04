@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
 import { Table, Form, InputNumber, Select, Space, Card, Button, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { quotaApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, FormModal } from '../../components';
 import type { Quota } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 const scopeOptions = [
   { value: 'org', label: 'quota.scopeOrg' },
@@ -72,9 +73,22 @@ export default function QuotasPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('quotas', columns, data);
+  };
+
   return (
     <div>
-      <PageHeader title={t('quota.title')} onCreate={openCreate} onSearch={setKeyword} />
+      <PageHeader
+        title={t('quota.title')}
+        onCreate={openCreate}
+        onSearch={setKeyword}
+        extra={
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            {t('common.export', 'Export')}
+          </Button>
+        }
+      />
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns}

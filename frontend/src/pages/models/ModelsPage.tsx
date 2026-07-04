@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, Typography, theme, message, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, DollarOutlined, EyeOutlined, BulbOutlined, ToolOutlined, ExperimentOutlined, ContainerOutlined, ThunderboltOutlined, CompressOutlined, SettingOutlined } from '@ant-design/icons';
+import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, Typography, theme, App, Row, Col } from 'antd';
+import { EditOutlined, DeleteOutlined, DollarOutlined, EyeOutlined, BulbOutlined, ToolOutlined, ExperimentOutlined, ContainerOutlined, ThunderboltOutlined, CompressOutlined, SettingOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelApi, providerApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, CapabilityTags, FormModal } from '../../components';
 import type { Model, Provider } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 interface CapabilityItemProps {
   icon: React.ComponentType<{ style?: React.CSSProperties }>;
@@ -47,10 +48,12 @@ function CapabilityItem({ icon: Icon, label, hint, name, color }: CapabilityItem
 export default function ModelsPage() {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const { message } = App.useApp();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<Model | null>(null);
   const [pricingForm] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => modelApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage } = useCrudList<Model, any>({ fetchFn });
@@ -58,8 +61,52 @@ export default function ModelsPage() {
     createFn: modelApi.create,
     updateFn: modelApi.update,
     onSuccess: fetchData,
+    transformRecord: (record) => ({
+      ...record,
+      thinkingStrengths: record.thinkingStrengths ? JSON.parse(record.thinkingStrengths) : undefined,
+    }),
+    transformSubmit: (values) => ({
+      ...values,
+      thinkingStrengths: values.thinkingStrengths ? JSON.stringify(values.thinkingStrengths) : undefined,
+    }),
   });
   const { handleDelete } = useConfirmDelete(modelApi.delete, fetchData);
+
+  const handleBatchDelete = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await modelApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchEnable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await modelApi.batchEnable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchDisable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await modelApi.batchDisable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
 
   const ensureProviders = async () => {
     if (!providers.length) {
@@ -141,6 +188,10 @@ export default function ModelsPage() {
 
   const providerOptions = providers.map((p) => ({ value: p.id, label: `${p.name} (${p.protocol})` }));
 
+  const handleExport = () => {
+    exportTableToCsv('models', columns, data);
+  };
+
   return (
     <div>
       <PageHeader
@@ -159,6 +210,16 @@ export default function ModelsPage() {
             <Button loading={syncing} disabled={!syncProviderId} onClick={handleSync}>
               {t('model.syncFromProvider')}
             </Button>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>
+              {t('common.export', 'Export')}
+            </Button>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button onClick={handleBatchEnable}>{t('common.enable')}</Button>
+                <Button onClick={handleBatchDisable}>{t('common.disable')}</Button>
+                <Button danger onClick={handleBatchDelete}>{t('common.delete')}</Button>
+              </>
+            )}
           </Space>
         }
         onCreate={async () => { await ensureProviders(); openCreate(); }}
@@ -168,6 +229,10 @@ export default function ModelsPage() {
           columns={columns} dataSource={data} rowKey="id" loading={loading}
           pagination={{ current: params.page, pageSize: params.pageSize, total, showSizeChanger: true, onChange: setPage }}
           scroll={{ x: 1000 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+          }}
         />
       </Card>
 
@@ -269,6 +334,18 @@ export default function ModelsPage() {
                 name="supportsThinking"
                 color={token.colorPrimary}
               />
+            </Col>
+            <Col span={24} style={{ marginTop: 8 }}>
+              <Form.Item name="thinkingStrengths" label={t('model.thinkingStrengths')}>
+                <Select mode="multiple" allowClear placeholder={t('model.reasoningIntensity')} options={[
+                  { value: 'none', label: t('model.intensityNone') },
+                  { value: 'low', label: t('model.intensityLow') },
+                  { value: 'medium', label: t('model.intensityMedium') },
+                  { value: 'high', label: t('model.intensityHigh') },
+                  { value: 'max', label: t('model.intensityMax') },
+                  { value: 'xhigh', label: t('model.intensityXHigh') },
+                ]} />
+              </Form.Item>
             </Col>
           </Row>
         </Card>

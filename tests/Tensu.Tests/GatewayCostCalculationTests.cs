@@ -37,7 +37,7 @@ public class GatewayCostCalculationTests : IDisposable
         _controller = new GatewayController(
             null!, null!, null!, null!, null!,
             _db, auditChannel, loadBalancer, rateLimiter, retryPolicy,
-            compression, cache, settingsService, quotaService, new IpWhitelistService(), logger, new Mock<IHttpClientFactory>().Object);
+            compression, cache, settingsService, quotaService, new IpWhitelistService(), logger, new Mock<IHttpClientFactory>().Object, new MetricsCollector());
     }
 
     public void Dispose()

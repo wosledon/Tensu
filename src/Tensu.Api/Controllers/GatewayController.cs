@@ -32,6 +32,7 @@ public class GatewayController : ControllerBase
     private readonly IpWhitelistService _ipWhitelistService;
     private readonly ILogger<GatewayController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly MetricsCollector _metrics;
 
     public GatewayController(
         ApiKeyService apiKeyService,
@@ -50,7 +51,8 @@ public class GatewayController : ControllerBase
         QuotaService quotaService,
         IpWhitelistService ipWhitelistService,
         ILogger<GatewayController> logger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        MetricsCollector metrics)
     {
         _apiKeyService = apiKeyService;
         _routeModelService = routeModelService;
@@ -69,6 +71,7 @@ public class GatewayController : ControllerBase
         _ipWhitelistService = ipWhitelistService;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _metrics = metrics;
     }
 
     [HttpPost("chat/completions")]
@@ -257,6 +260,7 @@ public class GatewayController : ControllerBase
                             await WriteStreamCacheResponseAsync(cachedResponse, requestId, model, apiKey, sw,
                                 inputTokens, inputTokensAfterCompression, cachedOutputTokens, inputCost, outputCost,
                                 compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey);
+                            _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: true, sw.ElapsedMilliseconds, inputTokens, cachedOutputTokens, rateLimited: false);
                             return new EmptyResult();
                         }
 
@@ -264,6 +268,7 @@ public class GatewayController : ControllerBase
                             RequestStatus.Success, inputTokens, inputTokensAfterCompression, cachedOutputTokens,
                             inputCost, outputCost, compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey, cacheHit: true);
                         Response.ContentType = isStream ? "text/event-stream" : "application/json";
+                        _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: true, sw.ElapsedMilliseconds, inputTokens, cachedOutputTokens, rateLimited: false);
                         return Content(responseToReturn, Response.ContentType);
                     }
 
@@ -289,6 +294,7 @@ public class GatewayController : ControllerBase
                                 await WriteStreamCacheResponseAsync(cachedResponse, requestId, model, apiKey, sw,
                                     inputTokens, inputTokensAfterCompression, cachedOutputTokens, inputCost, outputCost,
                                     compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey);
+                                _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: true, sw.ElapsedMilliseconds, inputTokens, cachedOutputTokens, rateLimited: false);
                                 return new EmptyResult();
                             }
 
@@ -296,6 +302,7 @@ public class GatewayController : ControllerBase
                                 RequestStatus.Success, inputTokens, inputTokensAfterCompression, cachedOutputTokens,
                                 inputCost, outputCost, compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey, cacheHit: true, semanticCacheHit: true);
                             Response.ContentType = isStream ? "text/event-stream" : "application/json";
+                            _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: true, sw.ElapsedMilliseconds, inputTokens, cachedOutputTokens, rateLimited: false);
                             return Content(responseToReturn, Response.ContentType);
                         }
                     }
@@ -316,7 +323,7 @@ public class GatewayController : ControllerBase
                     {
                         var upstreamRequest = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, selectedKey);
                         response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead);
-                        var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled, semanticCacheEnabled, semanticCacheThreshold, semanticCacheTtl, requestedModel, compressionMappingKey);
+                        var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled, semanticCacheEnabled, semanticCacheThreshold, semanticCacheTtl, requestedModel, compressionMappingKey, provider, selectedKey);
                         await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
                         return streamResult;
                     }
@@ -335,7 +342,10 @@ public class GatewayController : ControllerBase
                         sw.Stop();
 
                         if (response == null)
+                        {
+                            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
                             return StatusCode(502, new { error = new { message = "All retry attempts failed", type = "proxy_error" } });
+                        }
 
                         if (!response.IsSuccessStatusCode)
                         {
@@ -345,6 +355,7 @@ public class GatewayController : ControllerBase
                                 RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
                                 ((int)response.StatusCode).ToString(), errorBody, compressionMappingKey: compressionMappingKey);
                             await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
                             return StatusCode((int)response.StatusCode,
                                 new { error = new { message = "Upstream provider error", type = "upstream_error", upstream_status = (int)response.StatusCode } });
                         }
@@ -355,6 +366,7 @@ public class GatewayController : ControllerBase
 
                         _rateLimiter.RecordRequest(apiKey.Id, 0);
                         _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
+                        _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
                         var outputTokens = EstimateOutputTokensFromResponse(responseBody, isStream: false);
                         var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
@@ -372,6 +384,7 @@ public class GatewayController : ControllerBase
                             compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey);
 
                         Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                        _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
                         return Content(responseBody, "application/json");
                     }
                 }
@@ -382,6 +395,7 @@ public class GatewayController : ControllerBase
                         RequestStatus.Timeout, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
                         "TIMEOUT", "Request timed out", compressionMappingKey: compressionMappingKey);
                     await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                    _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
                     return StatusCode(408, new { error = new { message = "Request timed out", type = "timeout_error" } });
                 }
                 catch (Exception ex)
@@ -392,6 +406,7 @@ public class GatewayController : ControllerBase
                         RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
                         "INTERNAL_ERROR", ex.Message, compressionMappingKey: compressionMappingKey);
                     await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                    _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
                     return StatusCode(502, new { error = new { message = "Bad gateway", type = "proxy_error" } });
                 }
             }
@@ -706,7 +721,7 @@ public class GatewayController : ControllerBase
     private async Task<IActionResult> HandleStreamResponse(
         HttpResponseMessage response, string requestId, Model model, ApiKey apiKey, Stopwatch sw,
         string requestBody, int inputTokens, int inputTokensAfterCompression, string compressionStrategy, bool compressionApplied,
-        string cacheKey, TimeSpan? cacheTtl, bool cacheEnabled, bool semanticCacheEnabled, float semanticCacheThreshold, TimeSpan? semanticCacheTtl, string requestedModel, string? compressionMappingKey)
+        string cacheKey, TimeSpan? cacheTtl, bool cacheEnabled, bool semanticCacheEnabled, float semanticCacheThreshold, TimeSpan? semanticCacheTtl, string requestedModel, string? compressionMappingKey, Provider provider, ProviderKey selectedKey)
     {
         sw.Stop();
 
@@ -716,6 +731,7 @@ public class GatewayController : ControllerBase
             await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
                 RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
                 ((int)response.StatusCode).ToString(), errorBody, compressionMappingKey: compressionMappingKey);
+            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
             return StatusCode((int)response.StatusCode,
                 new { error = new { message = "Upstream provider error", type = "upstream_error" } });
         }
@@ -769,6 +785,7 @@ public class GatewayController : ControllerBase
             sw.Stop();
             _rateLimiter.RecordRequest(apiKey.Id, 0);
             _loadBalancer.RecordLatency(model.ProviderId, sw.ElapsedMilliseconds);
+            _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
             var outputTokens = CompressionService.EstimateTokens(aggregatedContent.ToString());
             var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
@@ -786,6 +803,7 @@ public class GatewayController : ControllerBase
                 RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
                 compressionStrategy, compressionApplied, requestBody, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey);
 
+            _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
             return new EmptyResult();
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException)
@@ -806,6 +824,7 @@ public class GatewayController : ControllerBase
             await EnqueueAuditLog(requestId, model, apiKey, aggregatedContent.ToString(), sw.ElapsedMilliseconds, true,
                 RequestStatus.Interrupted, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
                 compressionStrategy, compressionApplied, requestBody, "INTERRUPTED", ex.Message, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey);
+            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
             return new EmptyResult();
         }
     }

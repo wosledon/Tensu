@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Switch, InputNumber, Button, Space, message, Typography, Spin } from 'antd';
+import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../contexts/ThemeContext';
@@ -15,6 +15,7 @@ interface Settings {
 export default function SettingsPage() {
   const { t } = useTranslation();
   const { mode, setMode } = useThemeMode();
+  const { message } = App.useApp();
   const [, setSettings] = useState<Settings>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

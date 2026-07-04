@@ -170,6 +170,48 @@ public class AnomalyDetectionService
                             DateTime.UtcNow));
                     }
                 }
+
+                if (baselineTokens > 0)
+                {
+                    var (severity, message) = EvaluateSpike(currentTokens, baselineTokens, thresholds.UsageSpikeMultiplier, $"{prefix} tokens");
+                    if (severity != null)
+                    {
+                        anomalies.Add(new AnomalyResult(
+                            "TokenSpike",
+                            severity,
+                            key,
+                            message,
+                            currentTokens,
+                            baselineTokens,
+                            DateTime.UtcNow));
+                    }
+                    else
+                    {
+                        (severity, message) = EvaluateDrop(currentTokens, baselineTokens, thresholds.UsageDropMultiplier, $"{prefix} tokens");
+                        if (severity != null)
+                        {
+                            anomalies.Add(new AnomalyResult(
+                                "TokenDrop",
+                                severity,
+                                key,
+                                message,
+                                currentTokens,
+                                baselineTokens,
+                                DateTime.UtcNow));
+                        }
+                    }
+                }
+                else if (currentTokens > 10000)
+                {
+                    anomalies.Add(new AnomalyResult(
+                        "TokenSpike",
+                        "Medium",
+                        key,
+                        $"{prefix} tokens increased from no baseline to {currentTokens}",
+                        currentTokens,
+                        0,
+                        DateTime.UtcNow));
+                }
             }
         }
     }

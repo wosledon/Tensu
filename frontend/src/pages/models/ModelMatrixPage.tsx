@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Card, Table, Tag, Space, Select, Button, Row, Col } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import ReactECharts from 'echarts-for-react';
 import { modelCapabilityApi, providerApi } from '../../api';
 import { PageHeader } from '../../components';
 import type { Provider, ModelCapabilityMatrix } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 export default function ModelMatrixPage() {
   const { t } = useTranslation();
@@ -95,9 +97,21 @@ export default function ModelMatrixPage() {
     },
   ];
 
+  const handleExport = () => {
+    if (!matrix?.models?.length) return;
+    exportTableToCsv('model-matrix', columns, matrix.models);
+  };
+
   return (
     <div>
-      <PageHeader title={t('model.title') + ' - ' + t('capability.matrixTitle')} />
+      <PageHeader
+        title={t('model.title') + ' - ' + t('capability.matrixTitle')}
+        extra={
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            {t('common.export', 'Export')}
+          </Button>
+        }
+      />
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={16}>

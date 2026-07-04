@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { message } from 'antd';
+import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { PagedRequest, PagedResult } from '../types';
 
@@ -15,6 +15,7 @@ export function useCrudList<T, P extends PagedRequest>({
   autoFetch = true,
 }: UseCrudListOptions<T, P>) {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);

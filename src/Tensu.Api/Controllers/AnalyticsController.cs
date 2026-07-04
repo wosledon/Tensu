@@ -92,12 +92,30 @@ public class AnalyticsController : AdminBaseController
     public async Task<IActionResult> Anomalies(
         [FromQuery] DateTime from,
         [FromQuery] DateTime to,
-        [FromQuery] int? orgId = null)
+        [FromQuery] int? orgId = null,
+        [FromQuery] string? severity = null,
+        [FromQuery] string? type = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         if (from == default) from = DateTime.UtcNow.AddDays(-1);
         if (to == default) to = DateTime.UtcNow;
         var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
         var result = await _anomalyService.DetectAsync(from, to, effectiveOrgId);
-        return Ok(ApiResponse<List<AnomalyResult>>.Success(result));
+        if (!string.IsNullOrWhiteSpace(severity))
+        {
+            var sev = severity.Trim();
+            result = result.Where(a => a.Severity.Equals(sev, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var t = type.Trim();
+            result = result.Where(a => a.Type.Equals(t, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var total = result.Count;
+        var items = result.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Ok(ApiResponse<object>.Success(new { items, total, page, pageSize }));
     }
 }

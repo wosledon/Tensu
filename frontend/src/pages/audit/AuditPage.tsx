@@ -1,16 +1,37 @@
 import { useCallback, useState } from 'react';
-import { Table, Card, Tag, Descriptions, Modal } from 'antd';
+import { Table, Card, Tag, Descriptions, Modal, Switch, Space, Typography, Button } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { auditApi } from '../../api';
 import { useCrudList } from '../../hooks';
 import { PageHeader, StatusDot } from '../../components';
 import type { RequestLog } from '../../types';
 import dayjs from 'dayjs';
+import { exportTableToCsv } from '../../utils/export';
+
+const { Paragraph } = Typography;
+
+function desensitizeText(text: string) {
+  if (!text) return text;
+  let result = text;
+
+  result = result.replace(/"api[_-]?key"\s*:\s*"[^"]{8,}"/gi, '"api_key":"***"');
+  result = result.replace(/"token"\s*:\s*"[^"]{8,}"/gi, '"token":"***"');
+  result = result.replace(/"authorization"\s*:\s*"[^"]{8,}"/gi, '"authorization":"***"');
+  result = result.replace(/sk-[A-Za-z0-9]{20,}/g, 'sk-***');
+  result = result.replace(/pk-[A-Za-z0-9]{20,}/g, 'pk-***');
+  result = result.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '***@***.***');
+  result = result.replace(/\b(\d{1,3}\.){3}\d{1,3}\b/g, '***.***.***.***');
+  result = result.replace(/\b([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b/g, '***');
+
+  return result;
+}
 
 export default function AuditPage() {
   const { t } = useTranslation();
   const [detailOpen, setDetailOpen] = useState(false);
   const [selected, setSelected] = useState<RequestLog | null>(null);
+  const [desensitize, setDesensitize] = useState(true);
 
   const fetchFn = useCallback((params: any) => auditApi.list(params), []);
   const { data, total, loading, params, setPage, setKeyword } = useCrudList<RequestLog, any>({ fetchFn });
@@ -36,9 +57,34 @@ export default function AuditPage() {
     { title: t('audit.cacheHit'), dataIndex: 'cacheHit', key: 'cacheHit', render: (v: boolean) => v ? <Tag color="purple">HIT</Tag> : <Tag>MISS</Tag> },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('audit-logs', columns, data);
+  };
+
+  const renderContentBlock = (label: string, value?: string) => {
+    if (!value) return null;
+    const display = desensitize ? desensitizeText(value) : value;
+    return (
+      <Descriptions.Item label={label} span={2}>
+        <Paragraph copyable style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {display}
+        </Paragraph>
+      </Descriptions.Item>
+    );
+  };
+
   return (
     <div>
-      <PageHeader title={t('audit.title')} onSearch={(v) => setKeyword(v || undefined)} searchPlaceholder={t('audit.requestId')} />
+      <PageHeader
+        title={t('audit.title')}
+        onSearch={(v) => setKeyword(v || undefined)}
+        searchPlaceholder={t('audit.requestId')}
+        extra={
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            {t('common.export', 'Export')}
+          </Button>
+        }
+      />
       <Card style={{ borderRadius: 18 }}>
         <Table
           columns={columns} dataSource={data} rowKey="id" loading={loading}
@@ -48,24 +94,32 @@ export default function AuditPage() {
         />
       </Card>
 
-      <Modal title={t('audit.requestId')} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={700}>
+      <Modal title={t('audit.requestId')} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={800}>
         {selected && (
-          <Descriptions bordered column={2} size="small">
-            <Descriptions.Item label={t('audit.requestId')} span={2}>
-              <span style={{ fontFamily: 'monospace' }}>{selected.requestId}</span>
-            </Descriptions.Item>
-            <Descriptions.Item label={t('audit.timestamp')}>{dayjs(selected.timestamp).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.model')}>{selected.modelName}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.provider')}>{selected.providerName}</Descriptions.Item>
-            <Descriptions.Item label={t('common.status')}><StatusDot color={statusColors[selected.status] || 'default'} text={selected.status} /></Descriptions.Item>
-            <Descriptions.Item label={t('audit.inputTokens')}>{selected.inputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.outputTokens')}>{selected.outputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.latency')}>{selected.totalDurationMs ? `${selected.totalDurationMs}ms` : '-'}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.ttft')}>{selected.timeToFirstTokenMs ? `${selected.timeToFirstTokenMs}ms` : '-'}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.speed')}>{selected.outputTokensPerSecond ? `${selected.outputTokensPerSecond.toFixed(2)} t/s` : '-'}</Descriptions.Item>
-            <Descriptions.Item label={t('audit.cacheHit')}>{selected.cacheHit ? <Tag color="purple">HIT</Tag> : <Tag>MISS</Tag>}</Descriptions.Item>
-            {selected.errorCode && <Descriptions.Item label="Error" span={2}><Tag color="error">{selected.errorCode}</Tag> {selected.errorMessage}</Descriptions.Item>}
-          </Descriptions>
+          <>
+            <Space style={{ marginBottom: 16 }}>
+              <span>Desensitization</span>
+              <Switch checked={desensitize} onChange={setDesensitize} />
+            </Space>
+            <Descriptions bordered column={2} size="small">
+              <Descriptions.Item label={t('audit.requestId')} span={2}>
+                <span style={{ fontFamily: 'monospace' }}>{selected.requestId}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label={t('audit.timestamp')}>{dayjs(selected.timestamp).format('YYYY-MM-DD HH:mm:ss')}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.model')}>{selected.modelName}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.provider')}>{selected.providerName}</Descriptions.Item>
+              <Descriptions.Item label={t('common.status')}><StatusDot color={statusColors[selected.status] || 'default'} text={selected.status} /></Descriptions.Item>
+              <Descriptions.Item label={t('audit.inputTokens')}>{selected.inputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.outputTokens')}>{selected.outputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.latency')}>{selected.totalDurationMs ? `${selected.totalDurationMs}ms` : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.ttft')}>{selected.timeToFirstTokenMs ? `${selected.timeToFirstTokenMs}ms` : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.speed')}>{selected.outputTokensPerSecond ? `${selected.outputTokensPerSecond.toFixed(2)} t/s` : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('audit.cacheHit')}>{selected.cacheHit ? <Tag color="purple">HIT</Tag> : <Tag>MISS</Tag>}</Descriptions.Item>
+              {selected.errorCode && <Descriptions.Item label="Error" span={2}><Tag color="error">{selected.errorCode}</Tag> {selected.errorMessage}</Descriptions.Item>}
+              {renderContentBlock('Request Content', selected.requestContent)}
+              {renderContentBlock('Response Content', selected.responseContent)}
+            </Descriptions>
+          </>
         )}
       </Modal>
     </div>

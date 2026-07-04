@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
+import { Form, Input, Button, Card, Typography, Divider, App } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState<OAuthProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);

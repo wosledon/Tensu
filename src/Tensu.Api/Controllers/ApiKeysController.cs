@@ -96,4 +96,53 @@ public class ApiKeysController : AdminBaseController
         if (!deleted) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         return Ok(ApiResponse.Success());
     }
+
+    public record BatchIdsRequest(int[] Ids);
+
+    [HttpDelete("batch")]
+    public async Task<IActionResult> BatchDelete([FromBody] BatchIdsRequest request)
+    {
+        var ids = request.Ids ?? Array.Empty<int>();
+        if (ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var existing = await _service.GetEntityByIdAsync(id);
+                if (existing == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId) { results.Add(new { id, success = false, error = "Forbidden" }); continue; }
+                var deleted = await _service.DeleteAsync(id);
+                results.Add(new { id, success = deleted });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/revoke")]
+    public async Task<IActionResult> BatchRevoke([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var existing = await _service.GetEntityByIdAsync(id);
+                if (existing == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId) { results.Add(new { id, success = false, error = "Forbidden" }); continue; }
+                var revoked = await _service.RevokeAsync(id);
+                results.Add(new { id, success = revoked });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
 }

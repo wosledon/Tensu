@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Layout, Menu, Dropdown, Space, Button, Avatar } from 'antd';
 import {
   DashboardOutlined, ApiOutlined, DeploymentUnitOutlined, BranchesOutlined,
-  KeyOutlined, TeamOutlined, BarChartOutlined, SettingOutlined, ControlOutlined,
-  SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, UserOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  KeyOutlined, TeamOutlined, UserOutlined, BarChartOutlined, SettingOutlined, ControlOutlined, LineChartOutlined,
+  SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -39,8 +39,22 @@ export default function MainLayout() {
     { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels'), roles: ['SuperAdmin', 'Admin'] },
     { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
     { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations'), roles: ['SuperAdmin'] },
+    { key: '/users', icon: <UserOutlined />, label: t('nav.users'), roles: ['SuperAdmin'] },
     { key: '/quotas', icon: <ControlOutlined />, label: t('quota.title'), roles: ['SuperAdmin'] },
     { key: '/audit', icon: <BarChartOutlined />, label: t('nav.audit'), roles: allRoles },
+    {
+      key: 'analytics-group',
+      icon: <LineChartOutlined />,
+      label: t('nav.analytics'),
+      roles: allRoles,
+      children: [
+        { key: '/analytics/usage', label: t('analytics.usage') },
+        { key: '/analytics/cost', label: t('analytics.cost') },
+        { key: '/analytics/performance', label: t('analytics.performance') },
+        { key: '/analytics/cache', label: t('analytics.cache') },
+        { key: '/analytics/anomalies', label: t('analytics.anomalies') },
+      ],
+    },
     { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), roles: ['SuperAdmin'] },
   ];
 
@@ -73,7 +87,7 @@ export default function MainLayout() {
   ];
 
   const selectedKey = location.pathname;
-  const openKey = selectedKey.startsWith('/models') ? 'models-group' : undefined;
+  const openKey = selectedKey.startsWith('/models') ? 'models-group' : selectedKey.startsWith('/analytics') ? 'analytics-group' : undefined;
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

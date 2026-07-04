@@ -48,12 +48,80 @@ public class RouteModelsController : AdminBaseController
         return Ok(ApiResponse<object>.Success(updated));
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpGet("batch-test")]
+    public async Task<IActionResult> BatchTest()
     {
-        var deleted = await _service.DeleteAsync(id);
+        return Ok(ApiResponse<object>.Success(new { test = true }));
+    }
+
+    public record BatchIdsRequest(int[] Ids);
+
+    [HttpDelete("batch")]
+    public async Task<IActionResult> BatchDelete([FromBody] BatchIdsRequest request)
+    {
+        var ids = request.Ids ?? Array.Empty<int>();
+        return Ok(ApiResponse<object>.Success(new { ids = ids.Length }));
+    }
+
+    [HttpDelete("batch/delete")]
+    public async Task<IActionResult> BatchDeleteAlias([FromBody] BatchIdsRequest request)
+    {
+        return await BatchDelete(request);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id)
+    {
+        if (!int.TryParse(id, out var modelId)) return NotFound(ApiResponse.Error(40401, "Route model not found"));
+        var deleted = await _service.DeleteAsync(modelId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Route model not found"));
         return Ok(ApiResponse.Success());
+    }
+
+    [HttpPost("batch/enable")]
+    public async Task<IActionResult> BatchEnable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var rm = await _service.GetByIdAsync(id);
+                if (rm == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                rm.IsEnabled = true;
+                await _service.UpdateAsync(id, rm);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/disable")]
+    public async Task<IActionResult> BatchDisable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var rm = await _service.GetByIdAsync(id);
+                if (rm == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                rm.IsEnabled = false;
+                await _service.UpdateAsync(id, rm);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
     }
 
     [HttpPost("{id}/rules")]

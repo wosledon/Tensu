@@ -79,6 +79,8 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<QuotaService>();
 builder.Services.AddHostedService<HealthCheckBackgroundService>();
 builder.Services.AddHostedService<DataRetentionBackgroundService>();
+builder.Services.AddSingleton<KeyRotationService>();
+builder.Services.AddScoped<DesensitizationService>();
 builder.Services.AddHttpClient();
 
 // Controllers
@@ -109,7 +111,15 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
-    db.Database.EnsureCreated();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database migration failed: {ex.Message}");
+        throw;
+    }
 
     if (!db.Users.Any())
     {
