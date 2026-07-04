@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, DatePicker, Typography, Spin, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal, Descriptions } from 'antd';
-import { ExportOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { ExportOutlined, ReloadOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { analyticsApi } from '../../api';
 import { exportTableToCsv } from '../../utils/export';
@@ -38,6 +38,7 @@ export default function AnomalyPage() {
     baselineValue: number;
     detectedAt: string;
   } | null>(null);
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
   const fetchData = async () => {
@@ -52,6 +53,14 @@ export default function AnomalyPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const copyDetails = async () => {
+    if (!selectedRow) return;
+    const text = `Type: ${selectedRow.type}\nSeverity: ${selectedRow.severity}\nDimension: ${selectedRow.dimension}\nMessage: ${selectedRow.message}\nCurrent: ${selectedRow.currentValue}\nBaseline: ${selectedRow.baselineValue}\nTime: ${new Date(selectedRow.detectedAt).toLocaleString()}`;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   useEffect(() => { fetchData(); }, [dates[0]?.toISOString(), dates[1]?.toISOString(), severity, type, page]);
@@ -226,8 +235,12 @@ export default function AnomalyPage() {
         title={t('analytics.anomalies', 'Anomaly Detection')}
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
-        footer={null}
         width={720}
+        footer={
+          <Button icon={<CopyOutlined />} onClick={copyDetails}>
+            {copied ? 'Copied' : t('common.copy', 'Copy')}
+          </Button>
+        }
       >
         {selectedRow && (
           <Descriptions bordered size="small" column={1}>
