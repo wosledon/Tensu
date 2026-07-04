@@ -211,12 +211,12 @@ export default function ProvidersPage() {
       align: 'right' as const,
     },
     {
-      title: 'RPM', dataIndex: 'rateLimitRpm', key: 'rateLimitRpm', width: 100,
+      title: t('quota.rpm'), dataIndex: 'rateLimitRpm', key: 'rateLimitRpm', width: 100,
       render: (v?: number) => v != null ? <span style={{ fontFamily: 'monospace' }}>{v}</span> : '-',
       align: 'right' as const,
     },
     {
-      title: 'TPM', dataIndex: 'rateLimitTpm', key: 'rateLimitTpm', width: 100,
+      title: t('quota.tpm'), dataIndex: 'rateLimitTpm', key: 'rateLimitTpm', width: 100,
       render: (v?: number) => v != null ? <span style={{ fontFamily: 'monospace' }}>{v}</span> : '-',
       align: 'right' as const,
     },
@@ -314,7 +314,7 @@ export default function ProvidersPage() {
               <Input />
             </Form.Item>
             <Form.Item name="protocol" label={t('provider.protocol')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
-              <Select options={[{ value: 'OpenAI', label: 'OpenAI' }, { value: 'Anthropic', label: 'Anthropic' }]} />
+              <Select options={[{ value: 'OpenAI', label: t('provider.protocolOpenAI') }, { value: 'Anthropic', label: t('provider.protocolAnthropic') }]} />
             </Form.Item>
           </Space>
           <Form.Item name="baseUrl" label={t('provider.baseUrl')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
@@ -335,8 +335,8 @@ export default function ProvidersPage() {
           <Select options={[{ value: 'Active', label: t('common.enabled') }, { value: 'Degraded', label: t('provider.degraded') }, { value: 'Inactive', label: t('common.disabled') }]} />
         </Form.Item>
         <Form.Item name="weight" label={t('provider.weight')} initialValue={1}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="rateLimitRpm" label="RPM"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="rateLimitTpm" label="TPM"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="rateLimitRpm" label={t('quota.rpm')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="rateLimitTpm" label={t('quota.tpm')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
       </FormModal>
     </div>
   );

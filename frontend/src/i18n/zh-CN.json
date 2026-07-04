@@ -100,6 +100,9 @@
     "outputPrice": "输出单价",
     "cachedPrice": "缓存单价",
     "currency": "币种",
+    "currencyUSD": "USD",
+    "currencyCNY": "CNY",
+    "currencyEUR": "EUR",
     "perMillion": "/百万 token",
     "syncFromProvider": "自动拉取模型",
     "syncSuccess": "已同步 {{total}} 个模型，新增 {{added}} 个",
@@ -162,6 +165,11 @@
     "scopeOrg": "组织",
     "scopeKey": "API 密钥",
     "scopeModel": "模型"
+  },
+  "provider": {
+    "protocol": "协议",
+    "protocolOpenAI": "OpenAI",
+    "protocolAnthropic": "Anthropic"
   },
   "apiKey": {
     "title": "API 密钥管理",

@@ -100,6 +100,9 @@
     "outputPrice": "Output Price",
     "cachedPrice": "Cached Price",
     "currency": "Currency",
+    "currencyUSD": "USD",
+    "currencyCNY": "CNY",
+    "currencyEUR": "EUR",
     "perMillion": "/1M tokens",
     "syncFromProvider": "Sync Models from Provider",
     "syncSuccess": "Synced {{total}} models, {{added}} new",
@@ -162,6 +165,11 @@
     "scopeOrg": "Organization",
     "scopeKey": "API Key",
     "scopeModel": "Model"
+  },
+  "provider": {
+    "protocol": "Protocol",
+    "protocolOpenAI": "OpenAI",
+    "protocolAnthropic": "Anthropic"
   },
   "apiKey": {
     "title": "API Keys",

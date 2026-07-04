@@ -422,7 +422,7 @@ export default function ModelsPage() {
           </Col>
           <Col span={12}>
             <Form.Item name="currency" label={t('model.currency')} initialValue="USD">
-              <Select options={[{ value: 'USD', label: 'USD' }, { value: 'CNY', label: 'CNY' }, { value: 'EUR', label: 'EUR' }]} />
+              <Select options={[{ value: 'USD', label: t('model.currencyUSD') }, { value: 'CNY', label: t('model.currencyCNY') }, { value: 'EUR', label: t('model.currencyEUR') }]} />
             </Form.Item>
           </Col>
         </Row>
