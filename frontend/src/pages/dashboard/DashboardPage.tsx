@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, Col, Row, Statistic, Typography, Spin } from 'antd';
-import { ApiOutlined, ThunderboltOutlined, DollarOutlined, CloudOutlined } from '@ant-design/icons';
+import { ApiOutlined, ThunderboltOutlined, DollarOutlined, CloudOutlined, AlertOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../contexts/ThemeContext';
 import { analyticsApi } from '../../api';
+import { useNavigate } from 'react-router-dom';
 
 const { Title } = Typography;
 
@@ -15,12 +16,22 @@ export default function DashboardPage() {
   const { isDark } = useThemeMode();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [anomalyCount, setAnomalyCount] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     analyticsApi.dashboard()
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const from = new Date(); from.setHours(0,0,0,0);
+    const to = new Date();
+    analyticsApi.anomalies(from.toISOString(), to.toISOString())
+      .then((res) => setAnomalyCount(res?.total ?? 0))
+      .catch(() => {});
   }, []);
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div>;
@@ -93,6 +104,7 @@ export default function DashboardPage() {
     { title: t('dashboard.todayTokens'), value: data?.today?.tokens || 0, icon: <ThunderboltOutlined />, color: '#34C759' },
     { title: t('dashboard.todayCost'), value: data?.today?.cost || 0, prefix: '$', precision: 4, icon: <DollarOutlined />, color: '#FF9500' },
     { title: t('dashboard.cacheHitRate'), value: data?.today?.cacheHitRate || 0, suffix: '%', icon: <CloudOutlined />, color: '#AF52DE' },
+    { title: t('analytics.anomalies', 'Anomalies'), value: anomalyCount, icon: <AlertOutlined />, color: '#FF3B30', onClick: () => navigate('/analytics/anomalies') },
   ];
 
   return (
@@ -102,14 +114,14 @@ export default function DashboardPage() {
       <Row gutter={[24, 24]}>
         {stats.map((s, i) => (
           <Col key={i} xs={24} sm={12} lg={6}>
-            <Card style={{ borderRadius: 18 }}>
+            <Card style={{ borderRadius: 18, cursor: s.onClick ? 'pointer' : undefined }} onClick={s.onClick}>
               <Statistic
                 title={s.title}
                 value={s.value}
                 prefix={s.prefix}
                 suffix={s.suffix}
                 precision={s.precision}
-                valueStyle={{ color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 }}
+                styles={{ content: { color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 } }}
               />
             </Card>
           </Col>

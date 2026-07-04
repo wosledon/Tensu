@@ -13,10 +13,12 @@ namespace Tensu.Api.Controllers;
 public class ProvidersController : AdminBaseController
 {
     private readonly ProviderService _service;
+    private readonly KeyRotationService _keyRotationService;
 
-    public ProvidersController(ProviderService service)
+    public ProvidersController(ProviderService service, KeyRotationService keyRotationService)
     {
         _service = service;
+        _keyRotationService = keyRotationService;
     }
 
     [HttpGet]
@@ -136,5 +138,102 @@ public class ProvidersController : AdminBaseController
         var deleted = await _service.DeleteKeyAsync(providerId, keyId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Key not found"));
         return Ok(ApiResponse.Success());
+    }
+
+    [HttpPost("{providerId}/keys/{keyId}/rotate")]
+    public async Task<IActionResult> RotateKey(int providerId, int keyId)
+    {
+        try
+        {
+            var newKey = await _keyRotationService.RotateProviderKeyAsync(providerId, keyId);
+            var response = new
+            {
+                newKey.Id,
+                newKey.ProviderId,
+                newKey.Name,
+                newKey.Weight,
+                newKey.Status,
+                newKey.RateLimitRpm,
+                newKey.RateLimitTpm,
+                newKey.CreatedAt,
+                newKey.UpdatedAt,
+                newKey.LastHealthCheckAt,
+                KeyValue = newKey.KeyValue
+            };
+            return Ok(ApiResponse<object>.Success(response));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ApiResponse.Error(40401, ex.Message));
+        }
+    }
+
+    public record BatchIdsRequest(int[] Ids);
+
+    [HttpDelete("batch")]
+    public async Task<IActionResult> BatchDelete([FromBody] BatchIdsRequest request)
+    {
+        var ids = request.Ids ?? Array.Empty<int>();
+        if (ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var deleted = await _service.DeleteAsync(id);
+                results.Add(new { id, success = deleted });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/enable")]
+    public async Task<IActionResult> BatchEnable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var provider = await _service.GetByIdAsync(id);
+                if (provider == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                provider.IsEnabled = true;
+                await _service.UpdateAsync(id, provider);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
+    }
+
+    [HttpPost("batch/disable")]
+    public async Task<IActionResult> BatchDisable([FromBody] int[] ids)
+    {
+        if (ids == null || ids.Length == 0) return BadRequest(ApiResponse.Error(40001, "No ids provided"));
+        var results = new List<object>();
+        foreach (var id in ids.Distinct())
+        {
+            try
+            {
+                var provider = await _service.GetByIdAsync(id);
+                if (provider == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
+                provider.IsEnabled = false;
+                await _service.UpdateAsync(id, provider);
+                results.Add(new { id, success = true });
+            }
+            catch (Exception ex)
+            {
+                results.Add(new { id, success = false, error = ex.Message });
+            }
+        }
+        return Ok(ApiResponse<object>.Success(results));
     }
 }

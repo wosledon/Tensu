@@ -1,5 +1,6 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult } from '../types';
+import { getApiErrorMessage } from './errorHandler';
 
 const api = axios.create({
   baseURL: '/api/admin',
@@ -20,8 +21,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
+      return Promise.reject(new Error('Session expired'));
     }
-    return Promise.reject(error);
+
+    const message = getApiErrorMessage(error, 'Request failed');
+    return Promise.reject(new Error(message));
   }
 );
 
@@ -52,12 +56,20 @@ export const providerApi = {
     api.put<ApiResponse<Provider>>(`/providers/${id}`, data).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/providers/${id}`).then(unwrap),
+  batchDelete: (ids: number[]) =>
+    api.delete<ApiResponse<object>>('/providers/batch', { data: ids }).then(unwrap),
+  batchEnable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/providers/batch/enable', ids).then(unwrap),
+  batchDisable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/providers/batch/disable', ids).then(unwrap),
   addKey: (providerId: number, data: Partial<ProviderKey>) =>
     api.post<ApiResponse<ProviderKey>>(`/providers/${providerId}/keys`, data).then(unwrap),
   updateKey: (providerId: number, keyId: number, data: Partial<ProviderKey>) =>
     api.put<ApiResponse<ProviderKey>>(`/providers/${providerId}/keys/${keyId}`, data).then(unwrap),
   deleteKey: (providerId: number, keyId: number) =>
     api.delete<ApiResponse<void>>(`/providers/${providerId}/keys/${keyId}`).then(unwrap),
+  rotateKey: (providerId: number, keyId: number) =>
+    api.post<ApiResponse<{ id: number; name: string; keyValue: string }>>(`/providers/${providerId}/keys/${keyId}/rotate`).then(unwrap),
 };
 
 // Models
@@ -72,6 +84,12 @@ export const modelApi = {
     api.put<ApiResponse<Model>>(`/models/${id}`, data).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/models/${id}`).then(unwrap),
+  batchDelete: (ids: number[]) =>
+    api.delete<ApiResponse<object>>('/models/batch', { data: ids }).then(unwrap),
+  batchEnable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/models/batch/enable', ids).then(unwrap),
+  batchDisable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/models/batch/disable', ids).then(unwrap),
   addPricing: (modelId: number, data: Partial<ModelPricing>) =>
     api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricings`, data).then(unwrap),
   syncFromProvider: (providerId: number) =>
@@ -144,6 +162,10 @@ export const apiKeyApi = {
     api.post<ApiResponse<void>>(`/api-keys/${id}/revoke`).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/api-keys/${id}`).then(unwrap),
+  batchDelete: (ids: number[]) =>
+    api.delete<ApiResponse<object>>('/api-keys/batch', { data: ids }).then(unwrap),
+  batchRevoke: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/api-keys/batch/revoke', ids).then(unwrap),
 };
 
 // Route Models
@@ -158,6 +180,12 @@ export const routeModelApi = {
     api.put<ApiResponse<RouteModel>>(`/route-models/${id}`, data).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/route-models/${id}`).then(unwrap),
+  batchDelete: (ids: number[]) =>
+    api.delete<ApiResponse<object>>('/route-models/batch', { data: ids }).then(unwrap),
+  batchEnable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/route-models/batch/enable', ids).then(unwrap),
+  batchDisable: (ids: number[]) =>
+    api.post<ApiResponse<object>>('/route-models/batch/disable', ids).then(unwrap),
   addRule: (routeModelId: number, data: Partial<RouteRule>) =>
     api.post<ApiResponse<RouteRule>>(`/route-models/${routeModelId}/rules`, data).then(unwrap),
   deleteRule: (routeModelId: number, ruleId: number) =>
@@ -188,6 +216,8 @@ export const analyticsApi = {
     api.get<ApiResponse<any>>('/analytics/performance', { params: { from, to, orgId } }).then(unwrap),
   cache: (from: string, to: string, orgId?: number) =>
     api.get<ApiResponse<any>>('/analytics/cache', { params: { from, to, orgId } }).then(unwrap),
+  anomalies: (from: string, to: string, orgId?: number, severity?: string, type?: string, page = 1, pageSize = 20) =>
+    api.get<ApiResponse<{ items: AnomalyResult[]; total: number; page: number; pageSize: number }>>('/analytics/anomalies', { params: { from, to, orgId, severity, type, page, pageSize } }).then(unwrap),
 };
 
 // Settings

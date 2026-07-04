@@ -1,14 +1,16 @@
 import { useCallback, useState } from 'react';
-import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, InputNumber, message, Drawer, Empty } from 'antd';
-import { EditOutlined, DeleteOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
+import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, InputNumber, App, Drawer, Empty, Modal } from 'antd';
+import { EditOutlined, DeleteOutlined, KeyOutlined, PlusOutlined, ExportOutlined, RedoOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { providerApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
 import type { Provider, ProviderKey } from '../../types';
+import { exportTableToCsv } from '../../utils/export';
 
 export default function ProvidersPage() {
   const { t } = useTranslation();
+  const { message } = App.useApp();
 
   const fetchFn = useCallback((params: any) => providerApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setSort, setKeyword } = useCrudList<Provider, any>({ fetchFn });
@@ -23,6 +25,43 @@ export default function ProvidersPage() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ProviderKey | null>(null);
   const [keyForm] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const handleBatchDelete = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await providerApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchEnable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await providerApi.batchEnable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
+  const handleBatchDisable = async () => {
+    if (!selectedRowKeys.length) return;
+    try {
+      await providerApi.batchDisable(selectedRowKeys.map((k) => Number(k)));
+      message.success(t('common.success'));
+      setSelectedRowKeys([]);
+      fetchData();
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
 
   const handleToggleEnabled = async (record: Provider) => {
     try {
@@ -68,6 +107,26 @@ export default function ProvidersPage() {
       fetchData();
       setDrawerProvider({ ...drawerProvider, keys: (drawerProvider.keys ?? []).filter((k) => k.id !== keyId) });
     } catch {}
+  };
+
+  const handleRotateKey = async (key: ProviderKey) => {
+    if (!drawerProvider) return;
+    Modal.confirm({
+      title: t('provider.rotateConfirm', 'Rotate this key?'),
+      content: t('provider.rotateWarning', 'A new key will be generated. Please copy the new key immediately; it will not be shown again.'),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          const res = await providerApi.rotateKey(drawerProvider.id, key.id);
+          message.success(t('provider.rotateSuccess', 'Key rotated successfully'));
+          fetchData();
+          setDrawerProvider((prev) => prev ? { ...prev, keys: prev.keys?.map((k) => k.id === res.id ? { ...k, name: res.name, status: 'Active', keyValue: res.keyValue } : k) } : prev);
+        } catch {
+          message.error(t('common.error'));
+        }
+      },
+    });
   };
 
   const openEditKey = (key: ProviderKey) => {
@@ -162,9 +221,10 @@ export default function ProvidersPage() {
       align: 'right' as const,
     },
     {
-      title: t('common.actions'), key: 'actions', width: 160, fixed: 'right' as const,
+      title: t('common.actions'), key: 'actions', width: 220, fixed: 'right' as const,
       render: (_: any, k: ProviderKey) => (
         <Space size="small">
+          <Button type="text" icon={<RedoOutlined />} title={t('provider.rotate')} onClick={() => handleRotateKey(k)} />
           <Button type="text" icon={<EditOutlined />} onClick={() => openEditKey(k)} />
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteKey(k.id)} />
         </Space>
@@ -172,9 +232,31 @@ export default function ProvidersPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportTableToCsv('providers', providerColumns, data);
+  };
+
   return (
     <div>
-      <PageHeader title={t('provider.title')} onCreate={openCreate} onSearch={setKeyword} />
+      <PageHeader
+        title={t('provider.title')}
+        onCreate={openCreate}
+        onSearch={setKeyword}
+        extra={
+          <Space>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>
+              {t('common.export', 'Export')}
+            </Button>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button onClick={handleBatchEnable}>{t('common.enable')}</Button>
+                <Button onClick={handleBatchDisable}>{t('common.disable')}</Button>
+                <Button danger onClick={handleBatchDelete}>{t('common.delete')}</Button>
+              </>
+            )}
+          </Space>
+        }
+      />
 
       <Card style={{ borderRadius: 18, marginBottom: 16 }}>
         <Table
@@ -185,6 +267,10 @@ export default function ProvidersPage() {
           pagination={{ current: params.page, pageSize: params.pageSize, total, showSizeChanger: true, onChange: setPage }}
           onChange={(_p, _f, sorter: any) => sorter.field && setSort(sorter.field, sorter.order === 'ascend' ? 'asc' : 'desc')}
           scroll={{ x: 900 }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+          }}
         />
       </Card>
 
@@ -203,7 +289,7 @@ export default function ProvidersPage() {
           ) : undefined
         }
         placement="right"
-        width={720}
+        size={720}
         open={!!drawerProvider}
         onClose={() => setDrawerProvider(null)}
       >
@@ -222,7 +308,7 @@ export default function ProvidersPage() {
       </Drawer>
 
       <FormModal title={t('provider.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
-        <Space size={16} style={{ width: '100%' }} direction="vertical">
+        <Space size={16} style={{ width: '100%' }} orientation="vertical">
           <Space size={16} style={{ width: '100%' }} wrap>
             <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
               <Input />
