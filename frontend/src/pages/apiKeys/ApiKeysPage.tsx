@@ -204,7 +204,7 @@ export default function ApiKeysPage() {
             <Form.Item name="ipWhitelist" label={t('apiKey.ipWhitelist')} rules={[{ validator: ipWhitelistValidator }]}>
               <Input.TextArea rows={2} placeholder="e.g. 192.168.1.0/24, 10.0.0.1, ::1" />
             </Form.Item>
-            <Form.Item name="rateLimitRpm" label="RPM"><Input type="number" /></Form.Item>
+            <Form.Item name="rateLimitRpm" label={t('quota.rpm')}><Input type="number" /></Form.Item>
           </>
         )}
       </FormModal>

@@ -92,7 +92,7 @@ export default function UsersPage() {
         <Form.Item name="email" label={t('organization.email')}><Input /></Form.Item>
         <Form.Item name="displayName" label={t('organization.displayName')}><Input /></Form.Item>
         <Form.Item name="role" label={t('organization.role')} rules={[{ required: true }]}>
-          <Select options={['SuperAdmin', 'Admin', 'Developer', 'ReadOnly'].map((r) => ({ value: r, label: r }))} />
+          <Select options={['SuperAdmin', 'Admin', 'Developer', 'ReadOnly'].map((r) => ({ value: r, label: t(`organization.role${r}`) }))} />
         </Form.Item>
         <Form.Item name="organizationId" label={t('organization.title')} rules={[{ required: true }]}>
           <Select options={orgs.map((o) => ({ value: o.id, label: o.name }))} />

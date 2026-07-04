@@ -198,7 +198,11 @@
     "email": "Email",
     "role": "Role",
     "active": "Active",
-    "resetPassword": "Reset Password"
+    "resetPassword": "Reset Password",
+    "roleSuperAdmin": "Super Admin",
+    "roleAdmin": "Admin",
+    "roleDeveloper": "Developer",
+    "roleReadOnly": "Read Only"
   },
   "audit": {
     "title": "Audit & Analytics",
