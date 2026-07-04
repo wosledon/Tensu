@@ -115,9 +115,9 @@ export default function AuditPage() {
               <Descriptions.Item label={t('audit.ttft')}>{selected.timeToFirstTokenMs ? `${selected.timeToFirstTokenMs}ms` : '-'}</Descriptions.Item>
               <Descriptions.Item label={t('audit.speed')}>{selected.outputTokensPerSecond ? `${selected.outputTokensPerSecond.toFixed(2)} t/s` : '-'}</Descriptions.Item>
               <Descriptions.Item label={t('audit.cacheHit')}>{selected.cacheHit ? <Tag color="purple">HIT</Tag> : <Tag>MISS</Tag>}</Descriptions.Item>
-              {selected.errorCode && <Descriptions.Item label="Error" span={2}><Tag color="error">{selected.errorCode}</Tag> {selected.errorMessage}</Descriptions.Item>}
-              {renderContentBlock('Request Content', selected.requestContent)}
-              {renderContentBlock('Response Content', selected.responseContent)}
+              {selected.errorCode && <Descriptions.Item label={t('audit.error')} span={2}><Tag color="error">{selected.errorCode}</Tag> {selected.errorMessage}</Descriptions.Item>}
+              {renderContentBlock(t('audit.requestContent'), selected.requestContent)}
+              {renderContentBlock(t('audit.responseContent'), selected.responseContent)}
             </Descriptions>
           </>
         )}

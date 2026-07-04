@@ -224,7 +224,10 @@
     "totalRequests": "Total Requests",
     "successRate": "Success Rate",
     "avgLatency": "Avg Latency",
-    "totalCost": "Total Cost"
+    "totalCost": "Total Cost",
+    "error": "Error",
+    "requestContent": "Request Content",
+    "responseContent": "Response Content"
   },
   "analytics": {
     "title": "Analytics",

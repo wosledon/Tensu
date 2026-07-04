@@ -224,7 +224,10 @@
     "totalRequests": "总请求数",
     "successRate": "成功率",
     "avgLatency": "平均延迟",
-    "totalCost": "总费用"
+    "totalCost": "总费用",
+    "error": "错误",
+    "requestContent": "请求内容",
+    "responseContent": "响应内容"
   },
   "analytics": {
     "title": "分析报表",
