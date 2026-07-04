@@ -173,7 +173,7 @@ export default function AnomalyPage() {
             {data.length === 0 && !severity && !type ? (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
             ) : data.length === 0 && (severity || type) ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>No matching anomalies</div>
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>{t('analytics.noMatch', 'No matching anomalies')}</div>
             ) : (
               <Table
                 rowKey={(r) => `${r.detectedAt}-${r.dimension}-${r.type}-${r.message}`}

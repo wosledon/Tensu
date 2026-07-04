@@ -260,7 +260,8 @@
     "currentValue": "Current",
     "baselineValue": "Baseline",
     "timestamp": "Timestamp",
-    "severity": "Severity"
+    "severity": "Severity",
+    "noMatch": "No matching anomalies"
   },
   "settings": {
     "title": "Settings",

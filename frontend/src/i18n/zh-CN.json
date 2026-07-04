@@ -260,7 +260,8 @@
     "currentValue": "当前值",
     "baselineValue": "基线值",
     "timestamp": "时间",
-    "severity": "严重程度"
+    "severity": "严重程度",
+    "noMatch": "没有匹配的异常"
   },
   "settings": {
     "title": "系统设置",
