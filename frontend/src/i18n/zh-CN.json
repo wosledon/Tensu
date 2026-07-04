@@ -300,7 +300,21 @@
     "latencySpikeMultiplier": "延迟突增倍数",
     "errorRateThreshold": "错误率阈值",
     "rateLimitThreshold": "限流比例阈值",
-    "providerSuccessRateThreshold": "供应商成功率阈值"
+    "providerSuccessRateThreshold": "供应商成功率阈值",
+    "theme": "主题",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "ttlMinutes": "TTL（分钟）",
+    "defaultRpm": "默认 RPM",
+    "defaultTpm": "默认 TPM",
+    "audit": "审计",
+    "compressionHint": "CCR 可逆压缩。通过压缩 JSON 结构和提取日志模板来降低上游 token 成本。",
+    "cacheHint": "基于模型 + messages hash + parameters hash 的精确缓存。",
+    "rateLimitHint": "应用于没有显式限制的 API 密钥的默认速率限制。",
+    "anomalyHint": "异常检测使用的阈值。数值根据指标类型为相对倍数或绝对比率。",
+    "auditHint": "超过保留天数的请求级审计日志将被自动清理。",
+    "days": "天"
   },
   "dashboard": {
     "title": "总览",

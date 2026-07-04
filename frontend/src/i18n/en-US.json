@@ -300,7 +300,21 @@
     "latencySpikeMultiplier": "Latency spike multiplier",
     "errorRateThreshold": "Error rate threshold",
     "rateLimitThreshold": "Rate limit threshold",
-    "providerSuccessRateThreshold": "Provider success rate threshold"
+    "providerSuccessRateThreshold": "Provider success rate threshold",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "ttlMinutes": "TTL (minutes)",
+    "defaultRpm": "Default RPM",
+    "defaultTpm": "Default TPM",
+    "audit": "Audit",
+    "compressionHint": "CCR reversible compression. Reduces upstream token cost by compressing JSON structure and extracting log templates.",
+    "cacheHint": "Exact cache based on model + messages hash + parameters hash.",
+    "rateLimitHint": "Default rate limits applied to API keys without explicit limits.",
+    "anomalyHint": "Thresholds used by anomaly detection. Values are relative multipliers or absolute rates depending on the metric.",
+    "auditHint": "Request-level audit logs older than this will be cleaned up automatically.",
+    "days": "days"
   },
   "dashboard": {
     "title": "Dashboard",

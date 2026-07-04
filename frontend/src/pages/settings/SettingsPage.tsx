@@ -88,11 +88,11 @@ export default function SettingsPage() {
 
       <Form form={form} layout="vertical" style={{ maxWidth: 700 }}>
         <Card title={t('settings.general')} style={{ borderRadius: 18, marginBottom: 24 }}>
-          <Form.Item label="Theme">
+          <Form.Item label={t('settings.theme')}>
             <Button.Group>
               {(['light', 'dark', 'system'] as const).map((m) => (
                 <Button key={m} type={mode === m ? 'primary' : 'default'} onClick={() => setMode(m)}>
-                  {m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'System'}
+                  {m === 'light' ? t('settings.themeLight') : m === 'dark' ? t('settings.themeDark') : t('settings.themeSystem')}
                 </Button>
               ))}
             </Button.Group>
@@ -104,7 +104,7 @@ export default function SettingsPage() {
             <Switch />
           </Form.Item>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            CCR reversible compression. Reduces upstream token cost by compressing JSON structure and extracting log templates.
+            {t('settings.compressionHint')}
           </Text>
         </Card>
 
@@ -113,26 +113,26 @@ export default function SettingsPage() {
             <Form.Item name="cacheEnabled" label={t('common.enabled')} valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item name="cacheTtlMinutes" label="TTL (minutes)">
+            <Form.Item name="cacheTtlMinutes" label={t('settings.ttlMinutes')}>
               <InputNumber min={1} max={60} />
             </Form.Item>
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Exact cache based on model + messages hash + parameters hash.
+            {t('settings.cacheHint')}
           </Text>
         </Card>
 
         <Card title={t('settings.rateLimit')} style={{ borderRadius: 18, marginBottom: 24 }}>
           <Space size={16} wrap>
-            <Form.Item name="defaultRpm" label="Default RPM">
+            <Form.Item name="defaultRpm" label={t('settings.defaultRpm')}>
               <InputNumber min={0} style={{ width: 160 }} />
             </Form.Item>
-            <Form.Item name="defaultTpm" label="Default TPM">
+            <Form.Item name="defaultTpm" label={t('settings.defaultTpm')}>
               <InputNumber min={0} style={{ width: 160 }} />
             </Form.Item>
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Default rate limits applied to API keys without explicit limits.
+            {t('settings.rateLimitHint')}
           </Text>
         </Card>
 
@@ -161,16 +161,16 @@ export default function SettingsPage() {
             </Form.Item>
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Thresholds used by anomaly detection. Values are relative multipliers or absolute rates depending on the metric.
+            {t('settings.anomalyHint')}
           </Text>
         </Card>
 
-        <Card title="Audit" style={{ borderRadius: 18 }}>
+        <Card title={t('settings.audit')} style={{ borderRadius: 18 }}>
           <Form.Item name="dataRetentionDays" label={t('organization.retentionDays')}>
-            <InputNumber min={7} max={180} style={{ width: 160 }} addonAfter="days" />
+            <InputNumber min={7} max={180} style={{ width: 160 }} addonAfter={t('settings.days')} />
           </Form.Item>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Request-level audit logs older than this will be cleaned up automatically.
+            {t('settings.auditHint')}
           </Text>
         </Card>
       </Form>
