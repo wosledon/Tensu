@@ -268,7 +268,15 @@
     "general": "General",
     "compression": "Compression",
     "cache": "Cache",
-    "rateLimit": "Rate Limit"
+    "rateLimit": "Rate Limit",
+    "anomaly": "Anomaly Detection",
+    "usageSpikeMultiplier": "Usage spike multiplier",
+    "usageDropMultiplier": "Usage drop multiplier",
+    "costSpikeMultiplier": "Cost spike multiplier",
+    "latencySpikeMultiplier": "Latency spike multiplier",
+    "errorRateThreshold": "Error rate threshold",
+    "rateLimitThreshold": "Rate limit threshold",
+    "providerSuccessRateThreshold": "Provider success rate threshold"
   },
   "dashboard": {
     "title": "Dashboard",

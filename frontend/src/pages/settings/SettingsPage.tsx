@@ -32,6 +32,13 @@ export default function SettingsPage() {
           defaultRpm: parseInt(data['rateLimit.defaultRpm'] || '60'),
           defaultTpm: parseInt(data['rateLimit.defaultTpm'] || '100000'),
           dataRetentionDays: parseInt(data['audit.dataRetentionDays'] || '30'),
+          usageSpikeMultiplier: parseFloat(data['anomaly.usageSpikeMultiplier'] || '2.0'),
+          usageDropMultiplier: parseFloat(data['anomaly.usageDropMultiplier'] || '0.5'),
+          costSpikeMultiplier: parseFloat(data['anomaly.costSpikeMultiplier'] || '2.0'),
+          latencySpikeMultiplier: parseFloat(data['anomaly.latencySpikeMultiplier'] || '2.0'),
+          errorRateThreshold: parseFloat(data['anomaly.errorRateThreshold'] || '0.1'),
+          rateLimitThreshold: parseFloat(data['anomaly.rateLimitThreshold'] || '0.05'),
+          providerSuccessRateThreshold: parseFloat(data['anomaly.providerSuccessRateThreshold'] || '0.95'),
         });
       })
       .catch(() => {})
@@ -49,6 +56,13 @@ export default function SettingsPage() {
         ['rateLimit.defaultRpm', String(values.defaultRpm)],
         ['rateLimit.defaultTpm', String(values.defaultTpm)],
         ['audit.dataRetentionDays', String(values.dataRetentionDays)],
+        ['anomaly.usageSpikeMultiplier', String(values.usageSpikeMultiplier)],
+        ['anomaly.usageDropMultiplier', String(values.usageDropMultiplier)],
+        ['anomaly.costSpikeMultiplier', String(values.costSpikeMultiplier)],
+        ['anomaly.latencySpikeMultiplier', String(values.latencySpikeMultiplier)],
+        ['anomaly.errorRateThreshold', String(values.errorRateThreshold)],
+        ['anomaly.rateLimitThreshold', String(values.rateLimitThreshold)],
+        ['anomaly.providerSuccessRateThreshold', String(values.providerSuccessRateThreshold)],
       ];
       await Promise.all(updates.map(([k, v]) => settingsApi.set(k, v)));
       message.success(t('common.success'));
@@ -119,6 +133,35 @@ export default function SettingsPage() {
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             Default rate limits applied to API keys without explicit limits.
+          </Text>
+        </Card>
+
+        <Card title={t('settings.anomaly')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Space size={16} wrap>
+            <Form.Item name="usageSpikeMultiplier" label={t('settings.usageSpikeMultiplier')}>
+              <InputNumber min={1} max={10} step={0.1} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="usageDropMultiplier" label={t('settings.usageDropMultiplier')}>
+              <InputNumber min={0.1} max={1} step={0.1} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="costSpikeMultiplier" label={t('settings.costSpikeMultiplier')}>
+              <InputNumber min={1} max={10} step={0.1} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="latencySpikeMultiplier" label={t('settings.latencySpikeMultiplier')}>
+              <InputNumber min={1} max={10} step={0.1} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="errorRateThreshold" label={t('settings.errorRateThreshold')}>
+              <InputNumber min={0} max={1} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="rateLimitThreshold" label={t('settings.rateLimitThreshold')}>
+              <InputNumber min={0} max={1} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="providerSuccessRateThreshold" label={t('settings.providerSuccessRateThreshold')}>
+              <InputNumber min={0} max={1} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Thresholds used by anomaly detection. Values are relative multipliers or absolute rates depending on the metric.
           </Text>
         </Card>
 

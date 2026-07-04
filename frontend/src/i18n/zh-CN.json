@@ -268,7 +268,15 @@
     "general": "通用设置",
     "compression": "压缩设置",
     "cache": "缓存设置",
-    "rateLimit": "限流设置"
+    "rateLimit": "限流设置",
+    "anomaly": "异常检测",
+    "usageSpikeMultiplier": "用量突增倍数",
+    "usageDropMultiplier": "用量骤降倍数",
+    "costSpikeMultiplier": "成本突增倍数",
+    "latencySpikeMultiplier": "延迟突增倍数",
+    "errorRateThreshold": "错误率阈值",
+    "rateLimitThreshold": "限流比例阈值",
+    "providerSuccessRateThreshold": "供应商成功率阈值"
   },
   "dashboard": {
     "title": "总览",
