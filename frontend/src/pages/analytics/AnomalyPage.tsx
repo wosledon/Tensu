@@ -75,6 +75,16 @@ export default function AnomalyPage() {
     return <span style={{ fontFamily: 'monospace' }}>{dimension}</span>;
   };
 
+  const formatValue = (type: string, value: number) => {
+    if (type === 'ErrorRateSpike' || type === 'RateLimitSpike') {
+      return `${(value * 100).toFixed(1)}%`;
+    }
+    if (typeof value === 'number' && value < 1) {
+      return value.toFixed(4);
+    }
+    return value.toString();
+  };
+
   const severityCounts = data.reduce((acc, cur) => {
     acc[cur.severity] = (acc[cur.severity] || 0) + 1;
     return acc;
@@ -98,7 +108,7 @@ export default function AnomalyPage() {
       key: 'currentValue',
       align: 'right' as const,
       width: 120,
-      render: (v: number) => <span style={{ fontFamily: 'monospace' }}>{typeof v === 'number' && v < 1 ? v.toFixed(4) : v}</span>,
+      render: (v: number, r: any) => <span style={{ fontFamily: 'monospace' }}>{formatValue(r.type, v)}</span>,
     },
     {
       title: t('analytics.baselineValue', 'Baseline'),
@@ -106,7 +116,7 @@ export default function AnomalyPage() {
       key: 'baselineValue',
       align: 'right' as const,
       width: 120,
-      render: (v: number) => <span style={{ fontFamily: 'monospace' }}>{typeof v === 'number' && v < 1 ? v.toFixed(4) : v}</span>,
+      render: (v: number, r: any) => <span style={{ fontFamily: 'monospace' }}>{formatValue(r.type, v)}</span>,
     },
     {
       title: t('common.actions', 'Actions'),
@@ -230,10 +240,10 @@ export default function AnomalyPage() {
             </Descriptions.Item>
             <Descriptions.Item label={t('analytics.message', 'Message')}>{selectedRow.message}</Descriptions.Item>
             <Descriptions.Item label={t('analytics.currentValue', 'Current')}>
-              <span style={{ fontFamily: 'monospace' }}>{typeof selectedRow.currentValue === 'number' && selectedRow.currentValue < 1 ? selectedRow.currentValue.toFixed(4) : selectedRow.currentValue}</span>
+              <span style={{ fontFamily: 'monospace' }}>{formatValue(selectedRow.type, selectedRow.currentValue)}</span>
             </Descriptions.Item>
             <Descriptions.Item label={t('analytics.baselineValue', 'Baseline')}>
-              <span style={{ fontFamily: 'monospace' }}>{typeof selectedRow.baselineValue === 'number' && selectedRow.baselineValue < 1 ? selectedRow.baselineValue.toFixed(4) : selectedRow.baselineValue}</span>
+              <span style={{ fontFamily: 'monospace' }}>{formatValue(selectedRow.type, selectedRow.baselineValue)}</span>
             </Descriptions.Item>
             <Descriptions.Item label={t('analytics.timestamp', 'Timestamp')}>{new Date(selectedRow.detectedAt).toLocaleString()}</Descriptions.Item>
           </Descriptions>
