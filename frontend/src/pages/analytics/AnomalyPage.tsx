@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, DatePicker, Typography, Spin, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal } from 'antd';
-import { ExportOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, DatePicker, Typography, Spin, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal, Descriptions } from 'antd';
+import { ExportOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { analyticsApi } from '../../api';
 import { exportTableToCsv } from '../../utils/export';
@@ -94,6 +94,15 @@ export default function AnomalyPage() {
       width: 120,
       render: (v: number) => <span style={{ fontFamily: 'monospace' }}>{typeof v === 'number' && v < 1 ? v.toFixed(4) : v}</span>,
     },
+    {
+      title: t('common.actions', 'Actions'),
+      key: 'actions',
+      width: 100,
+      fixed: 'right' as const,
+      render: (_: any, r: any) => (
+        <Button type="text" icon={<EyeOutlined />} title={t('common.show', 'View')} onClick={() => { setSelectedRow(r); setDetailOpen(true); }} />
+      ),
+    },
   ];
 
   const exportColumns = [
@@ -181,11 +190,7 @@ export default function AnomalyPage() {
                 pagination={{ current: page, pageSize: 20, total, showSizeChanger: false, onChange: setPage }}
                 dataSource={data}
                 columns={columns as any}
-                scroll={{ x: 1000 }}
-                onRow={(record) => ({
-                  onClick: () => { setSelectedRow(record); setDetailOpen(true); },
-                  style: { cursor: 'pointer' },
-                })}
+                scroll={{ x: 1100 }}
               />
             )}
           </Card>
@@ -197,17 +202,26 @@ export default function AnomalyPage() {
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
         footer={null}
+        width={720}
       >
         {selectedRow && (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.type', 'Type')}: </span>{selectedRow.type}</div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('common.status', 'Severity')}: </span><Tag color={severityColor(selectedRow.severity)}>{selectedRow.severity}</Tag></div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.dimension', 'Dimension')}: </span><span style={{ fontFamily: 'monospace' }}>{selectedRow.dimension}</span></div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.message', 'Message')}: </span>{selectedRow.message}</div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.currentValue', 'Current')}: </span>{selectedRow.currentValue}</div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.baselineValue', 'Baseline')}: </span>{selectedRow.baselineValue}</div>
-            <div><span style={{ color: 'var(--ant-color-text-secondary)' }}>{t('analytics.timestamp', 'Timestamp')}: </span>{new Date(selectedRow.detectedAt).toLocaleString()}</div>
-          </Space>
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label={t('analytics.type', 'Type')}>{selectedRow.type}</Descriptions.Item>
+            <Descriptions.Item label={t('common.status', 'Severity')}>
+              <Tag color={severityColor(selectedRow.severity)}>{selectedRow.severity}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('analytics.dimension', 'Dimension')}>
+              <span style={{ fontFamily: 'monospace' }}>{selectedRow.dimension}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('analytics.message', 'Message')}>{selectedRow.message}</Descriptions.Item>
+            <Descriptions.Item label={t('analytics.currentValue', 'Current')}>
+              <span style={{ fontFamily: 'monospace' }}>{typeof selectedRow.currentValue === 'number' && selectedRow.currentValue < 1 ? selectedRow.currentValue.toFixed(4) : selectedRow.currentValue}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('analytics.baselineValue', 'Baseline')}>
+              <span style={{ fontFamily: 'monospace' }}>{typeof selectedRow.baselineValue === 'number' && selectedRow.baselineValue < 1 ? selectedRow.baselineValue.toFixed(4) : selectedRow.baselineValue}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('analytics.timestamp', 'Timestamp')}>{new Date(selectedRow.detectedAt).toLocaleString()}</Descriptions.Item>
+          </Descriptions>
         )}
       </Modal>
     </div>
