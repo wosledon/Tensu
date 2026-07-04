@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, DatePicker, Typography, Spin, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal, Descriptions } from 'antd';
 import { ExportOutlined, ReloadOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -39,21 +39,25 @@ export default function AnomalyPage() {
     detectedAt: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(30);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const navigate = useNavigate();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await analyticsApi.anomalies(dates[0].toISOString(), dates[1].toISOString(), undefined, severity, type, page, 20);
       setData(result.items);
       setTotal(result.total);
+      setLastRefreshed(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load anomalies');
     } finally {
       setLoading(false);
     }
-  };
+  }, [dates, severity, type, page]);
 
   const copyDetails = async () => {
     if (!selectedRow) return;
@@ -63,7 +67,13 @@ export default function AnomalyPage() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  useEffect(() => { fetchData(); }, [dates[0]?.toISOString(), dates[1]?.toISOString(), severity, type, page]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(fetchData, refreshInterval * 1000);
+    return () => clearInterval(id);
+  }, [autoRefresh, refreshInterval, fetchData]);
 
   const severityColor = (severity: string) => {
     if (severity === 'Critical') return 'red';
@@ -196,7 +206,21 @@ export default function AnomalyPage() {
           <Button type="primary" onClick={fetchData}>{t('common.search')}</Button>
           <Button onClick={() => { setDates([dayjs().subtract(1, 'day'), dayjs()]); setSeverity(undefined); setType(undefined); setPage(1); }}>{t('common.reset')}</Button>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>{t('common.refresh', 'Refresh')}</Button>
+          <Select
+            value={autoRefresh ? refreshInterval : undefined}
+            onChange={(v) => { setRefreshInterval(v || 30); setAutoRefresh(!!v); }}
+            allowClear
+            style={{ width: 120 }}
+            placeholder={t('common.refresh', 'Refresh')}
+            options={[
+              { value: 15, label: '15s' },
+              { value: 30, label: '30s' },
+              { value: 60, label: '1m' },
+              { value: 120, label: '2m' },
+            ]}
+          />
           <Button icon={<ExportOutlined />} onClick={handleExport}>{t('common.export', 'Export')}</Button>
+          {lastRefreshed && <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>Last refreshed: {lastRefreshed.toLocaleTimeString()}</span>}
         </Space>
       </Card>
 
