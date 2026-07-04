@@ -175,6 +175,7 @@ export default function AnomalyPage() {
             ]}
           />
           <Button type="primary" onClick={fetchData}>{t('common.search')}</Button>
+          <Button onClick={() => { setDates([dayjs().subtract(1, 'day'), dayjs()]); setSeverity(undefined); setType(undefined); setPage(1); }}>{t('common.reset')}</Button>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>{t('common.refresh', 'Refresh')}</Button>
           <Button icon={<ExportOutlined />} onClick={handleExport}>{t('common.export', 'Export')}</Button>
         </Space>
