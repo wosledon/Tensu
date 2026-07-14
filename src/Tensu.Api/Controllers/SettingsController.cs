@@ -40,6 +40,7 @@ public class SettingsController : AdminBaseController
         try
         {
             await _service.SetAsync(key, request.Value);
+            await LogAdminAuditAsync("set", "Setting", key, $"Value={request.Value}");
             return Ok(ApiResponse.Success());
         }
         catch (ArgumentException ex)

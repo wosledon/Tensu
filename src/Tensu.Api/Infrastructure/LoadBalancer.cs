@@ -11,9 +11,8 @@ namespace Tensu.Api.Infrastructure;
 public class LoadBalancer
 {
     private static readonly ConcurrentDictionary<int, int> _roundRobinCounters = new();
-    private static readonly ConcurrentDictionary<int, double> _providerLatency = new(); // providerId -> avg latency ms
-    private static readonly ConcurrentDictionary<int, double> _keyLatency = new(); // keyId -> avg latency ms
-    private static readonly object _lock = new();
+    private static readonly ConcurrentDictionary<int, double> _providerLatency = new();
+    private static readonly ConcurrentDictionary<int, double> _keyLatency = new();
 
     /// <summary>
     /// Select a key from the provider based on health status.
@@ -71,10 +70,9 @@ public class LoadBalancer
     {
         if (!models.Any()) return null;
 
-        // Try round-robin across providers
         var ordered = models.OrderBy(m => m.ProviderId).ToList();
-        var counter = _roundRobinCounters.GetOrAdd(0, _ => 0);
-        var startIndex = counter % ordered.Count;
+        var counter = _roundRobinCounters.AddOrUpdate(0, 1, (_, v) => v + 1);
+        var startIndex = (counter - 1) % ordered.Count;
 
         for (var i = 0; i < ordered.Count; i++)
         {
@@ -83,7 +81,6 @@ public class LoadBalancer
             var key = keySelector(model.Provider);
             if (key != null)
             {
-                _roundRobinCounters.AddOrUpdate(0, 1, (_, v) => v + 1);
                 return (model, key);
             }
         }

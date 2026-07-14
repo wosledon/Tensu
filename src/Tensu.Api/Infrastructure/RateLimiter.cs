@@ -53,15 +53,10 @@ public class RateLimiter
         return (true, 0);
     }
 
-    /// <summary>
-    /// Record a completed request for rate limiting counters.
-    /// </summary>
-    public void RecordRequest(int apiKeyId, int tokensUsed)
+    public async Task RecordRequestAsync(int apiKeyId, int tokensUsed)
     {
-        // Signature remains synchronous to keep existing callers unchanged.
-        // The DB work is small and happens after the upstream response is received.
-        IncrementAsync($"key:{apiKeyId}:rpm", 1).GetAwaiter().GetResult();
-        IncrementAsync($"key:{apiKeyId}:tpm", tokensUsed).GetAwaiter().GetResult();
+        await IncrementAsync($"key:{apiKeyId}:rpm", 1);
+        await IncrementAsync($"key:{apiKeyId}:tpm", tokensUsed);
     }
 
     /// <summary>

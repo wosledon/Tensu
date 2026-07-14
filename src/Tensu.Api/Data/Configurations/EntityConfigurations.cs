@@ -16,6 +16,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         builder.Property(e => e.Path).HasColumnName("path").HasMaxLength(500).IsRequired();
         builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
         builder.Property(e => e.EnableContentLogging).HasColumnName("enable_content_logging");
+        builder.Property(e => e.CompressionEnabled).HasColumnName("compression_enabled");
         builder.Property(e => e.DataRetentionDays).HasColumnName("data_retention_days");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
@@ -444,5 +445,145 @@ public class ModelCapabilityConfiguration : IEntityTypeConfiguration<ModelCapabi
 
         builder.HasOne(e => e.Model).WithMany(m => m.Capabilities).HasForeignKey(e => e.ModelId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(e => new { e.ModelId, e.Dimension }).IsUnique();
+    }
+}
+
+public class DataDeletionRequestConfiguration : IEntityTypeConfiguration<DataDeletionRequest>
+{
+    public void Configure(EntityTypeBuilder<DataDeletionRequest> builder)
+    {
+        builder.ToTable("data_deletion_requests");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.OrganizationId).HasColumnName("organization_id");
+        builder.Property(e => e.UserId).HasColumnName("user_id");
+        builder.Property(e => e.ApiKeyId).HasColumnName("api_key_id").HasMaxLength(100);
+        builder.Property(e => e.Reason).HasColumnName("reason").HasMaxLength(1000);
+        builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+        builder.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.CompletedAt).HasColumnName("completed_at");
+        builder.Property(e => e.DeletedRequestLogs).HasColumnName("deleted_request_logs");
+        builder.Property(e => e.DeletedArchivedLogs).HasColumnName("deleted_archived_logs");
+        builder.Property(e => e.RequestId).HasColumnName("request_id").HasMaxLength(100);
+
+        builder.HasIndex(e => e.RequestId).IsUnique();
+        builder.HasIndex(e => e.Status);
+        builder.HasIndex(e => e.CreatedAt);
+    }
+}
+
+public class DailyStatConfiguration : IEntityTypeConfiguration<DailyStat>
+{
+    public void Configure(EntityTypeBuilder<DailyStat> builder)
+    {
+        builder.ToTable("daily_stats");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.Date).HasColumnName("date");
+        builder.Property(e => e.OrganizationId).HasColumnName("organization_id");
+        builder.Property(e => e.ModelName).HasColumnName("model_name").HasMaxLength(200);
+        builder.Property(e => e.ProviderName).HasColumnName("provider_name").HasMaxLength(200);
+        builder.Property(e => e.TotalRequests).HasColumnName("total_requests");
+        builder.Property(e => e.SuccessRequests).HasColumnName("success_requests");
+        builder.Property(e => e.FailedRequests).HasColumnName("failed_requests");
+        builder.Property(e => e.RateLimitedRequests).HasColumnName("rate_limited_requests");
+        builder.Property(e => e.CacheHits).HasColumnName("cache_hits");
+        builder.Property(e => e.TotalInputTokens).HasColumnName("total_input_tokens");
+        builder.Property(e => e.TotalOutputTokens).HasColumnName("total_output_tokens");
+        builder.Property(e => e.TotalInputTokensAfterCompression).HasColumnName("total_input_tokens_after_compression");
+        builder.Property(e => e.TotalInputCost).HasColumnName("total_input_cost").HasPrecision(18, 8);
+        builder.Property(e => e.TotalOutputCost).HasColumnName("total_output_cost").HasPrecision(18, 8);
+        builder.Property(e => e.AvgLatencyMs).HasColumnName("avg_latency_ms");
+        builder.Property(e => e.P50LatencyMs).HasColumnName("p50_latency_ms");
+        builder.Property(e => e.P95LatencyMs).HasColumnName("p95_latency_ms");
+        builder.Property(e => e.P99LatencyMs).HasColumnName("p99_latency_ms");
+        builder.Property(e => e.AvgTtftMs).HasColumnName("avg_ttft_ms");
+        builder.Property(e => e.AvgOutputTokensPerSecond).HasColumnName("avg_output_tokens_per_second").HasPrecision(10, 2);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => new { e.Date, e.OrganizationId, e.ModelName, e.ProviderName }).IsUnique();
+        builder.HasIndex(e => e.Date);
+    }
+}
+
+public class AdminAuditLogConfiguration : IEntityTypeConfiguration<AdminAuditLog>
+{
+    public void Configure(EntityTypeBuilder<AdminAuditLog> builder)
+    {
+        builder.ToTable("admin_audit_logs");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.Timestamp).HasColumnName("timestamp");
+        builder.Property(e => e.UserId).HasColumnName("user_id");
+        builder.Property(e => e.Username).HasColumnName("username").HasMaxLength(100);
+        builder.Property(e => e.Action).HasColumnName("action").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.EntityType).HasColumnName("entity_type").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.EntityId).HasColumnName("entity_id").HasMaxLength(100);
+        builder.Property(e => e.Details).HasColumnName("details").HasMaxLength(5000);
+        builder.Property(e => e.IpAddress).HasColumnName("ip_address").HasMaxLength(50);
+        builder.Property(e => e.UserAgent).HasColumnName("user_agent").HasMaxLength(500);
+
+        builder.HasIndex(e => e.Timestamp);
+        builder.HasIndex(e => e.UserId);
+        builder.HasIndex(e => e.Action);
+    }
+}
+
+public class WebhookNotificationConfiguration : IEntityTypeConfiguration<WebhookNotification>
+{
+    public void Configure(EntityTypeBuilder<WebhookNotification> builder)
+    {
+        builder.ToTable("webhook_notifications");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
+        builder.Property(e => e.Url).HasColumnName("url").HasMaxLength(1000).IsRequired();
+        builder.Property(e => e.Secret).HasColumnName("secret").HasMaxLength(500);
+        builder.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+        builder.Property(e => e.Events).HasColumnName("events").HasMaxLength(2000);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+    }
+}
+
+public class WebhookDeliveryConfiguration : IEntityTypeConfiguration<WebhookDelivery>
+{
+    public void Configure(EntityTypeBuilder<WebhookDelivery> builder)
+    {
+        builder.ToTable("webhook_deliveries");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.WebhookNotificationId).HasColumnName("webhook_notification_id");
+        builder.Property(e => e.EventType).HasColumnName("event_type").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Payload).HasColumnName("payload").HasMaxLength(8000);
+        builder.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+        builder.Property(e => e.MaxAttempts).HasColumnName("max_attempts");
+        builder.Property(e => e.LastStatusCode).HasColumnName("last_status_code").HasMaxLength(20);
+        builder.Property(e => e.LastErrorMessage).HasColumnName("last_error_message").HasMaxLength(2000);
+        builder.Property(e => e.NextRetryAt).HasColumnName("next_retry_at");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.LastAttemptAt).HasColumnName("last_attempt_at");
+        builder.Property(e => e.IsSuccess).HasColumnName("is_success");
+
+        builder.HasIndex(e => new { e.WebhookNotificationId, e.IsSuccess });
+        builder.HasIndex(e => e.NextRetryAt);
+    }
+}
+
+public class AlertRuleConfiguration : IEntityTypeConfiguration<AlertRule>
+{
+    public void Configure(EntityTypeBuilder<AlertRule> builder)
+    {
+        builder.ToTable("alert_rules");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
+        builder.Property(e => e.EventType).HasColumnName("event_type").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Severity).HasColumnName("severity").HasMaxLength(20);
+        builder.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+        builder.Property(e => e.WebhookIds).HasColumnName("webhook_ids").HasMaxLength(2000);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
     }
 }

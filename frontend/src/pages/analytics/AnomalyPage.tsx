@@ -57,7 +57,7 @@ export default function AnomalyPage() {
     } finally {
       setLoading(false);
     }
-  }, [dates, severity, type, page]);
+  }, [dates, severity, type, page, t]);
 
   const copyDetails = async () => {
     if (!selectedRow) return;
@@ -113,7 +113,7 @@ export default function AnomalyPage() {
     { title: t('analytics.timestamp', 'Time'), dataIndex: 'detectedAt', key: 'detectedAt', width: 180, render: (v: string) => new Date(v).toLocaleString() },
     { title: t('analytics.type', 'Type'), dataIndex: 'type', key: 'type', width: 160 },
     {
-      title: t('common.status', 'Severity'),
+      title: t('analytics.severity'),
       dataIndex: 'severity',
       key: 'severity',
       width: 110,

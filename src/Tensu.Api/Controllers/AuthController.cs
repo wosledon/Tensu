@@ -102,7 +102,23 @@ public class AuthController : ControllerBase
             return Redirect(errorUrl);
         }
 
-        var successUrl = $"{redirectUriBase}/oauth/callback?token={Uri.EscapeDataString(token!)}";
+        var authCode = Guid.NewGuid().ToString("N");
+        _oauthService.StoreOAuthCode(authCode, token!, TimeSpan.FromMinutes(1));
+
+        var successUrl = $"{redirectUriBase}/oauth/callback?code={authCode}";
         return Redirect(successUrl);
     }
+
+    [AllowAnonymous]
+    [HttpPost("oauth/exchange")]
+    public async Task<IActionResult> OAuthExchange([FromBody] OAuthExchangeRequest request)
+    {
+        var token = _oauthService.ExchangeOAuthCode(request.Code);
+        if (token == null)
+            return BadRequest(ApiResponse.Error(40001, "Invalid or expired authorization code"));
+
+        return Ok(ApiResponse<object>.Success(new { token }));
+    }
+
+    public record OAuthExchangeRequest(string Code);
 }

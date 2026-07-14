@@ -24,9 +24,13 @@
     "copied": "Copied",
     "show": "Show",
     "hide": "Hide",
+    "totalItems": "Total {{total}} items",
     "submit": "Submit",
     "back": "Back",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "export": "Export",
+    "enable": "Enable",
+    "disable": "Disable"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -38,7 +42,8 @@
     "users": "Users",
     "audit": "Audit & Analytics",
     "analytics": "Analytics",
-    "settings": "Settings"
+    "settings": "Settings",
+    "oauthProviders": "OAuth Providers"
   },
   "auth": {
     "login": "Login",
@@ -50,12 +55,15 @@
     "invalidCredentials": "Invalid username or password",
     "loginWithProvider": "Continue with {provider}",
     "orContinueWith": "or continue with",
-    "oauthError": "OAuth login failed: {error}"
+    "oauthError": "OAuth login failed: {error}",
+    "defaultCredentials": "Default: admin / admin123"
   },
   "provider": {
     "title": "Providers",
     "name": "Name",
     "protocol": "Protocol",
+    "protocolOpenAI": "OpenAI",
+    "protocolAnthropic": "Anthropic",
     "baseUrl": "Base URL",
     "description": "Description",
     "healthStatus": "Health",
@@ -166,11 +174,6 @@
     "scopeKey": "API Key",
     "scopeModel": "Model"
   },
-  "provider": {
-    "protocol": "Protocol",
-    "protocolOpenAI": "OpenAI",
-    "protocolAnthropic": "Anthropic"
-  },
   "apiKey": {
     "title": "API Keys",
     "name": "Name",
@@ -180,6 +183,7 @@
     "expiresAt": "Expires At",
     "allowedModels": "Allowed Models",
     "ipWhitelist": "IP Whitelist",
+    "invalidIpOrCidr": "Invalid IP or CIDR: {value}",
     "revoke": "Revoke",
     "revokeConfirm": "Are you sure you want to revoke this key? This cannot be undone.",
     "created": "Key created. Please save it now:",
@@ -191,6 +195,7 @@
     "parent": "Parent",
     "description": "Description",
     "contentLogging": "Content Logging",
+    "compression": "Compression",
     "retentionDays": "Retention Days",
     "users": "Users",
     "addUser": "Add User",
@@ -218,8 +223,22 @@
     "speed": "Speed",
     "cost": "Cost",
     "cacheHit": "Cache Hit",
+    "cacheHitHit": "HIT",
+    "cacheHitMiss": "MISS",
+    "semanticCacheHit": "Semantic Cache Hit",
+    "compressionStrategy": "Compression Strategy",
+    "retryCount": "Retry Count",
+    "currency": "Currency",
+    "inputCost": "Input Cost",
+    "outputCost": "Output Cost",
+    "desensitization": "Desensitization",
     "compression": "Compression",
     "status": "Status",
+    "statusSuccess": "Success",
+    "statusFailed": "Failed",
+    "statusTimeout": "Timeout",
+    "statusInterrupted": "Interrupted",
+    "statusRateLimited": "Rate Limited",
     "summary": "Summary",
     "totalRequests": "Total Requests",
     "successRate": "Success Rate",
@@ -227,7 +246,10 @@
     "totalCost": "Total Cost",
     "error": "Error",
     "requestContent": "Request Content",
-    "responseContent": "Response Content"
+    "responseContent": "Response Content",
+    "archived": "Archived Logs",
+    "current": "Current Logs",
+    "archivedTab": "Archived"
   },
   "analytics": {
     "title": "Analytics",
@@ -268,7 +290,6 @@
     "totalRequests": "Total Requests",
     "cacheHits": "Cache Hits",
     "hitRate": "Hit Rate",
-    "byModel": "By Model",
     "type": "Type",
     "dimension": "Dimension",
     "message": "Message",
@@ -277,6 +298,7 @@
     "timestamp": "Timestamp",
     "severity": "Severity",
     "noMatch": "No matching anomalies",
+    "loadError": "Failed to load data",
     "loadError": "Failed to load anomalies",
     "lastRefreshed": "Last refreshed",
     "severityLevel": {
@@ -330,11 +352,77 @@
     "anomalyHint": "Thresholds used by anomaly detection. Values are relative multipliers or absolute rates depending on the metric.",
     "auditHint": "Request-level audit logs older than this will be cleaned up automatically.",
     "days": "days",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeSystem": "System",
+    "desensitization": "Desensitization",
+    "desensitizationEnabled": "Enable desensitization",
+    "desensitizationMaskApiKeys": "Mask API keys",
+    "desensitizationMaskEmails": "Mask emails",
+    "desensitizationMaskIps": "Mask IP addresses",
+    "desensitizationMaskTokens": "Mask tokens",
+    "keyRotation": "Key Rotation",
+    "keyRotationEnabled": "Enable auto rotation",
+    "keyRotationCheckInterval": "Check interval (hours)",
+    "keyRotationExpiryWarning": "Expiry warning (days)",
+    "retry": "Retry Policy",
+    "retryMaxRetries": "Max retries",
+    "retryBaseDelayMs": "Base delay (ms)",
+    "retryMaxDelayMs": "Max delay (ms)",
+    "retryHint": "Automatic retry policy when upstream requests fail.",
     "languageEnglish": "English",
-    "languageChinese": "Chinese"
+    "languageChinese": "Chinese",
+    "currency": "Currency Settings",
+    "defaultCurrency": "Default Currency",
+    "currencyRateUSD": "USD Rate",
+    "currencyRateCNY": "CNY Rate",
+    "currencyRateEUR": "EUR Rate",
+    "currencyRateJPY": "JPY Rate",
+    "currencyRateGBP": "GBP Rate",
+    "currencyHint": "Exchange rates relative to the default currency."
+  },
+  "compression": {
+    "restoreTitle": "CCR Compression Restore",
+    "restoreSubtitle": "View compression mappings and restore original request bodies",
+    "id": "ID",
+    "decompressionKey": "Decompression Key",
+    "strategy": "Strategy",
+    "originalBody": "Original Body",
+    "compressedLength": "Compressed Length",
+    "createdAt": "Created At",
+    "notStored": "Not stored",
+    "restore": "Restore",
+    "restoreModalTitle": "Restored Original Body",
+    "close": "Close",
+    "chars": "chars"
+  },
+  "alertRule": {
+    "title": "Alert Rules",
+    "name": "Name",
+    "eventType": "Event Type",
+    "severity": "Severity",
+    "create": "Create Alert Rule",
+    "edit": "Edit Alert Rule",
+    "selectEventType": "Select event type",
+    "anySeverity": "Any severity"
+  },
+  "oauthProvider": {
+    "title": "OAuth Providers",
+    "name": "Name",
+    "displayName": "Display Name",
+    "protocol": "Protocol",
+    "protocolOAuth2": "OAuth 2.0",
+    "protocolOIDC": "OIDC",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "authorizationEndpoint": "Authorization Endpoint",
+    "tokenEndpoint": "Token Endpoint",
+    "userInfoEndpoint": "User Info Endpoint",
+    "issuer": "Issuer",
+    "scope": "Scope",
+    "create": "Create OAuth Provider",
+    "edit": "Edit OAuth Provider",
+    "authorizationPlaceholder": "https://example.com/oauth/authorize",
+    "tokenPlaceholder": "https://example.com/oauth/token",
+    "userInfoPlaceholder": "https://example.com/oauth/userinfo",
+    "issuerPlaceholder": "https://example.com"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -346,5 +434,50 @@
     "requestTrend": "Request Trend",
     "modelDistribution": "Model Distribution",
     "providerHealth": "Provider Health"
+  },
+  "nav": {
+    "adminAudit": "Admin Audit",
+    "webhooks": "Webhooks"
+  },
+  "adminAudit": {
+    "timestamp": "Timestamp",
+    "username": "User",
+    "action": "Action",
+    "entityType": "Entity Type",
+    "entityId": "Entity ID",
+    "details": "Details",
+    "ipAddress": "IP Address"
+  },
+  "webhook": {
+    "name": "Name",
+    "url": "URL",
+    "secret": "Secret",
+    "secretPlaceholder": "Optional, for signature verification",
+    "events": "Event Types",
+    "eventsPlaceholder": "Select or enter event types",
+    "create": "Create Webhook",
+    "edit": "Edit Webhook"
+  },
+  "oauthProvider": {
+    "title": "OAuth Providers",
+    "name": "Name",
+    "displayName": "Display Name",
+    "protocol": "Protocol",
+    "protocolOAuth2": "OAuth 2.0",
+    "protocolOIDC": "OIDC",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "authorizationEndpoint": "Authorization Endpoint",
+    "tokenEndpoint": "Token Endpoint",
+    "userInfoEndpoint": "User Info Endpoint",
+    "issuer": "Issuer",
+    "scope": "Scope",
+    "create": "Create OAuth Provider",
+    "edit": "Edit OAuth Provider"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "subtitle": "An unexpected error occurred",
+    "tryAgain": "Try Again"
   }
 }

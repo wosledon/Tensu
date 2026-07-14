@@ -25,8 +25,8 @@ public class UserService : BaseService
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(u => u.Username.Contains(request.Keyword) || (u.Email != null && u.Email.Contains(request.Keyword)));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
     }
 

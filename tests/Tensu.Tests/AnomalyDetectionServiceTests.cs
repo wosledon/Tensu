@@ -113,13 +113,9 @@ public class AnomalyDetectionServiceTests : IDisposable
     {
         var otherOrgId = 2;
         // Org 1 baseline: 70 requests
-        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 70, status: RequestStatus.Success, model: "gpt-4o");
+        await AddLogsAsync(CurrentWindowStart.AddDays(-7), CurrentWindowEnd.AddDays(-7), 70, status: RequestStatus.Success, model: "gpt-4o", orgId: 1);
         // Org 2 current: 200 requests
-        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 200, status: RequestStatus.Success, model: "gpt-4o", provider: "OpenAI");
-        // Override org for these logs
-        var org2Logs = _db.RequestLogs.Where(r => r.ProviderName == "OpenAI" && r.Timestamp >= CurrentWindowStart && r.Timestamp <= CurrentWindowEnd).ToList();
-        foreach (var log in org2Logs) log.OrganizationId = otherOrgId;
-        await _db.SaveChangesAsync();
+        await AddLogsAsync(CurrentWindowStart, CurrentWindowEnd, 200, status: RequestStatus.Success, model: "gpt-4o", provider: "OpenAI", orgId: otherOrgId);
 
         var results = await _service.DetectAsync(CurrentWindowStart, CurrentWindowEnd, orgId: otherOrgId);
 
@@ -202,7 +198,7 @@ public class AnomalyDetectionServiceTests : IDisposable
         Assert.True(degraded.CurrentValue < 0.95);
     }
 
-    private async Task AddLogsAsync(DateTime from, DateTime to, int count, RequestStatus status, string model = "gpt-4o", string provider = "OpenAI", decimal? cost = null, int inputTokens = 10, int outputTokens = 10)
+    private async Task AddLogsAsync(DateTime from, DateTime to, int count, RequestStatus status, string model = "gpt-4o", string provider = "OpenAI", decimal? cost = null, int inputTokens = 10, int outputTokens = 10, int orgId = 1)
     {
         var random = new Random(42);
         var duration = to - from;
@@ -223,7 +219,7 @@ public class AnomalyDetectionServiceTests : IDisposable
                 OutputCost = cost * 0.5m ?? 0,
                 TotalDurationMs = random.Next(100, 1000),
                 CacheHit = false,
-                OrganizationId = 1,
+                OrganizationId = orgId,
                 ApiKeyId = 1
             });
         }

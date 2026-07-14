@@ -45,6 +45,7 @@ public class ApiKeysController : AdminBaseController
             apiKey.UserId = CurrentUserId;
         }
         var (created, plainTextKey) = await _service.CreateAsync(apiKey);
+        await LogAdminAuditAsync("create", "ApiKey", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(new
         {
             created.Id,
@@ -68,6 +69,7 @@ public class ApiKeysController : AdminBaseController
         var updated = await _service.UpdateAsync(id, apiKey);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         updated.KeyValue = "***";
+        await LogAdminAuditAsync("update", "ApiKey", id.ToString());
         return Ok(ApiResponse<object>.Success(ApiKeyService.MapToListDto(updated)));
     }
 
@@ -81,6 +83,7 @@ public class ApiKeysController : AdminBaseController
 
         var revoked = await _service.RevokeAsync(id);
         if (!revoked) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        await LogAdminAuditAsync("revoke", "ApiKey", id.ToString());
         return Ok(ApiResponse.Success());
     }
 
@@ -94,6 +97,7 @@ public class ApiKeysController : AdminBaseController
 
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        await LogAdminAuditAsync("delete", "ApiKey", id.ToString());
         return Ok(ApiResponse.Success());
     }
 
@@ -113,6 +117,7 @@ public class ApiKeysController : AdminBaseController
                 if (existing == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId) { results.Add(new { id, success = false, error = "Forbidden" }); continue; }
                 var deleted = await _service.DeleteAsync(id);
+                if (deleted) await LogAdminAuditAsync("batch_delete", "ApiKey", id.ToString());
                 results.Add(new { id, success = deleted });
             }
             catch (Exception ex)
@@ -136,6 +141,7 @@ public class ApiKeysController : AdminBaseController
                 if (existing == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId) { results.Add(new { id, success = false, error = "Forbidden" }); continue; }
                 var revoked = await _service.RevokeAsync(id);
+                if (revoked) await LogAdminAuditAsync("batch_revoke", "ApiKey", id.ToString());
                 results.Add(new { id, success = revoked });
             }
             catch (Exception ex)

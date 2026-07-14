@@ -31,8 +31,8 @@ public class AuditService : BaseService
         if (string.IsNullOrEmpty(request.SortBy))
             query = query.OrderByDescending(r => r.Timestamp);
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items, total, request);
     }
 
@@ -43,6 +43,30 @@ public class AuditService : BaseService
 
     public async Task<object> GetSummaryAsync(DateTime from, DateTime to, int? orgId = null)
     {
+        var today = DateTime.UtcNow.Date;
+        var todayStart = today;
+        var historicalEnd = today;
+
+        if (to.Date < today)
+        {
+            var statsQuery = _db.DailyStats.Where(s => s.Date >= from.Date && s.Date <= to.Date);
+            if (orgId.HasValue) statsQuery = statsQuery.Where(s => s.OrganizationId == orgId.Value);
+            var stats = await statsQuery.ToListAsync();
+
+            return new
+            {
+                TotalRequests = stats.Sum(s => s.TotalRequests),
+                SuccessRequests = stats.Sum(s => s.SuccessRequests),
+                FailedRequests = stats.Sum(s => s.FailedRequests),
+                TotalInputTokens = (long)stats.Sum(s => s.TotalInputTokens),
+                TotalOutputTokens = (long)stats.Sum(s => s.TotalOutputTokens),
+                TotalCost = stats.Sum(s => s.TotalInputCost + s.TotalOutputCost),
+                CacheHitRate = stats.Sum(s => s.TotalRequests) > 0 ? (double)stats.Sum(s => s.CacheHits) / stats.Sum(s => s.TotalRequests) * 100 : 0,
+                AvgLatencyMs = stats.Where(s => s.AvgLatencyMs.HasValue).Select(s => (double)s.AvgLatencyMs!.Value).DefaultIfEmpty(0).Average(),
+                CompressionSavedTokens = (long)(stats.Sum(s => s.TotalInputTokens) - stats.Sum(s => s.TotalInputTokensAfterCompression))
+            };
+        }
+
         var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to);
         if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
 
@@ -78,8 +102,8 @@ public class AuditService : BaseService
         if (string.IsNullOrEmpty(request.SortBy))
             query = query.OrderByDescending(r => r.Timestamp);
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items, total, request);
     }
 

@@ -40,7 +40,7 @@ export interface ProviderKey {
   name: string;
   keyValue: string;
   weight: number;
-  status: 'Active' | 'Degraded' | 'Inactive';
+  status: 'Active' | 'Degraded' | 'Inactive' | 'Expired' | 'Disabled';
   rateLimitRpm?: number;
   rateLimitTpm?: number;
   createdAt: string;
@@ -111,6 +111,7 @@ export interface Organization {
   path: string;
   description?: string;
   enableContentLogging: boolean;
+  compressionEnabled: boolean;
   dataRetentionDays: number;
   children?: Organization[];
   createdAt: string;
@@ -146,6 +147,16 @@ export interface OAuthProvider {
   name: string;
   displayName?: string;
   protocol: 'OAuth2' | 'OIDC';
+  clientId: string;
+  clientSecret: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  userInfoEndpoint?: string;
+  issuer?: string;
+  scope: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiKey {
@@ -231,17 +242,104 @@ export interface RequestLog {
   inputTokensAfterCompression?: number;
   outputTokens?: number;
   cacheHit: boolean;
+  semanticCacheHit: boolean;
   timeToFirstTokenMs?: number;
   totalDurationMs?: number;
   outputTokensPerSecond?: number;
   inputCost?: number;
   outputCost?: number;
-  status: 'Success' | 'Failed' | 'Timeout' | 'Interrupted' | 'RateLimited';
+  status: 'Success' | 'Failed' | 'Timeout' | 'Interrupted' | 'RateLimited' | 'Forbidden';
   errorCode?: string;
   errorMessage?: string;
+  retryCount?: number;
+  isStream: boolean;
+  compressionApplied: boolean;
+  compressionStrategy?: string;
+  compressionMappingKey?: string;
+  currency?: string;
+  requestContent?: string;
+  responseContent?: string;
+}
+
+export interface ArchivedRequestLog {
+  requestId: string;
+  timestamp: string;
+  apiKeyId?: number;
+  organizationId?: number;
+  userId?: number;
+  modelName: string;
+  resolvedModelName?: string;
+  providerName?: string;
+  inputTokens?: number;
+  inputTokensAfterCompression?: number;
+  outputTokens?: number;
+  cacheHit: boolean;
+  semanticCacheHit?: boolean;
+  timeToFirstTokenMs?: number;
+  totalDurationMs?: number;
+  outputTokensPerSecond?: number;
+  inputCost?: number;
+  outputCost?: number;
+  currency?: string;
+  compressionApplied: boolean;
+  compressionStrategy?: string;
+  status: 'Success' | 'Failed' | 'Timeout' | 'Interrupted' | 'RateLimited' | 'Forbidden';
+  errorCode?: string;
+  errorMessage?: string;
+  retryCount?: number;
   isStream: boolean;
   requestContent?: string;
   responseContent?: string;
+}
+
+export interface AdminAuditLog {
+  id: number;
+  timestamp: string;
+  userId: number;
+  username: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  details: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface WebhookNotification {
+  id: number;
+  name: string;
+  url: string;
+  secret?: string;
+  isEnabled: boolean;
+  events: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRule {
+  id: number;
+  name: string;
+  eventType: string;
+  severity?: string;
+  isEnabled: boolean;
+  webhookIds: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookDelivery {
+  id: number;
+  webhookNotificationId: number;
+  eventType: string;
+  payload: string;
+  attemptCount: number;
+  maxAttempts: number;
+  lastStatusCode?: string;
+  lastErrorMessage?: string;
+  nextRetryAt?: string;
+  createdAt: string;
+  lastAttemptAt?: string;
+  isSuccess: boolean;
 }
 
 export interface LoginRequest {
@@ -251,14 +349,4 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
-}
-
-export interface CurrentUser {
-  id: number;
-  username: string;
-  email?: string;
-  displayName?: string;
-  role: string;
-  organizationId: number;
-  organization?: string;
 }

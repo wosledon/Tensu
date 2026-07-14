@@ -31,6 +31,8 @@ public static class PlatformErrorCodes
     public const string UpstreamRateLimited = "50206";
     public const string UpstreamServerError = "50207";
     public const string UpstreamBadGateway = "50208";
+    public const string UpstreamTimeout = "50209";
+    public const string UpstreamConnectionError = "50210";
 
     // Platform Errors (50000-50099)
     public const string NoAvailableProviders = "50001";

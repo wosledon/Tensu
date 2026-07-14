@@ -48,25 +48,22 @@ public class CompressionService
         try
         {
             var json = JsonDocument.Parse(requestBody);
-            var compressed = CompressJson(json.RootElement);
-            var compressedTokens = EstimateTokens(compressed);
+            var minified = MinifyJson(json.RootElement);
+            var minifiedTokens = EstimateTokens(minified);
 
-            // Only apply compression if we save at least 5% tokens
-            if (compressedTokens < originalTokens * 0.95)
+            if (minifiedTokens < originalTokens * 0.95)
             {
-                var decompressionKey = ComputeHash(compressed);
-                await PersistMappingAsync(requestBody, compressed, "json-structure", decompressionKey, cancellationToken);
+                var decompressionKey = ComputeHash(minified);
+                await PersistMappingAsync(requestBody, minified, "json-structure", decompressionKey, cancellationToken);
                 return new CompressionResult(
-                    compressed, originalTokens, compressedTokens,
+                    minified, originalTokens, minifiedTokens,
                     "json-structure", Applied: true, decompressionKey);
             }
         }
         catch (JsonException)
         {
-            // Not JSON, try text compression
         }
 
-        // For non-JSON or when JSON compression doesn't help, try log template extraction
         try
         {
             var (templateCompressed, templateKey) = CompressLogTemplates(requestBody);
@@ -81,7 +78,6 @@ public class CompressionService
         }
         catch { }
 
-        // No beneficial compression found
         return new CompressionResult(
             requestBody, originalTokens, originalTokens,
             "none", Applied: false);
@@ -157,10 +153,7 @@ public class CompressionService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// JSON structure compression: remove whitespace, shorten known keys.
-    /// </summary>
-    private string CompressJson(JsonElement element)
+    private string MinifyJson(JsonElement element)
     {
         using var stream = new MemoryStream();
         using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
@@ -169,12 +162,12 @@ public class CompressionService
             SkipValidation = false
         });
 
-        CompressJsonElement(element, writer);
+        WriteElement(element, writer);
         writer.Flush();
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    private void CompressJsonElement(JsonElement element, Utf8JsonWriter writer)
+    private void WriteElement(JsonElement element, Utf8JsonWriter writer)
     {
         switch (element.ValueKind)
         {
@@ -182,9 +175,8 @@ public class CompressionService
                 writer.WriteStartObject();
                 foreach (var property in element.EnumerateObject())
                 {
-                    var key = ShortenKey(property.Name);
-                    writer.WritePropertyName(key);
-                    CompressJsonElement(property.Value, writer);
+                    writer.WritePropertyName(property.Name);
+                    WriteElement(property.Value, writer);
                 }
                 writer.WriteEndObject();
                 break;
@@ -192,15 +184,12 @@ public class CompressionService
             case JsonValueKind.Array:
                 writer.WriteStartArray();
                 foreach (var item in element.EnumerateArray())
-                    CompressJsonElement(item, writer);
+                    WriteElement(item, writer);
                 writer.WriteEndArray();
                 break;
 
             case JsonValueKind.String:
-                var str = element.GetString() ?? "";
-                // Deduplicate repeated whitespace in string values
-                var compressed = Regex.Replace(str, @"\s{2,}", " ");
-                writer.WriteStringValue(compressed);
+                writer.WriteStringValue(element.GetString() ?? "");
                 break;
 
             case JsonValueKind.Number:
@@ -223,32 +212,6 @@ public class CompressionService
                 break;
         }
     }
-
-    /// <summary>
-    /// Shorten well-known JSON keys in LLM API requests.
-    /// Only shortens keys that are safe to abbreviate without losing meaning.
-    /// </summary>
-    private static string ShortenKey(string key) => key switch
-    {
-        // Messages array is the biggest payload - keep readable
-        "messages" => "msg",
-        "content" => "c",
-        "role" => "r",
-        "name" => "n",
-        "function_call" => "fc",
-        "tool_calls" => "tc",
-        "tool_choice" => "tch",
-        "max_tokens" => "mt",
-        "max_completion_tokens" => "mct",
-        "temperature" => "tp",
-        "top_p" => "p",
-        "frequency_penalty" => "fp",
-        "presence_penalty" => "pp",
-        "stop_sequences" => "ss",
-        "system" => "sys",
-        "metadata" => "md",
-        _ => key
-    };
 
     /// <summary>
     /// Extract log-like patterns into template + parameters.

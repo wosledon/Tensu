@@ -3,7 +3,7 @@ import { Card, Col, Row, Statistic, Typography, Spin } from 'antd';
 import { ApiOutlined, ThunderboltOutlined, DollarOutlined, CloudOutlined, AlertOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../contexts/ThemeContext';
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,18 +20,22 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    analyticsApi.dashboard()
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    const fetchData = () => {
+      analyticsApi.dashboard()
+        .then(setData)
+        .catch(() => {})
+        .finally(() => setLoading(false));
 
-  useEffect(() => {
-    const from = new Date(); from.setHours(0,0,0,0);
-    const to = new Date();
-    analyticsApi.anomalies(from.toISOString(), to.toISOString())
-      .then((res) => setAnomalyCount(res?.total ?? 0))
-      .catch(() => {});
+      const from = new Date(); from.setHours(0,0,0,0);
+      const to = new Date();
+      analyticsApi.anomalies(from.toISOString(), to.toISOString())
+        .then((res) => setAnomalyCount(res?.total ?? 0))
+        .catch(() => {});
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div>;
@@ -149,15 +153,19 @@ export default function DashboardPage() {
         </Col>
         <Col xs={24} lg={10}>
           <Card title={t('dashboard.providerHealth')} style={{ borderRadius: 18 }}>
-            {data?.providers?.length ? data.providers.map((p: any) => (
-              <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--ant-color-border-secondary)' }}>
-                <span>{p.name}</span>
-                <span style={{ color: p.healthStatus === 'Healthy' ? '#34C759' : p.healthStatus === 'Unhealthy' ? '#FF3B30' : '#FF9500', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                  {p.healthStatus}
-                </span>
-              </div>
-            )) : (
+            {data?.providers?.length ? data.providers.map((p: any) => {
+              const statusLabel = p.healthStatus === 'Healthy' ? t('provider.healthy') : p.healthStatus === 'Degraded' ? t('provider.degraded') : p.healthStatus === 'Unhealthy' ? t('provider.unhealthy') : t('provider.unknown');
+              const statusColor = p.healthStatus === 'Healthy' ? '#34C759' : p.healthStatus === 'Unhealthy' ? '#FF3B30' : '#FF9500';
+              return (
+                <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--ant-color-border-secondary)' }}>
+                  <span>{p.name}</span>
+                  <span style={{ color: statusColor, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                    {statusLabel}
+                  </span>
+                </div>
+              );
+            }) : (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
             )}
           </Card>

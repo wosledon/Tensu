@@ -31,8 +31,8 @@ public class ModelCapabilityService : BaseService
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(c => c.Dimension.Contains(request.Keyword) || (c.Evidence != null && c.Evidence.Contains(request.Keyword)));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items, total, request);
     }
 

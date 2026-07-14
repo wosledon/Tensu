@@ -6,9 +6,9 @@ namespace Tensu.Api.Services;
 
 public abstract class BaseService
 {
-    protected IQueryable<T> ApplyPaging<T>(IQueryable<T> query, PagedRequest request, out int total)
+    protected async Task<(IQueryable<T> Query, int Total)> ApplyPagingAsync<T>(IQueryable<T> query, PagedRequest request)
     {
-        total = query.Count();
+        var total = await query.CountAsync();
 
         if (!string.IsNullOrEmpty(request.SortBy))
         {
@@ -20,7 +20,7 @@ public abstract class BaseService
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
         query = query.Skip((page - 1) * pageSize).Take(pageSize);
 
-        return query;
+        return (query, total);
     }
 
     protected Core.Common.PagedResult<T> ToPagedResult<T>(List<T> items, int total, PagedRequest request)

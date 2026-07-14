@@ -34,6 +34,9 @@ public class RetryPolicy
         Provider provider,
         ProviderKey initialKey,
         bool isStream,
+        int? maxRetries = null,
+        int? baseDelayMs = null,
+        int? maxDelayMs = null,
         CancellationToken cancellationToken = default)
     {
         // Only retry non-stream (idempotent) requests
@@ -42,18 +45,22 @@ public class RetryPolicy
             return await requestFn(initialKey);
         }
 
+        var effectiveMaxRetries = maxRetries ?? MaxRetries;
+        var effectiveBaseDelay = baseDelayMs ?? BaseDelayMs;
+        var effectiveMaxDelay = maxDelayMs ?? MaxDelayMs;
+
         HttpResponseMessage? lastResponse = null;
         var currentKey = initialKey;
         var failedKeys = new HashSet<int> { initialKey.Id };
 
-        for (var attempt = 0; attempt <= MaxRetries; attempt++)
+        for (var attempt = 0; attempt <= effectiveMaxRetries; attempt++)
         {
             try
             {
                 if (attempt > 0)
                 {
-                    var delay = CalculateDelay(attempt);
-                    _logger.LogInformation("Retry attempt {Attempt}/{MaxRetries} after {Delay}ms", attempt, MaxRetries, delay);
+                    var delay = CalculateDelay(attempt, effectiveBaseDelay, effectiveMaxDelay);
+                    _logger.LogInformation("Retry attempt {Attempt}/{MaxRetries} after {Delay}ms", attempt, effectiveMaxRetries, delay);
                     await Task.Delay(delay, cancellationToken);
 
                     // Try to select a different key after a failure
@@ -83,24 +90,24 @@ public class RetryPolicy
             {
                 _logger.LogWarning(ex, "Request failed with exception, attempt {Attempt}", attempt + 1);
                 failedKeys.Add(currentKey.Id);
-                if (attempt == MaxRetries) throw;
+                if (attempt == effectiveMaxRetries) throw;
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning("Request timed out, attempt {Attempt}", attempt + 1);
                 failedKeys.Add(currentKey.Id);
-                if (attempt == MaxRetries) throw;
+                if (attempt == effectiveMaxRetries) throw;
             }
         }
 
         return lastResponse;
     }
 
-    private int CalculateDelay(int attempt)
+    private int CalculateDelay(int attempt, int baseDelayMs, int maxDelayMs)
     {
         // Exponential backoff with jitter
-        var delay = BaseDelayMs * (int)Math.Pow(2, attempt - 1);
-        delay = Math.Min(delay, MaxDelayMs);
+        var delay = baseDelayMs * (int)Math.Pow(2, attempt - 1);
+        delay = Math.Min(delay, maxDelayMs);
         // Add jitter (±25%)
         var jitter = (int)(delay * 0.25 * (Random.Shared.NextDouble() * 2 - 1));
         return Math.Max(100, delay + jitter);

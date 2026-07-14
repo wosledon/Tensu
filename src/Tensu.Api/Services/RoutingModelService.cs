@@ -44,11 +44,20 @@ public class RoutingModelService
         var messagesHash = ComputeMessagesHash(requestBody);
         var cacheKey = $"routing:{routeModel.Id}:{messagesHash}";
 
+        // Try exact cache first
         var cached = cache.TryGet(cacheKey);
         if (cached.HasValue && cached.Value.hit)
         {
-            _logger.LogDebug("Routing cache hit for route model {RouteModelId}", routeModel.Id);
+            _logger.LogDebug("Routing exact cache hit for route model {RouteModelId}", routeModel.Id);
             return JsonSerializer.Deserialize<RoutingDecision>(cached.Value.responseBody!);
+        }
+
+        // Try semantic cache for similar inputs
+        var semanticHit = await cache.TryGetSemanticAsync($"routing:{routeModel.Id}", requestBody, 0.9f, CancellationToken.None);
+        if (semanticHit.HasValue && semanticHit.Value.hit)
+        {
+            _logger.LogDebug("Routing semantic cache hit for route model {RouteModelId}", routeModel.Id);
+            return JsonSerializer.Deserialize<RoutingDecision>(semanticHit.Value.responseBody!);
         }
 
         var db = _serviceProvider.GetRequiredService<TensuDbContext>();
@@ -140,7 +149,10 @@ public class RoutingModelService
             };
 
             var cacheMinutes = _configuration.GetValue<int?>("Routing:CacheTtlMinutes") ?? 5;
-            cache.Set(cacheKey, JsonSerializer.Serialize(decision), isStream: false, TimeSpan.FromMinutes(cacheMinutes));
+            var cacheTtl = TimeSpan.FromMinutes(cacheMinutes);
+            var serialized = JsonSerializer.Serialize(decision);
+            cache.Set(cacheKey, serialized, isStream: false, cacheTtl);
+            await cache.SetSemanticAsync($"routing:{routeModel.Id}", requestBody, serialized, isStream: false, cacheTtl, CancellationToken.None);
             return decision;
         }
         catch (Exception ex)

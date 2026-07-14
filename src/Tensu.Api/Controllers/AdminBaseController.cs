@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using Tensu.Api.Services;
 using Tensu.Core.Common;
 using Tensu.Core.Enums;
 
@@ -23,5 +24,13 @@ public abstract class AdminBaseController : ControllerBase
             if (Enum.TryParse<UserRole>(CurrentRole, out var role)) return role;
             return null;
         }
+    }
+
+    protected async Task LogAdminAuditAsync(string action, string entityType, string? entityId = null, string? details = null)
+    {
+        var audit = HttpContext?.RequestServices.GetRequiredService<AdminAuditService>();
+        var ipAddress = HttpContext?.Connection.RemoteIpAddress?.ToString();
+        var userAgent = HttpContext?.Request.Headers["User-Agent"].ToString();
+        await audit.LogAsync(CurrentUserId, CurrentUsername, action, entityType, entityId, details, ipAddress, userAgent);
     }
 }

@@ -36,7 +36,7 @@ export function useCrudList<T, P extends PagedRequest>({
     } finally {
       setLoading(false);
     }
-  }, [fetchFn, params, t]);
+  }, [fetchFn, params, t, message]);
 
   useEffect(() => {
     if (autoFetch) fetchData();

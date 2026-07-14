@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App } from 'antd';
 import { DeleteOutlined, StopOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { apiKeyApi, orgApi } from '../../api';
+import { apiKeyApi, modelApi, orgApi } from '../../api';
 import { useCrudList, useConfirmDelete } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
 import type { ApiKey, Organization } from '../../types';
@@ -43,20 +43,22 @@ function isValidIpOrCidr(value: string) {
   return false;
 }
 
-const ipWhitelistValidator = (_: unknown, value: string) => {
-  if (!value || !value.trim()) return Promise.resolve();
-  const entries = value.split(/[,\n；;]/).map((s) => s.trim()).filter(Boolean);
-  const invalid = entries.find((entry) => !isValidIpOrCidr(entry));
-  if (invalid) {
-    return Promise.reject(new Error('Invalid IP or CIDR: ' + invalid));
-  }
-  return Promise.resolve();
-};
-
 export default function ApiKeysPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
+
+  const ipWhitelistValidator = useCallback((_: unknown, value: string) => {
+    if (!value || !value.trim()) return Promise.resolve();
+    const entries = value.split(/[,\n；;]/).map((s) => s.trim()).filter(Boolean);
+    const invalid = entries.find((entry) => !isValidIpOrCidr(entry));
+    if (invalid) {
+      return Promise.reject(new Error(t('apiKey.invalidIpOrCidr', { value: invalid })));
+    }
+    return Promise.resolve();
+  }, [t]);
+
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [models, setModels] = useState<{ id: number; name: string }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [form] = Form.useForm();
@@ -93,6 +95,15 @@ export default function ApiKeysPage() {
   const ensureOrgs = async () => {
     if (!orgs.length) {
       try { setOrgs(await orgApi.tree()); } catch {}
+    }
+  };
+
+  const ensureModels = async () => {
+    if (!models.length) {
+      try {
+        const data = await modelApi.list({ page: 1, pageSize: 1000 });
+        setModels(data.items.map((m: any) => ({ id: m.id, name: `${m.provider?.name || ''}-${m.name}` })));
+      } catch {}
     }
   };
 
@@ -150,7 +161,7 @@ export default function ApiKeysPage() {
     <div>
       <PageHeader
         title={t('apiKey.title')}
-        onCreate={async () => { await ensureOrgs(); form.resetFields(); setCreatedKey(null); setModalOpen(true); }}
+        onCreate={async () => { await ensureOrgs(); await ensureModels(); form.resetFields(); setCreatedKey(null); setModalOpen(true); }}
         onSearch={setKeyword}
         extra={
           <Space>
@@ -200,7 +211,9 @@ export default function ApiKeysPage() {
               <Select options={orgs.map((o) => ({ value: o.id, label: o.name }))} />
             </Form.Item>
             <Form.Item name="expiresAt" label={t('apiKey.expiresAt')}><DatePicker style={{ width: '100%' }} /></Form.Item>
-            <Form.Item name="allowedModels" label={t('apiKey.allowedModels')}><Input.TextArea rows={2} placeholder="model1,model2 (empty = all)" /></Form.Item>
+            <Form.Item name="allowedModels" label={t('apiKey.allowedModels')}>
+              <Select mode="multiple" options={models.map((m) => ({ value: m.id, label: m.name }))} placeholder={t('common.all')} allowClear />
+            </Form.Item>
             <Form.Item name="ipWhitelist" label={t('apiKey.ipWhitelist')} rules={[{ validator: ipWhitelistValidator }]}>
               <Input.TextArea rows={2} placeholder="e.g. 192.168.1.0/24, 10.0.0.1, ::1" />
             </Form.Item>

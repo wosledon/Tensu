@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Card, Col, Row, DatePicker, Typography, Spin, Space, Button, Statistic, Table } from 'antd';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, Col, Row, DatePicker, Typography, Spin, Space, Button, Statistic, Table, Alert } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../contexts/ThemeContext';
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
 import dayjs from 'dayjs';
 
@@ -16,15 +16,23 @@ export default function CostPage() {
   const { isDark } = useThemeMode();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(30, 'day'), dayjs()]);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    analyticsApi.cost(dates[0].toISOString(), dates[1].toISOString())
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    setError(null);
+    try {
+      const result = await analyticsApi.cost(dates[0].toISOString(), dates[1].toISOString());
+      setData(result);
+    } catch (err: any) {
+      setError(err?.message || t('analytics.loadError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [dates, t]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const textColor = isDark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
   const gridColor = isDark ? 'rgba(84,84,88,0.2)' : 'rgba(60,60,67,0.08)';
@@ -62,14 +70,11 @@ export default function CostPage() {
             onChange={(vals) => vals && setDates([vals[0]!, vals[1]!])}
             format="YYYY-MM-DD"
           />
-          <Button type="primary" onClick={() => {
-            setLoading(true);
-            analyticsApi.cost(dates[0].toISOString(), dates[1].toISOString())
-              .then(setData).catch(() => {}).finally(() => setLoading(false));
-          }}>{t('common.search')}</Button>
+          <Button type="primary" onClick={fetchData}>{t('common.search')}</Button>
         </Space>
       </Card>
 
+      {error && <Alert type="error" message={error} style={{ marginBottom: 24 }} />}
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div> : (
         <>
           <Row gutter={[24, 24]}>

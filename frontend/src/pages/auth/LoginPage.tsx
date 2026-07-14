@@ -3,7 +3,7 @@ import { Form, Input, Button, Card, Typography, Divider, App } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { authApi } from '../../api';
 import type { OAuthProvider } from '../../types';
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
         )}
 
         <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>Default: admin / admin123</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('auth.defaultCredentials', 'Default: admin / admin123')}</Text>
         </div>
       </Card>
     </div>

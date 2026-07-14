@@ -24,9 +24,13 @@
     "copied": "已复制",
     "show": "显示",
     "hide": "隐藏",
+    "totalItems": "共 {{total}} 项",
     "submit": "提交",
     "back": "返回",
-    "refresh": "刷新"
+    "refresh": "刷新",
+    "export": "导出",
+    "enable": "启用",
+    "disable": "禁用"
   },
   "nav": {
     "dashboard": "总览",
@@ -38,7 +42,8 @@
     "users": "用户管理",
     "audit": "审计与分析",
     "analytics": "分析报表",
-    "settings": "系统设置"
+    "settings": "系统设置",
+    "oauthProviders": "OAuth 提供商"
   },
   "auth": {
     "login": "登录",
@@ -50,12 +55,15 @@
     "invalidCredentials": "用户名或密码错误",
     "loginWithProvider": "使用 {provider} 登录",
     "orContinueWith": "或使用以下方式",
-    "oauthError": "OAuth 登录失败：{error}"
+    "oauthError": "OAuth 登录失败：{error}",
+    "defaultCredentials": "默认账号：admin / admin123"
   },
   "provider": {
     "title": "供应商管理",
     "name": "名称",
     "protocol": "协议",
+    "protocolOpenAI": "OpenAI",
+    "protocolAnthropic": "Anthropic",
     "baseUrl": "Base URL",
     "description": "描述",
     "healthStatus": "健康状态",
@@ -166,11 +174,6 @@
     "scopeKey": "API 密钥",
     "scopeModel": "模型"
   },
-  "provider": {
-    "protocol": "协议",
-    "protocolOpenAI": "OpenAI",
-    "protocolAnthropic": "Anthropic"
-  },
   "apiKey": {
     "title": "API 密钥管理",
     "name": "名称",
@@ -180,6 +183,7 @@
     "expiresAt": "过期时间",
     "allowedModels": "可用模型",
     "ipWhitelist": "IP 白名单",
+    "invalidIpOrCidr": "无效的 IP 或 CIDR：{value}",
     "revoke": "吊销",
     "revokeConfirm": "确定要吊销此密钥吗？吊销后无法恢复。",
     "created": "密钥已创建，请妥善保存：",
@@ -191,6 +195,7 @@
     "parent": "上级组织",
     "description": "描述",
     "contentLogging": "记录对话内容",
+    "compression": "启用压缩",
     "retentionDays": "数据保留天数",
     "users": "用户管理",
     "addUser": "添加用户",
@@ -218,8 +223,22 @@
     "speed": "输出速度",
     "cost": "费用",
     "cacheHit": "缓存命中",
+    "cacheHitHit": "命中",
+    "cacheHitMiss": "未命中",
+    "semanticCacheHit": "语义缓存命中",
+    "compressionStrategy": "压缩策略",
+    "retryCount": "重试次数",
+    "currency": "币种",
+    "inputCost": "输入费用",
+    "outputCost": "输出费用",
+    "desensitization": "脱敏",
     "compression": "压缩",
     "status": "状态",
+    "statusSuccess": "成功",
+    "statusFailed": "失败",
+    "statusTimeout": "超时",
+    "statusInterrupted": "中断",
+    "statusRateLimited": "限流",
     "summary": "统计概览",
     "totalRequests": "总请求数",
     "successRate": "成功率",
@@ -227,7 +246,10 @@
     "totalCost": "总费用",
     "error": "错误",
     "requestContent": "请求内容",
-    "responseContent": "响应内容"
+    "responseContent": "响应内容",
+    "archived": "归档日志",
+    "current": "当前日志",
+    "archivedTab": "归档"
   },
   "analytics": {
     "title": "分析报表",
@@ -268,7 +290,6 @@
     "totalRequests": "总请求数",
     "cacheHits": "缓存命中数",
     "hitRate": "命中率",
-    "byModel": "按模型",
     "type": "类型",
     "dimension": "维度",
     "message": "描述",
@@ -277,6 +298,7 @@
     "timestamp": "时间",
     "severity": "严重程度",
     "noMatch": "没有匹配的异常",
+    "loadError": "加载数据失败",
     "loadError": "加载异常数据失败",
     "lastRefreshed": "最后刷新",
     "severityLevel": {
@@ -330,11 +352,77 @@
     "anomalyHint": "异常检测使用的阈值。数值根据指标类型为相对倍数或绝对比率。",
     "auditHint": "超过保留天数的请求级审计日志将被自动清理。",
     "days": "天",
-    "themeLight": "浅色",
-    "themeDark": "深色",
-    "themeSystem": "跟随系统",
+    "desensitization": "脱敏规则",
+    "desensitizationEnabled": "启用脱敏",
+    "desensitizationMaskApiKeys": "脱敏 API Key",
+    "desensitizationMaskEmails": "脱敏邮箱",
+    "desensitizationMaskIps": "脱敏 IP 地址",
+    "desensitizationMaskTokens": "脱敏 Token",
+    "keyRotation": "密钥轮换",
+    "keyRotationEnabled": "启用自动轮换",
+    "keyRotationCheckInterval": "检查间隔（小时）",
+    "keyRotationExpiryWarning": "过期预警（天）",
+    "retry": "重试策略",
+    "retryMaxRetries": "最大重试次数",
+    "retryBaseDelayMs": "基础延迟（毫秒）",
+    "retryMaxDelayMs": "最大延迟（毫秒）",
+    "retryHint": "上游请求失败时的自动重试策略。",
     "languageEnglish": "英文",
-    "languageChinese": "中文"
+    "languageChinese": "中文",
+    "currency": "币种设置",
+    "defaultCurrency": "默认币种",
+    "currencyRateUSD": "USD 汇率",
+    "currencyRateCNY": "CNY 汇率",
+    "currencyRateEUR": "EUR 汇率",
+    "currencyRateJPY": "JPY 汇率",
+    "currencyRateGBP": "GBP 汇率",
+    "currencyHint": "汇率相对于默认币种。"
+  },
+  "compression": {
+    "restoreTitle": "CCR 压缩还原",
+    "restoreSubtitle": "查看压缩映射记录并还原原始请求体",
+    "id": "ID",
+    "decompressionKey": "Decompression Key",
+    "strategy": "策略",
+    "originalBody": "原始内容",
+    "compressedLength": "压缩长度",
+    "createdAt": "创建时间",
+    "notStored": "未存储",
+    "restore": "还原",
+    "restoreModalTitle": "还原的原始请求体",
+    "close": "关闭",
+    "chars": "字符"
+  },
+  "alertRule": {
+    "title": "告警规则",
+    "name": "名称",
+    "eventType": "事件类型",
+    "severity": "严重级别",
+    "create": "创建告警规则",
+    "edit": "编辑告警规则",
+    "selectEventType": "选择事件类型",
+    "anySeverity": "任意严重级别"
+  },
+  "oauthProvider": {
+    "title": "OAuth 提供商管理",
+    "name": "名称",
+    "displayName": "显示名称",
+    "protocol": "协议",
+    "protocolOAuth2": "OAuth 2.0",
+    "protocolOIDC": "OIDC",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "authorizationEndpoint": "授权端点",
+    "tokenEndpoint": "令牌端点",
+    "userInfoEndpoint": "用户信息端点",
+    "issuer": "Issuer",
+    "scope": "权限范围",
+    "create": "创建 OAuth 提供商",
+    "edit": "编辑 OAuth 提供商",
+    "authorizationPlaceholder": "https://example.com/oauth/authorize",
+    "tokenPlaceholder": "https://example.com/oauth/token",
+    "userInfoPlaceholder": "https://example.com/oauth/userinfo",
+    "issuerPlaceholder": "https://example.com"
   },
   "dashboard": {
     "title": "总览",
@@ -346,5 +434,50 @@
     "requestTrend": "请求趋势",
     "modelDistribution": "模型分布",
     "providerHealth": "供应商状态"
+  },
+  "nav": {
+    "adminAudit": "管理审计",
+    "webhooks": "Webhook 通知"
+  },
+  "adminAudit": {
+    "timestamp": "时间",
+    "username": "用户",
+    "action": "操作",
+    "entityType": "实体类型",
+    "entityId": "实体ID",
+    "details": "详情",
+    "ipAddress": "IP 地址"
+  },
+  "webhook": {
+    "name": "名称",
+    "url": "URL",
+    "secret": "密钥",
+    "secretPlaceholder": "可选，用于签名验证",
+    "events": "事件类型",
+    "eventsPlaceholder": "选择或输入事件类型",
+    "create": "创建 Webhook",
+    "edit": "编辑 Webhook"
+  },
+  "oauthProvider": {
+    "title": "OAuth 提供商管理",
+    "name": "名称",
+    "displayName": "显示名称",
+    "protocol": "协议",
+    "protocolOAuth2": "OAuth 2.0",
+    "protocolOIDC": "OIDC",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "authorizationEndpoint": "授权端点",
+    "tokenEndpoint": "令牌端点",
+    "userInfoEndpoint": "用户信息端点",
+    "issuer": "Issuer",
+    "scope": "权限范围",
+    "create": "创建 OAuth 提供商",
+    "edit": "编辑 OAuth 提供商"
+  },
+  "error": {
+    "title": "出错了",
+    "subtitle": "发生了意外错误",
+    "tryAgain": "重试"
   }
 }

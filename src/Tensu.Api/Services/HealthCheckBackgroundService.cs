@@ -58,7 +58,7 @@ public class HealthCheckBackgroundService : BackgroundService
             .Where(p => p.IsEnabled)
             .ToListAsync(ct);
 
-        foreach (var provider in providers)
+        var tasks = providers.Select(async provider =>
         {
             var providerResult = await CheckProviderAsync(provider, encryption, settings, ct);
             provider.HealthStatus = providerResult.Status;
@@ -69,7 +69,9 @@ public class HealthCheckBackgroundService : BackgroundService
                 key.Status = providerResult.KeyResults.GetValueOrDefault(key.Id, key.Status);
                 key.LastHealthCheckAt = DateTime.UtcNow;
             }
-        }
+        });
+
+        await Task.WhenAll(tasks);
 
         await db.SaveChangesAsync(ct);
     }

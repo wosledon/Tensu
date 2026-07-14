@@ -17,7 +17,7 @@ public class DesensitizationService
     /// <summary>
     /// Desensitize request/response content based on organization settings.
     /// </summary>
-    public string? Desensitize(string? content, Organization org)
+    public string? Desensitize(string? content, Organization org, Dictionary<string, string>? settings = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
@@ -25,32 +25,50 @@ public class DesensitizationService
         if (!org.EnableContentLogging)
             return "[Content logging disabled by organization policy]";
 
+        var enabled = settings != null && settings.TryGetValue("desensitization.enabled", out var enabledVal)
+            ? bool.Parse(enabledVal)
+            : true;
+        if (!enabled)
+            return content;
+
         var result = content;
 
-        // Mask API keys (long alphanumeric strings that look like keys)
-        result = System.Text.RegularExpressions.Regex.Replace(
-            result,
-            @"\b[A-Za-z0-9]{32,}\b",
-            "[REDACTED_KEY]");
+        if (settings == null || settings.GetValueOrDefault("desensitization.maskApiKeys") != "false")
+        {
+            // Mask API keys (long alphanumeric strings that look like keys)
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"\b[A-Za-z0-9]{32,}\b",
+                "[REDACTED_KEY]");
+        }
 
-        // Mask common token patterns
-        result = System.Text.RegularExpressions.Regex.Replace(
-            result,
-            @"\b(sk-|pk-|api-|key-|token-)[A-Za-z0-9]{20,}\b",
-            "[REDACTED_TOKEN]",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (settings == null || settings.GetValueOrDefault("desensitization.maskTokens") != "false")
+        {
+            // Mask common token patterns
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"\b(sk-|pk-|api-|key-|token-)[A-Za-z0-9]{20,}\b",
+                "[REDACTED_TOKEN]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
 
-        // Mask email addresses
-        result = System.Text.RegularExpressions.Regex.Replace(
-            result,
-            @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
-            "[REDACTED_EMAIL]");
+        if (settings == null || settings.GetValueOrDefault("desensitization.maskEmails") != "false")
+        {
+            // Mask email addresses
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+                "[REDACTED_EMAIL]");
+        }
 
-        // Mask IP addresses
-        result = System.Text.RegularExpressions.Regex.Replace(
-            result,
-            @"\b(\d{1,3}\.){3}\d{1,3}\b",
-            "[REDACTED_IP]");
+        if (settings == null || settings.GetValueOrDefault("desensitization.maskIps") != "false")
+        {
+            // Mask IP addresses
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"\b(\d{1,3}\.){3}\d{1,3}\b",
+                "[REDACTED_IP]");
+        }
 
         return result;
     }

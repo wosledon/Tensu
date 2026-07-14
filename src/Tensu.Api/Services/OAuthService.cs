@@ -127,7 +127,7 @@ public class OAuthService
 
         if (provider.Protocol == "OIDC" && !string.IsNullOrEmpty(tokenResponse.idToken))
         {
-            var idClaims = ValidateIdToken(tokenResponse.idToken, provider, oauthState.Nonce);
+            var idClaims = await ValidateIdTokenAsync(tokenResponse.idToken, provider, oauthState.Nonce);
             if (!string.IsNullOrEmpty(idClaims.error))
                 return (false, null, idClaims.error);
             foreach (var kv in idClaims.claims)
@@ -163,7 +163,13 @@ public class OAuthService
             .FirstOrDefaultAsync(u => u.ExternalId == externalId && u.AuthProvider == providerName);
 
         if (user == null && !string.IsNullOrEmpty(email))
-            user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+        {
+            var existingByEmail = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (existingByEmail != null && string.IsNullOrEmpty(existingByEmail.AuthProvider))
+            {
+                user = existingByEmail;
+            }
+        }
 
         if (user != null)
         {
@@ -224,6 +230,17 @@ public class OAuthService
                 provider.UserInfoEndpoint = doc["userinfo_endpoint"]?.GetValue<string>() ?? provider.UserInfoEndpoint;
                 if (string.IsNullOrEmpty(provider.Issuer))
                     provider.Issuer = doc["issuer"]?.GetValue<string>() ?? provider.Issuer;
+
+                var existing = await _db.OAuthProviders.FirstOrDefaultAsync(p => p.Id == provider.Id);
+                if (existing != null)
+                {
+                    existing.AuthorizationEndpoint = provider.AuthorizationEndpoint;
+                    existing.TokenEndpoint = provider.TokenEndpoint;
+                    existing.UserInfoEndpoint = provider.UserInfoEndpoint;
+                    existing.Issuer = provider.Issuer;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
             }
         }
         catch (Exception ex)
@@ -269,7 +286,7 @@ public class OAuthService
         return (true, accessToken, idToken, null);
     }
 
-    private (Dictionary<string, string> claims, string? error) ValidateIdToken(
+    private async Task<(Dictionary<string, string> claims, string? error)> ValidateIdTokenAsync(
         string idToken,
         OAuthProvider provider,
         string? expectedNonce)
@@ -292,6 +309,35 @@ public class OAuthService
 
             if (!string.IsNullOrEmpty(expectedNonce) && claims.GetValueOrDefault("nonce") != expectedNonce)
                 return (claims, "ID token nonce mismatch.");
+
+            if (!string.IsNullOrEmpty(provider.Issuer))
+            {
+                try
+                {
+                    var jwksUri = $"{provider.Issuer.TrimEnd('/')}/.well-known/jwks.json";
+                    var client = _httpClientFactory.CreateClient();
+                    var jwksResponse = await client.GetStringAsync(jwksUri);
+                    var jwks = new Microsoft.IdentityModel.Tokens.JsonWebKeySet(jwksResponse);
+
+                    var validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidIssuer = provider.Issuer,
+                        ValidateAudience = true,
+                        ValidAudience = provider.ClientId,
+                        ValidateLifetime = true,
+                        IssuerSigningKeys = jwks.GetSigningKeys(),
+                        ValidateIssuerSigningKey = true
+                    };
+
+                    handler.ValidateToken(idToken, validationParameters, out _);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ID token signature validation failed for issuer {Issuer}", provider.Issuer);
+                    return (claims, "ID token signature validation failed.");
+                }
+            }
 
             return (claims, null);
         }
@@ -344,6 +390,20 @@ public class OAuthService
         $"oauth_state:{state}";
 
     private record OAuthState(string ProviderName, string Nonce, string RedirectUri);
+
+    public void StoreOAuthCode(string code, string token, TimeSpan ttl)
+    {
+        _cache.Set($"oauth_code:{code}", token, ttl);
+    }
+
+    public string? ExchangeOAuthCode(string code)
+    {
+        if (string.IsNullOrEmpty(code)) return null;
+        var key = $"oauth_code:{code}";
+        if (!_cache.TryGetValue(key, out string? token)) return null;
+        _cache.Remove(key);
+        return token;
+    }
 }
 
 internal static class DictionaryExtensions

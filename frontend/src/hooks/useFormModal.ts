@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Form } from 'antd';
+import { Form, App } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 interface UseFormModalOptions<T> {
   createFn: (data: Partial<T>) => Promise<T>;
@@ -20,6 +21,8 @@ export function useFormModal<T extends { id?: number }>({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<T | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { message } = App.useApp();
+  const { t } = useTranslation();
 
   const openCreate = () => {
     setEditing(null);
@@ -52,8 +55,9 @@ export function useFormModal<T extends { id?: number }>({
       }
       close();
       onSuccess?.();
-    } catch {
-      // validation error or API error
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.message || t('common.error'));
     } finally {
       setSubmitting(false);
     }

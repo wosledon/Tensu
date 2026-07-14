@@ -30,6 +30,7 @@ public class GatewayController : ControllerBase
     private readonly SettingsService _settingsService;
     private readonly QuotaService _quotaService;
     private readonly IpWhitelistService _ipWhitelistService;
+    private readonly DesensitizationService _desensitizationService;
     private readonly ILogger<GatewayController> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MetricsCollector _metrics;
@@ -50,6 +51,7 @@ public class GatewayController : ControllerBase
         SettingsService settingsService,
         QuotaService quotaService,
         IpWhitelistService ipWhitelistService,
+        DesensitizationService desensitizationService,
         ILogger<GatewayController> logger,
         IHttpClientFactory httpClientFactory,
         MetricsCollector metrics)
@@ -69,6 +71,7 @@ public class GatewayController : ControllerBase
         _settingsService = settingsService;
         _quotaService = quotaService;
         _ipWhitelistService = ipWhitelistService;
+        _desensitizationService = desensitizationService;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
         _metrics = metrics;
@@ -107,7 +110,21 @@ public class GatewayController : ControllerBase
         }
 
         // ── 2. Rate limit check ──
-        var (allowed, retryAfter) = await _rateLimiter.CheckRateLimitAsync(apiKey.Id, apiKey.RateLimitRpm, apiKey.RateLimitTpm);
+        var apiKeyRpm = apiKey.RateLimitRpm;
+        var apiKeyTpm = apiKey.RateLimitTpm;
+        if (!apiKeyRpm.HasValue || apiKeyRpm.Value <= 0)
+        {
+            var defaultRpm = await _settingsService.GetAsync("rateLimit.defaultRpm");
+            if (int.TryParse(defaultRpm, out var parsedDefaultRpm) && parsedDefaultRpm > 0)
+                apiKeyRpm = parsedDefaultRpm;
+        }
+        if (!apiKeyTpm.HasValue || apiKeyTpm.Value <= 0)
+        {
+            var defaultTpm = await _settingsService.GetAsync("rateLimit.defaultTpm");
+            if (int.TryParse(defaultTpm, out var parsedDefaultTpm) && parsedDefaultTpm > 0)
+                apiKeyTpm = parsedDefaultTpm;
+        }
+        var (allowed, retryAfter) = await _rateLimiter.CheckRateLimitAsync(apiKey.Id, apiKeyRpm, apiKeyTpm);
         if (!allowed)
         {
             HttpContext.Response.Headers["Retry-After"] = retryAfter.ToString();
@@ -115,9 +132,16 @@ public class GatewayController : ControllerBase
         }
 
         // ── 3. Read & parse request ──
+        const int maxBodySize = 4 * 1024 * 1024;
         string requestBody;
         using (var reader = new StreamReader(HttpContext.Request.Body, Encoding.UTF8))
-            requestBody = await reader.ReadToEndAsync();
+        {
+            var buffer = new char[maxBodySize + 1];
+            var charsRead = await reader.ReadAsync(buffer, 0, buffer.Length);
+            if (charsRead > maxBodySize)
+                return BadRequest(new { error = new { message = "Request body too large", type = "invalid_request_error" } });
+            requestBody = new string(buffer, 0, charsRead);
+        }
 
         var requestJson = JsonDocument.Parse(requestBody);
         var requestedModel = requestJson.RootElement.TryGetProperty("model", out var modelProp) ? modelProp.GetString() : null;
@@ -134,7 +158,7 @@ public class GatewayController : ControllerBase
 
         // ── 4. Organization quota check ──
         var estimatedTokens = CompressionService.EstimateTokens(requestBody);
-        var (quotaAllowed, quotaRetryAfter) = await _quotaService.CheckOrgQuotaAsync(apiKey.OrganizationId, estimatedTokens);
+        var (quotaAllowed, quotaRetryAfter) = await _quotaService.CheckOrgQuotaAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
         if (!quotaAllowed)
         {
             HttpContext.Response.Headers["Retry-After"] = quotaRetryAfter.ToString();
@@ -145,24 +169,7 @@ public class GatewayController : ControllerBase
         var resolvedModelName = await ResolveModelAsync(requestedModel, requestBody, apiKey, requestId);
 
         // ── 6. Find models ──
-        var parts = resolvedModelName.Split('-', 2);
-        if (parts.Length != 2)
-            return BadRequest(new { error = new { message = $"Invalid model format: {resolvedModelName}. Expected 'Provider-Model'", type = "invalid_request_error" } });
-
-        var candidates = await _db.Models
-            .Include(m => m.Provider).ThenInclude(p => p.Keys)
-            .Include(m => m.Pricings)
-            .Where(m => m.Name == parts[1] && m.Provider.Name == parts[0] && m.IsEnabled)
-            .ToListAsync();
-
-        if (!candidates.Any())
-        {
-            candidates = await _db.Models
-                .Include(m => m.Provider).ThenInclude(p => p.Keys)
-                .Include(m => m.Pricings)
-                .Where(m => m.Name == parts[1] && m.IsEnabled)
-                .ToListAsync();
-        }
+        var candidates = await FindModelsAsync(resolvedModelName);
 
         if (!candidates.Any())
             return NotFound(new { error = new { message = $"Model '{resolvedModelName}' not found", type = "not_found_error" } });
@@ -223,7 +230,7 @@ public class GatewayController : ControllerBase
                 // ── Token estimation & compression ──
                 var inputTokens = CompressionService.EstimateTokens(requestBody);
                 var compressionResult = await _compression.CompressAsync(requestBody);
-                var compressionEnabled = await IsCompressionEnabledAsync();
+                var compressionEnabled = await IsCompressionEnabledAsync(model.Id, apiKey.OrganizationId);
                 var compressionApplied = compressionResult.Applied && compressionEnabled;
                 var compressionStrategy = compressionApplied ? compressionResult.Strategy : "none";
                 var inputTokensAfterCompression = compressionApplied ? compressionResult.CompressedTokenEstimate : inputTokens;
@@ -244,8 +251,8 @@ public class GatewayController : ControllerBase
                     if (cacheHit.HasValue && cacheHit.Value.hit)
                     {
                         HttpContext.Response.Headers["X-Cache"] = "HIT";
-                        _rateLimiter.RecordRequest(apiKey.Id, 0);
-                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                        await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
 
                         var cachedResponse = cacheHit.Value.responseBody!;
                         var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, cacheHit.Value.isStream);
@@ -278,8 +285,8 @@ public class GatewayController : ControllerBase
                         if (semanticHit.HasValue && semanticHit.Value.hit)
                         {
                             HttpContext.Response.Headers["X-Cache"] = "HIT_SEMANTIC";
-                            _rateLimiter.RecordRequest(apiKey.Id, 0);
-                            await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                            await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
+                            await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
 
                             var cachedResponse = semanticHit.Value.responseBody!;
                             var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, semanticHit.Value.isStream);
@@ -324,11 +331,18 @@ public class GatewayController : ControllerBase
                         var upstreamRequest = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, selectedKey);
                         response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead);
                         var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled, semanticCacheEnabled, semanticCacheThreshold, semanticCacheTtl, requestedModel, compressionMappingKey, provider, selectedKey);
-                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
                         return streamResult;
                     }
                     else
                     {
+                        var maxRetriesValue = await _settingsService.GetAsync("retry.maxRetries");
+                        var baseDelayMsValue = await _settingsService.GetAsync("retry.baseDelayMs");
+                        var maxDelayMsValue = await _settingsService.GetAsync("retry.maxDelayMs");
+                        int.TryParse(maxRetriesValue, out var parsedMaxRetries);
+                        int.TryParse(baseDelayMsValue, out var parsedBaseDelayMs);
+                        int.TryParse(maxDelayMsValue, out var parsedMaxDelayMs);
+
                         response = await _retryPolicy.ExecuteWithRetryAsync(
                             async (key) =>
                             {
@@ -337,7 +351,10 @@ public class GatewayController : ControllerBase
                             },
                             provider,
                             selectedKey,
-                            isStream: false);
+                            isStream: false,
+                            maxRetries: parsedMaxRetries > 0 ? parsedMaxRetries : null,
+                            baseDelayMs: parsedBaseDelayMs > 0 ? parsedBaseDelayMs : null,
+                            maxDelayMs: parsedMaxDelayMs > 0 ? parsedMaxDelayMs : null);
 
                         sw.Stop();
 
@@ -354,7 +371,6 @@ public class GatewayController : ControllerBase
                             await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
                                 RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
                                 ((int)response.StatusCode).ToString(), errorBody, compressionMappingKey: compressionMappingKey);
-                            await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
                             _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
                             return StatusCode((int)response.StatusCode,
                                 new { error = new { message = "Upstream provider error", type = "upstream_error", upstream_status = (int)response.StatusCode } });
@@ -364,7 +380,7 @@ public class GatewayController : ControllerBase
 
                         ForwardHeaders(response);
 
-                        _rateLimiter.RecordRequest(apiKey.Id, 0);
+                        await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
                         _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
                         _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
@@ -377,7 +393,7 @@ public class GatewayController : ControllerBase
                         if (semanticCacheEnabled)
                             await _cache.SetSemanticAsync(requestedModel, requestBody, responseBody, isStream: false, semanticCacheTtl, CancellationToken.None);
 
-                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, inputTokens + outputTokens);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, inputTokens + outputTokens, apiKey.Id);
 
                         await EnqueueAuditLog(requestId, model, apiKey, responseBody, sw.ElapsedMilliseconds, false,
                             RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
@@ -388,26 +404,18 @@ public class GatewayController : ControllerBase
                         return Content(responseBody, "application/json");
                     }
                 }
-                catch (TaskCanceledException)
-                {
-                    sw.Stop();
-                    await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
-                        RequestStatus.Timeout, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
-                        "TIMEOUT", "Request timed out", compressionMappingKey: compressionMappingKey);
-                    await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
-                    _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
-                    return StatusCode(408, new { error = new { message = "Request timed out", type = "timeout_error" } });
-                }
                 catch (Exception ex)
                 {
                     sw.Stop();
+                    var errorCode = ErrorCodeMapper.Map(ex);
+                    var errorMessage = ex is TimeoutException or TaskCanceledException or OperationCanceledException ? "Request timed out" : "Proxy error";
+                    var statusCode = ex is TimeoutException or TaskCanceledException or OperationCanceledException ? 504 : 502;
                     _logger.LogError(ex, "Error proxying request {RequestId}", requestId);
                     await EnqueueAuditLog(requestId, model, apiKey, null, sw.ElapsedMilliseconds, false,
                         RequestStatus.Failed, inputTokens, inputTokensAfterCompression, 0, 0, 0, compressionStrategy, compressionApplied, requestBody,
-                        "INTERNAL_ERROR", ex.Message, compressionMappingKey: compressionMappingKey);
-                    await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens);
+                        errorCode, errorMessage, compressionMappingKey: compressionMappingKey);
                     _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
-                    return StatusCode(502, new { error = new { message = "Bad gateway", type = "proxy_error" } });
+                    return StatusCode(statusCode, ErrorCodeMapper.BuildErrorResponse(errorCode, errorMessage, statusCode == 504 ? "timeout_error" : "proxy_error"));
                 }
             }
             finally
@@ -500,10 +508,41 @@ public class GatewayController : ControllerBase
             if (allowed == null || !allowed.Any()) return true;
             return allowed.Contains(modelName, StringComparer.OrdinalIgnoreCase);
         }
-        catch
+        catch (JsonException ex)
         {
-            return true;
+            Console.WriteLine($"Malformed AllowedModels JSON for API key {apiKey.Id}: {ex.Message}");
+            return false;
         }
+    }
+
+    private async Task<List<Model>> FindModelsAsync(string resolvedModelName)
+    {
+        var dashIndex = resolvedModelName.IndexOf('-');
+        if (dashIndex <= 0 || dashIndex >= resolvedModelName.Length - 1)
+        {
+            return await _db.Models
+                .Include(m => m.Provider).ThenInclude(p => p.Keys)
+                .Include(m => m.Pricings)
+                .Where(m => m.Name == resolvedModelName && m.IsEnabled)
+                .ToListAsync();
+        }
+
+        var providerName = resolvedModelName[..dashIndex];
+        var modelName = resolvedModelName[(dashIndex + 1)..];
+
+        var exact = await _db.Models
+            .Include(m => m.Provider).ThenInclude(p => p.Keys)
+            .Include(m => m.Pricings)
+            .Where(m => m.Name == modelName && m.Provider.Name == providerName && m.IsEnabled)
+            .ToListAsync();
+
+        if (exact.Any()) return exact;
+
+        return await _db.Models
+            .Include(m => m.Provider).ThenInclude(p => p.Keys)
+            .Include(m => m.Pricings)
+            .Where(m => m.Name == modelName && m.IsEnabled)
+            .ToListAsync();
     }
 
     private async Task EnqueueRoutingAuditLog(string requestId, ApiKey apiKey, RouteModel routeModel, RoutingModelService.RoutingDecision decision)
@@ -588,20 +627,54 @@ public class GatewayController : ControllerBase
         return request;
     }
 
+    private static readonly HashSet<string> AllowedResponseHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "x-ratelimit-limit-requests",
+        "x-ratelimit-limit-tokens",
+        "x-ratelimit-remaining-requests",
+        "x-ratelimit-remaining-tokens",
+        "x-ratelimit-reset-requests",
+        "x-ratelimit-reset-tokens",
+        "openai-model",
+        "openai-organization",
+        "openai-processing-ms",
+        "openai-version",
+        "anthropic-ratelimit-requests-limit",
+        "anthropic-ratelimit-requests-remaining",
+        "anthropic-ratelimit-requests-reset",
+        "anthropic-ratelimit-tokens-limit",
+        "anthropic-ratelimit-tokens-remaining",
+        "anthropic-ratelimit-tokens-reset",
+    };
+
     private void ForwardHeaders(HttpResponseMessage response)
     {
         foreach (var header in response.Headers)
-            if (!header.Key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase))
-                Response.Headers[header.Key] = string.Join(", ", header.Value);
-        foreach (var header in response.Content.Headers)
-            if (!header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+            if (AllowedResponseHeaders.Contains(header.Key))
                 Response.Headers[header.Key] = string.Join(", ", header.Value);
     }
 
-    private async Task<bool> IsCompressionEnabledAsync()
+    private async Task<bool> IsCompressionEnabledAsync(int? modelId = null, int? orgId = null)
     {
-        var value = await _settingsService.GetAsync("compression.enabled");
-        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+        var globalValue = await _settingsService.GetAsync("compression.enabled");
+        if (string.Equals(globalValue, "false", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (orgId.HasValue)
+        {
+            var org = await _db.Organizations.FindAsync(orgId.Value);
+            if (org != null && !org.CompressionEnabled)
+                return false;
+        }
+
+        if (modelId.HasValue)
+        {
+            var model = await _modelService.GetByIdAsync(modelId.Value) as Tensu.Core.Entities.Model;
+            if (model != null && !model.CompressionEnabled)
+                return false;
+        }
+
+        return true;
     }
 
     private async Task<bool> IsCacheEnabledAsync()
@@ -783,7 +856,7 @@ public class GatewayController : ControllerBase
             }
 
             sw.Stop();
-            _rateLimiter.RecordRequest(apiKey.Id, 0);
+            await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
             _loadBalancer.RecordLatency(model.ProviderId, sw.ElapsedMilliseconds);
             _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
@@ -898,6 +971,14 @@ public class GatewayController : ControllerBase
     {
         try
         {
+            var org = await _db.Organizations.FindAsync(apiKey.OrganizationId);
+            var sanitizedRequest = _desensitizationService.Desensitize(
+                requestContent?.Length > 10000 ? requestContent[..10000] : requestContent,
+                org ?? new Organization { EnableContentLogging = true });
+            var sanitizedResponse = _desensitizationService.Desensitize(
+                responseContent?.Length > 10000 ? responseContent[..10000] : responseContent,
+                org ?? new Organization { EnableContentLogging = true });
+
             await _auditChannel.EnqueueAsync(new RequestLog
             {
                 RequestId = requestId,
@@ -927,8 +1008,8 @@ public class GatewayController : ControllerBase
                 ErrorCode = errorCode,
                 ErrorMessage = errorMessage,
                 IsStream = isStream,
-                RequestContent = requestContent?.Length > 10000 ? requestContent[..10000] : requestContent,
-                ResponseContent = responseContent?.Length > 10000 ? responseContent[..10000] : responseContent
+                RequestContent = sanitizedRequest,
+                ResponseContent = sanitizedResponse
             });
         }
         catch (Exception ex)

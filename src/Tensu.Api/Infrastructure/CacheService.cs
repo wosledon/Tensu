@@ -20,6 +20,7 @@ public class CacheService : IDisposable
     private readonly IServiceScopeFactory? _scopeFactory;
     private readonly Timer _cleanupTimer;
     private bool _disposed;
+    private const int MaxCacheEntries = 10000;
 
     public CacheService(ILogger<CacheService> logger)
     {
@@ -56,6 +57,18 @@ public class CacheService : IDisposable
     /// </summary>
     public void Set(string cacheKey, string responseBody, bool isStream, TimeSpan? ttl = null)
     {
+        if (_cache.Count >= MaxCacheEntries && !_cache.ContainsKey(cacheKey))
+        {
+            var oldest = _cache
+                .Where(kv => kv.Value.ExpiresAt > DateTime.UtcNow)
+                .OrderBy(kv => kv.Value.CachedAt)
+                .Take(_cache.Count - MaxCacheEntries + 1)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var key in oldest)
+                _cache.TryRemove(key, out _);
+        }
+
         var entry = new CacheEntry
         {
             ResponseBody = responseBody,

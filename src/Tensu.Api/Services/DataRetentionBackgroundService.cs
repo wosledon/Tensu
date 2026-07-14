@@ -126,6 +126,18 @@ public class DataRetentionBackgroundService : BackgroundService
             .Where(e => e.ExpiresAt < now)
             .ExecuteDeleteAsync(ct);
 
+        var dailyStatsDeleted = await db.DailyStats
+            .Where(s => s.Date < now.AddDays(-archivedRetentionDays))
+            .ExecuteDeleteAsync(ct);
+
+        var adminAuditDeleted = await db.AdminAuditLogs
+            .Where(a => a.Timestamp < now.AddDays(-180))
+            .ExecuteDeleteAsync(ct);
+
+        var dataDeletionDeleted = await db.DataDeletionRequests
+            .Where(d => d.CreatedAt < now.AddDays(-archivedRetentionDays) && d.Status == "completed")
+            .ExecuteDeleteAsync(ct);
+
         await transaction.CommitAsync(ct);
 
         _logger.LogInformation(
@@ -140,6 +152,13 @@ public class DataRetentionBackgroundService : BackgroundService
             "Data retention removed {Count} compression mappings older than 30 days", compressionMappingsDeleted);
         _logger.LogInformation(
             "Data retention removed {Count} expired semantic cache entries", semanticCacheDeleted);
+        _logger.LogInformation(
+            "Data retention removed {Count} daily stats older than {ArchivedCutoff:O}",
+            dailyStatsDeleted, archivedCutoff);
+        _logger.LogInformation(
+            "Data retention removed {Count} admin audit logs older than 180 days", adminAuditDeleted);
+        _logger.LogInformation(
+            "Data retention removed {Count} completed data deletion requests", dataDeletionDeleted);
     }
 
     private static ArchivedRequestLog MapToArchive(RequestLog log)

@@ -1,82 +1,75 @@
-# Tensu — AI 编码代理指南
+# Tensu — Agent Guide
 
-Tensu 是企业级大模型网关平台：统一 LLM API 接入、供应商管理、智能路由、上下文压缩、用量审计。业务方通过单一端点访问所有供应商模型。
+## Commands
 
-**权威文档（改动前先读，勿在此复制其内容）：**
-- 产品需求与架构：[docs/PRD.md](docs/PRD.md)
-- 前端设计规范（视觉/交互/主题/组件）：[design/前端设计规范.md](design/前端设计规范.md)
-- 项目概览：[README.md](README.md)
-
-## 当前状态
-
-脚手架已搭建完成。后端（`src/`）包含完整 CRUD API 与网关代理；前端（`frontend/`）包含管理端完整页面。详见下方「构建与测试」。
-
-## 技术栈
-
-| 层次     | 选型                                                                   |
-| -------- | ---------------------------------------------------------------------- |
-| 后端     | ASP.NET Core 10 Web API                                                |
-| ORM      | Entity Framework Core                                                  |
-| 数据库   | 开发用 SQLite，生产用 PostgreSQL                                       |
-| 异步处理 | `Channel<T>`（内部消息管道，用于审计落库等）                           |
-| 缓存     | 单机 `MemoryCache`；多点部署以数据库作共享计数后端（**不引入 Redis**） |
-| 前端     | React + Vite + TypeScript + Ant Design v5                              |
-| 图表     | ECharts（`echarts-for-react`）                                         |
-| 国际化   | `react-i18next`（首期 zh-CN / en-US）                                  |
-
-## 架构约定
-
-- **网关透传，不做协议转换**：OpenAI 与 Anthropic 协议各自透传（`POST /v1/chat/completions`、`POST /v1/messages`），请求/响应完全兼容官方 SDK，中间层只做路由、压缩、缓存、限流、审计。
-- **代理链路顺序**：认证 → 路由 → 压缩 → 缓存 → 转发 → 审计。
-- **上下文压缩必须可逆（CCR）**：仅在能完整还原且不改变语义时应用，否则透传原文；每次记录压缩前/后 token 数。
-- **审计异步落库**：请求级记录经 `Channel<T>` 异步写入，避免阻塞代理转发热路径（延迟目标见 PRD §4.2）。
-- **无状态设计**：单实例无状态、可水平扩展；限流/配额/并发等共享计数走数据库后端。
-- **敏感数据加密**：所有 API Key、供应商密钥加密存储（AES-256 等效）；审计对话内容按组织配置脱敏。
-
-## API 约定
-
-- 对外代理端点前缀 `/v1/`；管理端 RESTful 接口前缀 `/api/admin/`，JWT 认证。
-- 平台扩展响应头：`X-Request-Id`、`X-Cache`(HIT/MISS)、`X-Route-Model`、`X-Upstream-Provider`。
-- 管理接口统一响应格式（勿偏离）：
-  ```json
-  { "code": 0, "message": "success", "data": {} }
-  ```
-  分页数据放在 `data.{items,total,page,pageSize}`；错误用非零 `code` + `message`，`data: null`。
-- 限流超限返回标准 `429` + `Retry-After` 头。
-
-## 前端约定（详见设计规范）
-
-- 视觉基调：苹果风格（毛玻璃 Vibrancy、连续圆角、柔和景深）；圆角基准 10px，卡片 18px。
-- **禁止硬编码颜色**：全部走 Ant Design theme token / CSS 变量；提供浅色/深色/跟随系统三套主题。
-- **禁止硬编码可见文案**：全部走 i18n key，命名 `模块.子模块.含义`（如 `provider.form.apiKeyRequired`）。
-- 数值/token/成本/密钥/request_id 使用等宽字体；表格数值列右对齐。
-- 长列表用服务端分页 + 后端排序，禁止一次性加载全量。
-- 危险操作（删除、吊销）统一二次确认（`Popconfirm` / `Modal.confirm`）。
-
-## 里程碑优先级
-
-按 PRD §6：P0 供应商管理 + 基础网关代理 + JWT 认证 → P1 负载均衡/限流/重试/基础审计 → P2 路由模型/压缩/RBAC → P3 缓存/统计/组织架构 → P4 健康检查/密钥轮换/可观测性。
-
-## 构建与测试
-
-后端：
 ```bash
-dotnet build Tensu.slnx          # 构建
-dotnet test Tensu.slnx            # 测试
-dotnet run --project src/Tensu.Api # 启动开发服务器（http://localhost:5000）
-```
+dotnet build Tensu.slnx          # 注意不是 .sln
+dotnet test Tensu.slnx
+dotnet run --project src/Tensu.Api
 
-前端：
-```bash
 cd frontend
-npm install        # 安装依赖
-npm run dev        # 开发服务器（http://localhost:3000，代理到后端 5000）
-npm run build      # 生产构建（输出到 frontend/dist/）
+npm run dev        # :3000，代理到后端 :5000
+npm run build      # 同时执行 tsc -b && vite build
+npm run lint       # oxlint（非 eslint）
 ```
 
-Docker：
-```bash
-docker compose up --build   # 一键启动（http://localhost:5000）
+## Repo structure
+
+```
+src/Tensu.Core/     — 实体、枚举、通用类型
+src/Tensu.Api/      — Web API（Program.cs 单文件启动，控制器 + 服务两层）
+frontend/src/       — React 19 + Vite 8 + Ant Design v6
+tests/Tensu.Tests/  — xunit + Moq + WebApplicationFactory + coverlet
 ```
 
-默认管理员账号：`admin` / `admin123`
+## Backend 关键约定
+
+- **启动即自动迁移 + 种子数据**：`Program.cs:124-159`，开发环境第一次启动自动建库并创建 `admin/admin123`
+- **JWT / Encryption key 未配置时使用不安全默认值**：生产必须设置 `Jwt:Key`（≥32 chars）与 `Encryption:Key`（32 bytes）
+- **管理接口统一响应**：`{"code": 0, "message": "success", "data": {}}`；分页在 `data.items/total/page/pageSize`，非零 `code` 表示错误
+- **平台响应头**：`X-Request-Id`, `X-Cache`(HIT/MISS), `X-Route-Model`, `X-Upstream-Provider`
+- **Admin Controller 基类**：继承 `AdminBaseController` 获得 `CurrentUserId/CurrentOrgId/IsSuperAdmin` 等快捷属性
+- **审计异步落库**：请求级审计走 `AuditChannel` + `AuditBackgroundService`，不得在代理热路径同步写库
+- **无 Redis**：限流/配额/并发计数直接走数据库（EF Core 单条 UPDATE/COUNT 原子操作）
+- **敏感字段加密**：`EncryptionService`（AES-256 等效）用于 ProviderKey.ApiKeyValue 等字段
+
+## 前端关键约定
+
+- **页面全部懒加载**：`App.tsx` 用 `React.lazy` + `Suspense`，新增页面必须在此注册路由
+- **路由守卫**：`RequireAuth` + `RequireRole`，SuperAdmin/Admin 才能访问管理页
+- **Token 存储**：`localStorage.token`，拦截器自动附带 Bearer；401 自动跳 `/login`
+- **i18n 命名**：`模块.子模块.含义`（如 `provider.form.apiKeyRequired`），禁止硬编码可见文案
+- **数值列右对齐、request_id/token 等用等宽字体**
+- **禁止硬编码颜色**：全部走 Ant Design theme token / CSS 变量
+
+## 已知陷阱（务必注意）
+
+| 问题 | 位置 | 说明 |
+|------|------|------|
+| **SettingsService.SetAsync 限制 key** | `SettingsService.cs:85` | 只允许写入 `Defaults` 字典中已有的 key，前端 SettingsPage 尝试写入未知 key 时会抛异常 |
+| **QuotasPage 的 `model` scope 后端不支持** | `QuotaService` 只按 ApiKeyId 过滤 | 前端下拉选了也不会生效 |
+| **ModelCapabilitiesPage dimension 筛选参数丢失** | 前端 filter state 只跟踪 modelId，不跟踪 dimension | 实际传参未生效 |
+| **语义缓存是词袋模型** | `CacheService.GenerateEmbedding` | 100 维词频向量，非真实 embedding |
+| **流式请求不重试** | `GatewayController` | 仅非流式走 RetryPolicy，流式直接透传 |
+| **模型自动评估未调用 LLM** | `ModelCapabilityService.RunSyntheticEvaluationAsync` | 只基于历史日志计算指标，未调用 LLM 做真实评估 |
+
+## 已完成但需注意的缺口
+
+- `OAuthProvidersController` 后端 CRUD 完整，前端管理页面已补充（路由 `/oauth-providers`）
+- `POST /api/admin/compression/restore` 后端存在，前端页面已补充（路由 `/compression/restore`）
+- 货币汇率管理已通过 Settings 页面集成（`currency.*` keys），`ModelPricing.ExchangeRate` 字段已存在但无自动换算逻辑
+- Webhook 投递已加入重试队列（`WebhookDelivery` 实体 + `NotificationService` 自动重试失败投递）
+- 告警规则配置页面已补充（路由 `/alert-rules`，CRUD 端点 `/api/admin/alert-rules`）
+
+## 技术栈速查
+
+| 层次 | 版本/选型 |
+|------|-----------|
+| 后端 | .NET 10 / EF Core / SQLite(dev) PostgreSQL(prod) |
+| 前端 | React 19 / Vite 8 / TS / AntD v6 / ECharts |
+| 测试 | xunit 2.9 / Moq / WebApplicationFactory / coverlet |
+| 容器 | Docker Compose，单容器 :5000，SQLite 数据卷挂载 |
+
+## 权威文档
+
+改动前先读：`docs/PRD.md`、`design/前端设计规范.md`

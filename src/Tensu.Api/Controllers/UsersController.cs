@@ -48,6 +48,7 @@ public class UsersController : AdminBaseController
         };
         var created = await _service.CreateAsync(user, request.Password);
         created.PasswordHash = "***";
+        await LogAdminAuditAsync("create", "User", created.Id.ToString(), $"Username={created.Username}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -57,6 +58,7 @@ public class UsersController : AdminBaseController
         var updated = await _service.UpdateAsync(id, user);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "User not found"));
         updated.PasswordHash = "***";
+        await LogAdminAuditAsync("update", "User", id.ToString(), $"Username={updated.Username}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -67,6 +69,7 @@ public class UsersController : AdminBaseController
     {
         var success = await _service.ResetPasswordAsync(id, request.NewPassword);
         if (!success) return NotFound(ApiResponse.Error(40401, "User not found"));
+        await LogAdminAuditAsync("reset_password", "User", id.ToString());
         return Ok(ApiResponse.Success());
     }
 
@@ -75,6 +78,7 @@ public class UsersController : AdminBaseController
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "User not found"));
+        await LogAdminAuditAsync("delete", "User", id.ToString());
         return Ok(ApiResponse.Success());
     }
 }

@@ -25,8 +25,8 @@ public class OAuthProviderService : BaseService
             query = query.Where(p => p.Name.Contains(request.Keyword)
                 || (p.DisplayName != null && p.DisplayName.Contains(request.Keyword)));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items.Select(ToDto).ToList(), total, request);
     }
 

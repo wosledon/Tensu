@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App } from 'antd';
+import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App, Input } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../contexts/ThemeContext';
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { settingsApi } from '../../api';
 import { PageHeader } from '../../components';
 
@@ -39,6 +39,23 @@ export default function SettingsPage() {
           errorRateThreshold: parseFloat(data['anomaly.errorRateThreshold'] || '0.1'),
           rateLimitThreshold: parseFloat(data['anomaly.rateLimitThreshold'] || '0.05'),
           providerSuccessRateThreshold: parseFloat(data['anomaly.providerSuccessRateThreshold'] || '0.95'),
+          desensitizationEnabled: data['desensitization.enabled'] !== 'false',
+          desensitizationMaskApiKeys: data['desensitization.maskApiKeys'] !== 'false',
+          desensitizationMaskEmails: data['desensitization.maskEmails'] !== 'false',
+          desensitizationMaskIps: data['desensitization.maskIps'] !== 'false',
+          desensitizationMaskTokens: data['desensitization.maskTokens'] !== 'false',
+          keyRotationEnabled: data['keyRotation.enabled'] !== 'false',
+          keyRotationCheckIntervalHours: parseInt(data['keyRotation.checkIntervalHours'] || '24'),
+          keyRotationExpiryWarningDays: parseInt(data['keyRotation.expiryWarningDays'] || '7'),
+          retryMaxRetries: parseInt(data['retry.maxRetries'] || '2'),
+          retryBaseDelayMs: parseInt(data['retry.baseDelayMs'] || '500'),
+          retryMaxDelayMs: parseInt(data['retry.maxDelayMs'] || '5000'),
+          defaultCurrency: data['currency.default'] || 'USD',
+          currencyRateUSD: parseFloat(data['currency.rate.USD'] || '1.0'),
+          currencyRateCNY: parseFloat(data['currency.rate.CNY'] || '7.2'),
+          currencyRateEUR: parseFloat(data['currency.rate.EUR'] || '0.92'),
+          currencyRateJPY: parseFloat(data['currency.rate.JPY'] || '150.0'),
+          currencyRateGBP: parseFloat(data['currency.rate.GBP'] || '0.79'),
         });
       })
       .catch(() => {})
@@ -63,6 +80,23 @@ export default function SettingsPage() {
         ['anomaly.errorRateThreshold', String(values.errorRateThreshold)],
         ['anomaly.rateLimitThreshold', String(values.rateLimitThreshold)],
         ['anomaly.providerSuccessRateThreshold', String(values.providerSuccessRateThreshold)],
+        ['desensitization.enabled', String(values.desensitizationEnabled)],
+        ['desensitization.maskApiKeys', String(values.desensitizationMaskApiKeys)],
+        ['desensitization.maskEmails', String(values.desensitizationMaskEmails)],
+        ['desensitization.maskIps', String(values.desensitizationMaskIps)],
+        ['desensitization.maskTokens', String(values.desensitizationMaskTokens)],
+        ['keyRotation.enabled', String(values.keyRotationEnabled)],
+        ['keyRotation.checkIntervalHours', String(values.keyRotationCheckIntervalHours)],
+        ['keyRotation.expiryWarningDays', String(values.keyRotationExpiryWarningDays)],
+        ['retry.maxRetries', String(values.retryMaxRetries)],
+        ['retry.baseDelayMs', String(values.retryBaseDelayMs)],
+        ['retry.maxDelayMs', String(values.retryMaxDelayMs)],
+        ['currency.default', String(values.defaultCurrency)],
+        ['currency.rate.USD', String(values.currencyRateUSD)],
+        ['currency.rate.CNY', String(values.currencyRateCNY)],
+        ['currency.rate.EUR', String(values.currencyRateEUR)],
+        ['currency.rate.JPY', String(values.currencyRateJPY)],
+        ['currency.rate.GBP', String(values.currencyRateGBP)],
       ];
       await Promise.all(updates.map(([k, v]) => settingsApi.set(k, v)));
       message.success(t('common.success'));
@@ -165,13 +199,90 @@ export default function SettingsPage() {
           </Text>
         </Card>
 
-        <Card title={t('settings.audit')} style={{ borderRadius: 18 }}>
+        <Card title={t('settings.audit')} style={{ borderRadius: 18, marginBottom: 24 }}>
           <Form.Item name="dataRetentionDays" label={t('organization.retentionDays')}>
             <InputNumber min={7} max={180} style={{ width: 160 }} addonAfter={t('settings.days')} />
           </Form.Item>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t('settings.auditHint')}
           </Text>
+        </Card>
+
+        <Card title={t('settings.currency')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Form.Item name="defaultCurrency" label={t('settings.defaultCurrency')}>
+            <Input style={{ width: 160 }} />
+          </Form.Item>
+          <Space size={16} wrap>
+            <Form.Item name="currencyRateUSD" label={t('settings.currencyRateUSD')}>
+              <InputNumber min={0} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="currencyRateCNY" label={t('settings.currencyRateCNY')}>
+              <InputNumber min={0} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="currencyRateEUR" label={t('settings.currencyRateEUR')}>
+              <InputNumber min={0} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="currencyRateJPY" label={t('settings.currencyRateJPY')}>
+              <InputNumber min={0} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="currencyRateGBP" label={t('settings.currencyRateGBP')}>
+              <InputNumber min={0} step={0.01} style={{ width: 160 }} />
+            </Form.Item>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('settings.currencyHint')}
+          </Text>
+        </Card>
+
+        <Card title={t('settings.desensitization')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Form.Item name="desensitizationEnabled" label={t('settings.desensitizationEnabled')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Space size={16} wrap>
+            <Form.Item name="desensitizationMaskApiKeys" label={t('settings.desensitizationMaskApiKeys')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="desensitizationMaskEmails" label={t('settings.desensitizationMaskEmails')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="desensitizationMaskIps" label={t('settings.desensitizationMaskIps')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="desensitizationMaskTokens" label={t('settings.desensitizationMaskTokens')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Space>
+        </Card>
+
+        <Card title={t('settings.retry')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Space size={16} wrap>
+            <Form.Item name="retryMaxRetries" label={t('settings.retryMaxRetries')}>
+              <InputNumber min={0} max={10} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="retryBaseDelayMs" label={t('settings.retryBaseDelayMs')}>
+              <InputNumber min={0} max={30000} step={100} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="retryMaxDelayMs" label={t('settings.retryMaxDelayMs')}>
+              <InputNumber min={0} max={120000} step={100} style={{ width: 160 }} />
+            </Form.Item>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('settings.retryHint', 'Exponential backoff with jitter for non-streaming idempotent requests.')}
+          </Text>
+        </Card>
+
+        <Card title={t('settings.keyRotation')} style={{ borderRadius: 18 }}>
+          <Form.Item name="keyRotationEnabled" label={t('settings.keyRotationEnabled')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Space size={16} wrap>
+            <Form.Item name="keyRotationCheckIntervalHours" label={t('settings.keyRotationCheckInterval')}>
+              <InputNumber min={1} max={168} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="keyRotationExpiryWarningDays" label={t('settings.keyRotationExpiryWarning')}>
+              <InputNumber min={1} max={90} style={{ width: 160 }} addonAfter={t('settings.days')} />
+            </Form.Item>
+          </Space>
         </Card>
       </Form>
     </div>

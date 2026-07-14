@@ -3,10 +3,6 @@ using Tensu.Api.Data;
 
 namespace Tensu.Api.Services;
 
-/// <summary>
-/// Aggregation service for computing analytics from request logs.
-/// Provides usage, cost, performance, and cache statistics.
-/// </summary>
 public class AnalyticsService
 {
     private readonly TensuDbContext _db;
@@ -16,47 +12,41 @@ public class AnalyticsService
         _db = db;
     }
 
-    /// <summary>
-    /// Get dashboard overview: today's stats.
-    /// </summary>
     public async Task<object> GetDashboardAsync(int? orgId = null)
     {
         var today = DateTime.UtcNow.Date;
         var weekAgo = today.AddDays(-7);
 
-        var query = _db.RequestLogs.Where(r => r.Timestamp >= today);
-        if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
+        var todayQuery = _db.RequestLogs.Where(r => r.Timestamp >= today);
+        if (orgId.HasValue) todayQuery = todayQuery.Where(r => r.OrganizationId == orgId.Value);
+        var todayLogs = await todayQuery.ToListAsync();
 
-        var todayLogs = await query.ToListAsync();
+        var dailyStatsQuery = _db.DailyStats.Where(s => s.Date >= weekAgo && s.Date < today);
+        if (orgId.HasValue) dailyStatsQuery = dailyStatsQuery.Where(s => s.OrganizationId == orgId.Value);
+        var dailyStats = await dailyStatsQuery.ToListAsync();
 
-        var weekQuery = _db.RequestLogs.Where(r => r.Timestamp >= weekAgo);
-        if (orgId.HasValue) weekQuery = weekQuery.Where(r => r.OrganizationId == orgId.Value);
-        var weekLogs = await weekQuery.ToListAsync();
-
-        // Daily trend (last 7 days)
-        var dailyTrend = weekLogs
-            .GroupBy(r => r.Timestamp.Date)
+        var dailyTrend = dailyStats
+            .GroupBy(s => s.Date)
             .Select(g => new
             {
                 date = g.Key.ToString("MM-dd"),
-                requests = g.Count(),
-                tokens = g.Sum(r => (r.InputTokens ?? 0) + (r.OutputTokens ?? 0)),
-                cost = g.Sum(r => (r.InputCost ?? 0) + (r.OutputCost ?? 0)),
-                successRate = g.Count() > 0 ? Math.Round((double)g.Count(r => r.Status == Core.Enums.RequestStatus.Success) / g.Count() * 100, 1) : 0,
-                avgLatency = g.Where(r => r.TotalDurationMs.HasValue).Select(r => (double)r.TotalDurationMs!.Value).DefaultIfEmpty(0).Average()
+                requests = g.Sum(s => s.TotalRequests),
+                tokens = (int)(g.Sum(s => s.TotalInputTokens) + g.Sum(s => s.TotalOutputTokens)),
+                cost = g.Sum(s => s.TotalInputCost + s.TotalOutputCost),
+                successRate = g.Sum(s => s.TotalRequests) > 0
+                    ? Math.Round((double)g.Sum(s => s.SuccessRequests) / g.Sum(s => s.TotalRequests) * 100, 1) : 0,
+                avgLatency = g.Where(s => s.AvgLatencyMs.HasValue).Select(s => (double)s.AvgLatencyMs!.Value).DefaultIfEmpty(0).Average()
             })
             .OrderBy(x => x.date)
             .ToList();
 
-        // Model distribution (last 7 days)
-        var modelDistribution = weekLogs
-            .GroupBy(r => r.ModelName)
-            .Select(g => new { name = g.Key, value = g.Count() })
+        var modelDistribution = dailyStats
+            .GroupBy(s => s.ModelName)
+            .Select(g => new { name = g.Key ?? "unknown", value = g.Sum(s => s.TotalRequests) })
             .OrderByDescending(x => x.value)
             .Take(8)
             .ToList();
 
-        // Provider health
         var providers = await _db.Providers
             .Select(p => new { p.Name, p.HealthStatus, p.IsEnabled })
             .ToListAsync();
@@ -78,10 +68,6 @@ public class AnalyticsService
         };
     }
 
-    /// <summary>
-    /// Get system health overview: provider status, today's error/rate-limit/cache metrics,
-    /// and top models / API keys by request volume.
-    /// </summary>
     public async Task<object> GetHealthAsync(int? orgId = null)
     {
         var today = DateTime.UtcNow.Date;
@@ -167,17 +153,44 @@ public class AnalyticsService
         };
     }
 
-    /// <summary>
-    /// Get usage statistics over a time range.
-    /// </summary>
     public async Task<object> GetUsageAsync(DateTime from, DateTime to, string granularity = "day", int? orgId = null)
     {
+        if (granularity == "day" || granularity == "week" || granularity == "month")
+        {
+            var statsQuery = _db.DailyStats.Where(s => s.Date >= from.Date && s.Date <= to.Date);
+            if (orgId.HasValue) statsQuery = statsQuery.Where(s => s.OrganizationId == orgId.Value);
+            var stats = await statsQuery.ToListAsync();
+
+            if (stats.Any())
+            {
+                var grouped = granularity switch
+                {
+                    "week" => stats.GroupBy(s => s.Date.AddDays(-(int)s.Date.DayOfWeek)),
+                    "month" => stats.GroupBy(s => new DateTime(s.Date.Year, s.Date.Month, 1)),
+                    _ => stats.GroupBy(s => s.Date)
+                };
+
+                return grouped.Select(g => new
+                {
+                    time = g.Key.ToString(granularity == "hour" ? "MM-dd HH:mm" : "yyyy-MM-dd"),
+                    inputTokens = (long)g.Sum(s => s.TotalInputTokens),
+                    outputTokens = (long)g.Sum(s => s.TotalOutputTokens),
+                    totalTokens = (long)(g.Sum(s => s.TotalInputTokens) + g.Sum(s => s.TotalOutputTokens)),
+                    requests = g.Sum(s => s.TotalRequests),
+                    success = g.Sum(s => s.SuccessRequests),
+                    failed = g.Sum(s => s.FailedRequests),
+                    cacheHits = g.Sum(s => s.CacheHits),
+                    compressionSaved = (long)(g.Sum(s => s.TotalInputTokens) - g.Sum(s => s.TotalInputTokensAfterCompression)),
+                }).OrderBy(x => x.time).ToList();
+            }
+        }
+
         var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to);
         if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
 
         var logs = await query.ToListAsync();
 
-        var grouped = granularity switch
+        var logGrouped = granularity switch
         {
             "hour" => logs.GroupBy(r => new DateTime(r.Timestamp.Year, r.Timestamp.Month, r.Timestamp.Day, r.Timestamp.Hour, 0, 0)),
             "week" => logs.GroupBy(r => r.Timestamp.Date.AddDays(-(int)r.Timestamp.DayOfWeek)),
@@ -185,7 +198,7 @@ public class AnalyticsService
             _ => logs.GroupBy(r => r.Timestamp.Date)
         };
 
-        return grouped.Select(g => new
+        return logGrouped.Select(g => new
         {
             time = g.Key.ToString(granularity == "hour" ? "MM-dd HH:mm" : "yyyy-MM-dd"),
             inputTokens = g.Sum(r => r.InputTokens ?? 0),
@@ -199,17 +212,69 @@ public class AnalyticsService
         }).OrderBy(x => x.time).ToList();
     }
 
-    /// <summary>
-    /// Get cost statistics.
-    /// </summary>
     public async Task<object> GetCostAsync(DateTime from, DateTime to, int? orgId = null)
     {
+        var statsQuery = _db.DailyStats.Where(s => s.Date >= from.Date && s.Date <= to.Date);
+        if (orgId.HasValue) statsQuery = statsQuery.Where(s => s.OrganizationId == orgId.Value);
+        var stats = await statsQuery.ToListAsync();
+
+        if (stats.Any())
+        {
+            var byModel = stats
+                .GroupBy(s => s.ModelName ?? "unknown")
+                .Select(g => new
+                {
+                    model = g.Key,
+                    totalCost = Math.Round(g.Sum(s => s.TotalInputCost + s.TotalOutputCost), 6),
+                    requests = g.Sum(s => s.TotalRequests),
+                    avgCostPerRequest = g.Sum(s => s.TotalRequests) > 0
+                        ? Math.Round(g.Sum(s => s.TotalInputCost + s.TotalOutputCost) / g.Sum(s => s.TotalRequests), 6) : 0,
+                })
+                .OrderByDescending(x => x.totalCost)
+                .ToList();
+
+            var byProvider = stats
+                .GroupBy(s => s.ProviderName ?? "unknown")
+                .Select(g => new
+                {
+                    provider = g.Key,
+                    totalCost = Math.Round(g.Sum(s => s.TotalInputCost + s.TotalOutputCost), 6),
+                    requests = g.Sum(s => s.TotalRequests),
+                })
+                .OrderByDescending(x => x.totalCost)
+                .ToList();
+
+            var daily = stats
+                .GroupBy(s => s.Date)
+                .Select(g => new
+                {
+                    date = g.Key.ToString("yyyy-MM-dd"),
+                    cost = Math.Round(g.Sum(s => s.TotalInputCost + s.TotalOutputCost), 6),
+                })
+                .OrderBy(x => x.date)
+                .ToList();
+
+            var totalCost = Math.Round(stats.Sum(s => s.TotalInputCost + s.TotalOutputCost), 6);
+            var totalRequests = stats.Sum(s => s.TotalRequests);
+
+            return new
+            {
+                totalCost,
+                totalRequests,
+                avgCostPerRequest = totalRequests > 0 ? Math.Round(totalCost / totalRequests, 6) : 0,
+                compressionSavings = 0m,
+                byModel,
+                byProvider,
+                daily
+            };
+        }
+
         var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to);
         if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
 
         var logs = await query.ToListAsync();
 
-        var byModel = logs
+        var logByModel = logs
             .GroupBy(r => r.ModelName)
             .Select(g => new
             {
@@ -221,7 +286,7 @@ public class AnalyticsService
             .OrderByDescending(x => x.totalCost)
             .ToList();
 
-        var byProvider = logs
+        var logByProvider = logs
             .GroupBy(r => r.ProviderName ?? "unknown")
             .Select(g => new
             {
@@ -232,7 +297,7 @@ public class AnalyticsService
             .OrderByDescending(x => x.totalCost)
             .ToList();
 
-        var daily = logs
+        var logDaily = logs
             .GroupBy(r => r.Timestamp.Date)
             .Select(g => new
             {
@@ -247,23 +312,52 @@ public class AnalyticsService
             totalCost = Math.Round(logs.Sum(r => (r.InputCost ?? 0) + (r.OutputCost ?? 0)), 6),
             totalRequests = logs.Count,
             avgCostPerRequest = logs.Count > 0 ? Math.Round(logs.Sum(r => (r.InputCost ?? 0) + (r.OutputCost ?? 0)) / logs.Count, 6) : 0,
-            compressionSavings = Math.Round(logs.Sum(r =>
-            {
-                var original = r.InputTokens ?? 0;
-                var compressed = r.InputTokensAfterCompression ?? original;
-                return (original - compressed) * 0.00001m; // rough estimate
-            }), 6),
-            byModel,
-            byProvider,
-            daily
+            compressionSavings = 0m,
+            byModel = logByModel,
+            byProvider = logByProvider,
+            daily = logDaily
         };
     }
 
-    /// <summary>
-    /// Get performance statistics.
-    /// </summary>
     public async Task<object> GetPerformanceAsync(DateTime from, DateTime to, int? orgId = null)
     {
+        var statsQuery = _db.DailyStats.Where(s => s.Date >= from.Date && s.Date <= to.Date);
+        if (orgId.HasValue) statsQuery = statsQuery.Where(s => s.OrganizationId == orgId.Value);
+        var stats = await statsQuery.ToListAsync();
+
+        if (stats.Any())
+        {
+            var byModel = stats
+                .GroupBy(s => s.ModelName ?? "unknown")
+                .Select(g => new
+                {
+                    model = g.Key,
+                    avgLatency = Math.Round(g.Where(s => s.AvgLatencyMs.HasValue).Select(s => (double)s.AvgLatencyMs!.Value).DefaultIfEmpty(0).Average(), 1),
+                    p95Latency = g.Max(s => s.P95LatencyMs) ?? 0,
+                    avgSpeed = Math.Round(g.Where(s => s.AvgOutputTokensPerSecond.HasValue).Select(s => s.AvgOutputTokensPerSecond!.Value).DefaultIfEmpty(0).Average(), 1),
+                    requests = g.Sum(s => s.TotalRequests),
+                })
+                .OrderByDescending(x => x.requests)
+                .ToList();
+
+            var allLatencies = stats.Where(s => s.AvgLatencyMs.HasValue).Select(s => (double)s.AvgLatencyMs!.Value).OrderBy(x => x).ToList();
+
+            return new
+            {
+                overall = new
+                {
+                    avgLatency = Math.Round(allLatencies.DefaultIfEmpty(0).Average(), 1),
+                    p50Latency = stats.Where(s => s.P50LatencyMs.HasValue).Select(s => (double)s.P50LatencyMs!.Value).OrderBy(x => x).DefaultIfEmpty(0).FirstOrDefault(),
+                    p95Latency = stats.Max(s => s.P95LatencyMs) ?? 0,
+                    p99Latency = stats.Max(s => s.P99LatencyMs) ?? 0,
+                    avgTtft = Math.Round(stats.Where(s => s.AvgTtftMs.HasValue).Select(s => (double)s.AvgTtftMs!.Value).DefaultIfEmpty(0).Average(), 1),
+                    p95Ttft = 0.0,
+                    avgSpeed = Math.Round(stats.Where(s => s.AvgOutputTokensPerSecond.HasValue).Select(s => s.AvgOutputTokensPerSecond!.Value).DefaultIfEmpty(0).Average(), 1),
+                },
+                byModel
+            };
+        }
+
         var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to && r.Status == Core.Enums.RequestStatus.Success);
         if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
 
@@ -273,7 +367,7 @@ public class AnalyticsService
         var ttfts = logs.Where(r => r.TimeToFirstTokenMs.HasValue).Select(r => (double)r.TimeToFirstTokenMs!.Value).OrderBy(x => x).ToList();
         var speeds = logs.Where(r => r.OutputTokensPerSecond.HasValue).Select(r => r.OutputTokensPerSecond!.Value).OrderBy(x => x).ToList();
 
-        var byModel = logs
+        var logByModel = logs
             .GroupBy(r => r.ModelName)
             .Select(g => new
             {
@@ -298,23 +392,50 @@ public class AnalyticsService
                 p95Ttft = Percentile(ttfts, 95),
                 avgSpeed = speeds.Count > 0 ? (double)Math.Round(speeds.Average(), 1) : 0,
             },
-            byModel
+            byModel = logByModel
         };
     }
 
-    /// <summary>
-    /// Get cache statistics.
-    /// </summary>
     public async Task<object> GetCacheStatsAsync(DateTime from, DateTime to, int? orgId = null)
     {
+        var statsQuery = _db.DailyStats.Where(s => s.Date >= from.Date && s.Date <= to.Date);
+        if (orgId.HasValue) statsQuery = statsQuery.Where(s => s.OrganizationId == orgId.Value);
+        var stats = await statsQuery.ToListAsync();
+
+        if (stats.Any())
+        {
+            var total = stats.Sum(s => s.TotalRequests);
+            var hits = stats.Sum(s => s.CacheHits);
+
+            var byModel = stats
+                .GroupBy(s => s.ModelName ?? "unknown")
+                .Select(g => new
+                {
+                    model = g.Key,
+                    total = g.Sum(s => s.TotalRequests),
+                    hits = g.Sum(s => s.CacheHits),
+                    hitRate = g.Sum(s => s.TotalRequests) > 0 ? Math.Round((double)g.Sum(s => s.CacheHits) / g.Sum(s => s.TotalRequests) * 100, 1) : 0,
+                })
+                .OrderByDescending(x => x.hits)
+                .ToList();
+
+            return new
+            {
+                totalRequests = total,
+                cacheHits = hits,
+                hitRate = total > 0 ? Math.Round((double)hits / total * 100, 1) : 0,
+                byModel
+            };
+        }
+
         var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to);
         if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
 
         var logs = await query.ToListAsync();
-        var total = logs.Count;
-        var hits = logs.Count(r => r.CacheHit);
+        var logTotal = logs.Count;
+        var logHits = logs.Count(r => r.CacheHit);
 
-        var byModel = logs
+        var logByModel = logs
             .GroupBy(r => r.ModelName)
             .Select(g => new
             {
@@ -328,10 +449,10 @@ public class AnalyticsService
 
         return new
         {
-            totalRequests = total,
-            cacheHits = hits,
-            hitRate = total > 0 ? Math.Round((double)hits / total * 100, 1) : 0,
-            byModel
+            totalRequests = logTotal,
+            cacheHits = logHits,
+            hitRate = logTotal > 0 ? Math.Round((double)logHits / logTotal * 100, 1) : 0,
+            byModel = logByModel
         };
     }
 

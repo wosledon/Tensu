@@ -37,6 +37,7 @@ public class RouteModelsController : AdminBaseController
     public async Task<IActionResult> Create([FromBody] RouteModel routeModel)
     {
         var created = await _service.CreateAsync(routeModel);
+        await LogAdminAuditAsync("create", "RouteModel", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -45,13 +46,31 @@ public class RouteModelsController : AdminBaseController
     {
         var updated = await _service.UpdateAsync(id, routeModel);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Route model not found"));
+        await LogAdminAuditAsync("update", "RouteModel", id.ToString(), $"Name={updated.Name}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
     [HttpGet("batch-test")]
-    public async Task<IActionResult> BatchTest()
+    public async Task<IActionResult> BatchTest([FromQuery] int[] ids)
     {
-        return Ok(ApiResponse<object>.Success(new { test = true }));
+        if (ids == null || ids.Length == 0) return Ok(ApiResponse<object>.Success(new { results = Array.Empty<object>() }));
+        var results = new List<object>();
+        foreach (var id in ids)
+        {
+            var rm = await _service.GetByIdAsync(id);
+            results.Add(new
+            {
+                id,
+                exists = rm != null,
+                name = rm?.Name,
+                mode = rm?.Mode.ToString(),
+                isEnabled = rm?.IsEnabled ?? false,
+                ruleCount = rm?.Rules?.Count ?? 0,
+                hasTarget = rm?.TargetModelId.HasValue ?? false,
+                hasFallback = rm?.FallbackModelId.HasValue ?? false
+            });
+        }
+        return Ok(ApiResponse<object>.Success(new { results }));
     }
 
     public record BatchIdsRequest(int[] Ids);
@@ -60,7 +79,16 @@ public class RouteModelsController : AdminBaseController
     public async Task<IActionResult> BatchDelete([FromBody] BatchIdsRequest request)
     {
         var ids = request.Ids ?? Array.Empty<int>();
-        return Ok(ApiResponse<object>.Success(new { ids = ids.Length }));
+        var deleted = 0;
+        foreach (var id in ids.Distinct())
+        {
+            if (await _service.DeleteAsync(id))
+            {
+                deleted++;
+                await LogAdminAuditAsync("batch_delete", "RouteModel", id.ToString());
+            }
+        }
+        return Ok(ApiResponse<object>.Success(new { ids = deleted }));
     }
 
     [HttpDelete("batch/delete")]
@@ -75,6 +103,7 @@ public class RouteModelsController : AdminBaseController
         if (!int.TryParse(id, out var modelId)) return NotFound(ApiResponse.Error(40401, "Route model not found"));
         var deleted = await _service.DeleteAsync(modelId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Route model not found"));
+        await LogAdminAuditAsync("delete", "RouteModel", modelId.ToString());
         return Ok(ApiResponse.Success());
     }
 
@@ -91,6 +120,7 @@ public class RouteModelsController : AdminBaseController
                 if (rm == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 rm.IsEnabled = true;
                 await _service.UpdateAsync(id, rm);
+                await LogAdminAuditAsync("batch_enable", "RouteModel", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)
@@ -114,6 +144,7 @@ public class RouteModelsController : AdminBaseController
                 if (rm == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 rm.IsEnabled = false;
                 await _service.UpdateAsync(id, rm);
+                await LogAdminAuditAsync("batch_disable", "RouteModel", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)
@@ -128,6 +159,7 @@ public class RouteModelsController : AdminBaseController
     public async Task<IActionResult> AddRule(int id, [FromBody] RouteRule rule)
     {
         var created = await _service.AddRuleAsync(id, rule);
+        await LogAdminAuditAsync("add_rule", "RouteRule", created.Id.ToString(), $"RouteModelId={id}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -136,6 +168,7 @@ public class RouteModelsController : AdminBaseController
     {
         var deleted = await _service.DeleteRuleAsync(routeModelId, ruleId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Rule not found"));
+        await LogAdminAuditAsync("delete_rule", "RouteRule", ruleId.ToString(), $"RouteModelId={routeModelId}");
         return Ok(ApiResponse.Success());
     }
 
@@ -146,6 +179,7 @@ public class RouteModelsController : AdminBaseController
     {
         var updated = await _service.UpdateShadowTargetAsync(id, request.TargetModelId);
         if (updated == null) return BadRequest(ApiResponse.Error(40001, "Route model not found or not in shadow mode"));
+        await LogAdminAuditAsync("update_shadow_target", "RouteModel", id.ToString(), $"TargetModelId={request.TargetModelId}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 }

@@ -39,7 +39,7 @@ public class RateLimiterTests : IDisposable
     public async Task CheckRateLimit_DeniesWhenExceeded()
     {
         for (var i = 0; i < 10; i++)
-            _limiter.RecordRequest(apiKeyId: 2, tokensUsed: 0);
+            await _limiter.RecordRequestAsync(apiKeyId: 2, tokensUsed: 0);
 
         var (allowed, retryAfter) = await _limiter.CheckRateLimitAsync(apiKeyId: 2, rpmLimit: 10, tpmLimit: null);
         Assert.False(allowed);
@@ -56,7 +56,7 @@ public class RateLimiterTests : IDisposable
     [Fact]
     public async Task RecordRequest_IncrementsCounters()
     {
-        _limiter.RecordRequest(apiKeyId: 4, tokensUsed: 100);
+        await _limiter.RecordRequestAsync(apiKeyId: 4, tokensUsed: 100);
         var (allowed, _) = await _limiter.CheckRateLimitAsync(apiKeyId: 4, rpmLimit: 5, tpmLimit: null);
         Assert.True(allowed);
     }
@@ -80,7 +80,7 @@ public class RateLimiterTests : IDisposable
     public async Task CheckRateLimit_DeniesWhenRpmExceeded()
     {
         for (var i = 0; i < 5; i++)
-            _limiter.RecordRequest(apiKeyId: 10, tokensUsed: 0);
+            await _limiter.RecordRequestAsync(apiKeyId: 10, tokensUsed: 0);
 
         var (allowed, retryAfter) = await _limiter.CheckRateLimitAsync(apiKeyId: 10, rpmLimit: 5, tpmLimit: null);
         Assert.False(allowed);
@@ -90,7 +90,7 @@ public class RateLimiterTests : IDisposable
     [Fact]
     public async Task CheckRateLimit_DeniesWhenTpmExceeded()
     {
-        _limiter.RecordRequest(apiKeyId: 11, tokensUsed: 1000);
+        await _limiter.RecordRequestAsync(apiKeyId: 11, tokensUsed: 1000);
 
         var (allowed, retryAfter) = await _limiter.CheckRateLimitAsync(apiKeyId: 11, rpmLimit: null, tpmLimit: 1000, estimatedTokens: 100);
         Assert.False(allowed);
@@ -101,7 +101,7 @@ public class RateLimiterTests : IDisposable
     public async Task CheckRateLimit_MultipleKeys_DoNotInterfere()
     {
         for (var i = 0; i < 5; i++)
-            _limiter.RecordRequest(apiKeyId: 20, tokensUsed: 0);
+            await _limiter.RecordRequestAsync(apiKeyId: 20, tokensUsed: 0);
 
         var (allowed1, _) = await _limiter.CheckRateLimitAsync(apiKeyId: 20, rpmLimit: 5, tpmLimit: null);
         Assert.False(allowed1);

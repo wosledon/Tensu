@@ -24,7 +24,7 @@ export function useConfirmDelete(deleteFn: (id: number) => Promise<void>, onSucc
         },
       });
     },
-    [deleteFn, onSuccess, t]
+    [deleteFn, onSuccess, t, modal, message]
   );
 
   return { handleDelete };

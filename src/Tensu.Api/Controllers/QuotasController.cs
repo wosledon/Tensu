@@ -37,6 +37,7 @@ public class QuotasController : AdminBaseController
     public async Task<IActionResult> Create([FromBody] Quota quota)
     {
         var created = await _service.CreateAsync(quota);
+        await LogAdminAuditAsync("create", "Quota", created.Id.ToString());
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -45,6 +46,7 @@ public class QuotasController : AdminBaseController
     {
         var updated = await _service.UpdateAsync(id, quota);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Quota not found"));
+        await LogAdminAuditAsync("update", "Quota", id.ToString());
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -53,6 +55,7 @@ public class QuotasController : AdminBaseController
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Quota not found"));
+        await LogAdminAuditAsync("delete", "Quota", id.ToString());
         return Ok(ApiResponse.Success());
     }
 }

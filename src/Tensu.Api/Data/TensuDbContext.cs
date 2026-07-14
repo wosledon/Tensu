@@ -22,9 +22,42 @@ public class TensuDbContext : DbContext
     public DbSet<RouteRule> RouteRules => Set<RouteRule>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
     public DbSet<ArchivedRequestLog> ArchivedRequestLogs => Set<ArchivedRequestLog>();
+    public DbSet<DataDeletionRequest> DataDeletionRequests => Set<DataDeletionRequest>();
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<CompressionMapping> CompressionMappings => Set<CompressionMapping>();
     public DbSet<SemanticCacheEntry> SemanticCacheEntries => Set<SemanticCacheEntry>();
+    public DbSet<DailyStat> DailyStats => Set<DailyStat>();
+    public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
+    public DbSet<WebhookNotification> WebhookNotifications => Set<WebhookNotification>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+
+    public override int SaveChanges()
+    {
+        ValidateAuditImmutability();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateAuditImmutability();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ValidateAuditImmutability()
+    {
+        var modifiedEntities = ChangeTracker.Entries()
+            .Where(e => e.Entity is RequestLog or ArchivedRequestLog)
+            .ToList();
+
+        foreach (var entry in modifiedEntities)
+        {
+            if (entry.State == EntityState.Modified)
+                throw new InvalidOperationException("Audit logs are immutable and cannot be modified.");
+            if (entry.State == EntityState.Deleted)
+                throw new InvalidOperationException("Audit logs are immutable and cannot be deleted directly.");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

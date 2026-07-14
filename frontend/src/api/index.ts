@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
 import { getApiErrorMessage } from './errorHandler';
 
 const api = axios.create({
@@ -57,7 +57,7 @@ export const providerApi = {
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/providers/${id}`).then(unwrap),
   batchDelete: (ids: number[]) =>
-    api.delete<ApiResponse<object>>('/providers/batch', { data: ids }).then(unwrap),
+    api.delete<ApiResponse<object>>('/providers/batch', { data: { ids } }).then(unwrap),
   batchEnable: (ids: number[]) =>
     api.post<ApiResponse<object>>('/providers/batch/enable', ids).then(unwrap),
   batchDisable: (ids: number[]) =>
@@ -85,13 +85,13 @@ export const modelApi = {
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/models/${id}`).then(unwrap),
   batchDelete: (ids: number[]) =>
-    api.delete<ApiResponse<object>>('/models/batch', { data: ids }).then(unwrap),
+    api.delete<ApiResponse<object>>('/models/batch', { data: { ids } }).then(unwrap),
   batchEnable: (ids: number[]) =>
     api.post<ApiResponse<object>>('/models/batch/enable', ids).then(unwrap),
   batchDisable: (ids: number[]) =>
     api.post<ApiResponse<object>>('/models/batch/disable', ids).then(unwrap),
   addPricing: (modelId: number, data: Partial<ModelPricing>) =>
-    api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricings`, data).then(unwrap),
+    api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricing`, data).then(unwrap),
   syncFromProvider: (providerId: number) =>
     api.post<ApiResponse<{ added: number; existing: number; total: number }>>(`/models/sync/${providerId}`).then(unwrap),
   allEnabled: () =>
@@ -163,7 +163,7 @@ export const apiKeyApi = {
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/api-keys/${id}`).then(unwrap),
   batchDelete: (ids: number[]) =>
-    api.delete<ApiResponse<object>>('/api-keys/batch', { data: ids }).then(unwrap),
+    api.delete<ApiResponse<object>>('/api-keys/batch', { data: { ids } }).then(unwrap),
   batchRevoke: (ids: number[]) =>
     api.post<ApiResponse<object>>('/api-keys/batch/revoke', ids).then(unwrap),
 };
@@ -181,7 +181,7 @@ export const routeModelApi = {
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/route-models/${id}`).then(unwrap),
   batchDelete: (ids: number[]) =>
-    api.delete<ApiResponse<object>>('/route-models/batch', { data: ids }).then(unwrap),
+    api.delete<ApiResponse<object>>('/route-models/batch', { data: { ids } }).then(unwrap),
   batchEnable: (ids: number[]) =>
     api.post<ApiResponse<object>>('/route-models/batch/enable', ids).then(unwrap),
   batchDisable: (ids: number[]) =>
@@ -202,6 +202,10 @@ export const auditApi = {
     api.get<ApiResponse<RequestLog>>(`/audit/logs/${requestId}`).then(unwrap),
   summary: (from: string, to: string, orgId?: number) =>
     api.get<ApiResponse<Record<string, number>>>('/audit/summary', { params: { from, to, orgId } }).then(unwrap),
+  listArchived: (params: PagedRequest & { modelName?: string; orgId?: number }) =>
+    api.get<ApiResponse<PagedResult<ArchivedRequestLog>>>('/audit/archived', { params }).then(unwrap),
+  getArchived: (requestId: string) =>
+    api.get<ApiResponse<ArchivedRequestLog>>(`/audit/archived/${requestId}`).then(unwrap),
 };
 
 // Analytics
@@ -242,4 +246,70 @@ export const quotaApi = {
     api.put<ApiResponse<Quota>>(`/quotas/${id}`, data).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/quotas/${id}`).then(unwrap),
+};
+
+// Admin Audit
+export const adminAuditApi = {
+  list: (params: PagedRequest & { action?: string; entityType?: string }) =>
+    api.get<ApiResponse<PagedResult<AdminAuditLog>>>('/admin-audit', { params }).then(unwrap),
+};
+
+// Webhooks
+export const webhookApi = {
+  list: (params: PagedRequest) =>
+    api.get<ApiResponse<PagedResult<WebhookNotification>>>('/webhooks', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<WebhookNotification>>(`/webhooks/${id}`).then(unwrap),
+  create: (data: Partial<WebhookNotification>) =>
+    api.post<ApiResponse<WebhookNotification>>('/webhooks', data).then(unwrap),
+  update: (id: number, data: Partial<WebhookNotification>) =>
+    api.put<ApiResponse<WebhookNotification>>(`/webhooks/${id}`, data).then(unwrap),
+  delete: (id: number) =>
+    api.delete<ApiResponse<void>>(`/webhooks/${id}`).then(unwrap),
+};
+
+// OAuth Providers
+export const oauthProviderApi = {
+  list: (params: PagedRequest) =>
+    api.get<ApiResponse<PagedResult<OAuthProvider>>>('/oauth-providers', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<OAuthProvider>>(`/oauth-providers/${id}`).then(unwrap),
+  create: (data: Partial<OAuthProvider>) =>
+    api.post<ApiResponse<OAuthProvider>>('/oauth-providers', data).then(unwrap),
+  update: (id: number, data: Partial<OAuthProvider>) =>
+    api.put<ApiResponse<OAuthProvider>>(`/oauth-providers/${id}`, data).then(unwrap),
+  delete: (id: number) =>
+    api.delete<ApiResponse<void>>(`/oauth-providers/${id}`).then(unwrap),
+};
+
+// Compression
+export const compressionApi = {
+  mappings: (params: { requestId?: string; page?: number; pageSize?: number }) =>
+    api.get<ApiResponse<{ items: any[]; total: number; page: number; pageSize: number }>>('/compression/mappings', { params }).then(unwrap),
+  getMapping: (decompressionKey: string) =>
+    api.get<ApiResponse<any>>(`/compression/mappings/${decompressionKey}`).then(unwrap),
+  restore: (decompressionKey: string) =>
+    api.post<ApiResponse<{ originalBody: string }>>('/compression/restore', { decompressionKey }).then(unwrap),
+  deleteMapping: (decompressionKey: string) =>
+    api.delete<ApiResponse<void>>(`/compression/mappings/${decompressionKey}`).then(unwrap),
+};
+
+// Webhook Deliveries
+export const webhookDeliveryApi = {
+  list: (params: PagedRequest & { webhookId?: number; success?: boolean }) =>
+    api.get<ApiResponse<PagedResult<WebhookDelivery>>>('/webhook-deliveries', { params }).then(unwrap),
+};
+
+// Alert Rules
+export const alertRuleApi = {
+  list: (params: PagedRequest) =>
+    api.get<ApiResponse<PagedResult<AlertRule>>>('/alert-rules', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<AlertRule>>(`/alert-rules/${id}`).then(unwrap),
+  create: (data: Partial<AlertRule>) =>
+    api.post<ApiResponse<AlertRule>>('/alert-rules', data).then(unwrap),
+  update: (id: number, data: Partial<AlertRule>) =>
+    api.put<ApiResponse<AlertRule>>(`/alert-rules/${id}`, data).then(unwrap),
+  delete: (id: number) =>
+    api.delete<ApiResponse<void>>(`/alert-rules/${id}`).then(unwrap),
 };

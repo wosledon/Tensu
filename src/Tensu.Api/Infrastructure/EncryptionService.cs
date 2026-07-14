@@ -6,15 +6,11 @@ namespace Tensu.Api.Infrastructure;
 public class EncryptionService
 {
     private readonly byte[] _key;
-    private readonly byte[] _iv;
 
     public EncryptionService(IConfiguration configuration)
     {
-        var keyString = configuration["Encryption:Key"] ?? "TensuDefaultEncryptionKey32Bytes!"; // 32 bytes for AES-256
-        var ivString = configuration["Encryption:IV"] ?? "TensuDefaultIV16B"; // 16 bytes for AES
-
+        var keyString = configuration["Encryption:Key"] ?? "TensuDefaultEncryptionKey32Bytes!";
         _key = Encoding.UTF8.GetBytes(keyString.PadRight(32)[..32]);
-        _iv = Encoding.UTF8.GetBytes(ivString.PadRight(16)[..16]);
     }
 
     public string Encrypt(string plainText)
@@ -23,11 +19,12 @@ public class EncryptionService
 
         using var aes = Aes.Create();
         aes.Key = _key;
-        aes.IV = _iv;
+        aes.GenerateIV();
 
         var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
         using var ms = new MemoryStream();
-        using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
+        ms.Write(aes.IV, 0, aes.IV.Length);
+        using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
         using (var writer = new StreamWriter(cs))
         {
             writer.Write(plainText);
@@ -39,12 +36,17 @@ public class EncryptionService
     {
         if (string.IsNullOrEmpty(cipherText)) return cipherText;
 
+        var fullBuffer = Convert.FromBase64String(cipherText);
+
         using var aes = Aes.Create();
         aes.Key = _key;
-        aes.IV = _iv;
+
+        var iv = new byte[16];
+        Array.Copy(fullBuffer, 0, iv, 0, 16);
+        aes.IV = iv;
 
         var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        using var ms = new MemoryStream(Convert.FromBase64String(cipherText));
+        using var ms = new MemoryStream(fullBuffer, 16, fullBuffer.Length - 16);
         using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
         using var reader = new StreamReader(cs);
         return reader.ReadToEnd();

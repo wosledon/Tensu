@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Tensu.Api.Data;
@@ -7,15 +8,10 @@ using Tensu.Core.Enums;
 
 namespace Tensu.Api.Services;
 
-/// <summary>
-/// Service that automatically rotates API keys and provider keys based on usage patterns,
-/// error rates, and time-based policies.
-/// </summary>
 public class KeyRotationService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<KeyRotationService> _logger;
-    private readonly TimeSpan _interval = TimeSpan.FromHours(24);
 
     public KeyRotationService(
         IServiceScopeFactory scopeFactory,
@@ -25,60 +21,13 @@ public class KeyRotationService
         _logger = logger;
     }
 
-    public async Task RunAsync(CancellationToken ct)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
-        var encryption = scope.ServiceProvider.GetRequiredService<EncryptionService>();
-
-        // Rotate platform API keys with high error rates or approaching expiration
-        var apiKeys = await db.ApiKeys
-            .Where(k => k.Status == KeyStatus.Active && k.ExpiresAt.HasValue)
-            .ToListAsync(ct);
-
-        foreach (var apiKey in apiKeys)
-        {
-            var daysUntilExpiry = (apiKey.ExpiresAt.Value - DateTime.UtcNow).TotalDays;
-            if (daysUntilExpiry <= 7)
-            {
-                _logger.LogInformation("API key {KeyId} ({Name}) expires in {Days} days; consider rotation",
-                    apiKey.Id, apiKey.Name, daysUntilExpiry);
-            }
-        }
-
-        // Rotate provider keys that have been inactive or degraded for extended periods
-        var providerKeys = await db.ProviderKeys
-            .Include(k => k.Provider)
-            .Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired)
-            .ToListAsync(ct);
-
-        foreach (var key in providerKeys)
-        {
-            if (key.LastHealthCheckAt.HasValue &&
-                (DateTime.UtcNow - key.LastHealthCheckAt.Value).TotalHours > 72)
-            {
-                _logger.LogInformation("Provider key {KeyId} for provider {Provider} has not been health checked in over 72 hours; consider rotation",
-                    key.Id, key.Provider.Name);
-            }
-        }
-
-        await db.SaveChangesAsync(ct);
-    }
-
-    /// <summary>
-    /// Generate a new key value for rotation.
-    /// </summary>
     public string GenerateNewKey()
     {
-        return Convert.ToBase64String(Guid.NewGuid().ToByteArray())
-            .Replace("+", "")
-            .Replace("/", "")
-            .Replace("=", "")[..32];
+        var bytes = new byte[32];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes)[..32];
     }
 
-    /// <summary>
-    /// Rotate a provider key: create a new key, mark old key as expired after grace period.
-    /// </summary>
     public async Task<ProviderKey> RotateProviderKeyAsync(int providerId, int keyId)
     {
         using var scope = _scopeFactory.CreateScope();
@@ -113,5 +62,77 @@ public class KeyRotationService
             keyId, providerId, newKey.Id);
 
         return newKey;
+    }
+}
+
+public class KeyRotationBackgroundService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<KeyRotationBackgroundService> _logger;
+    private readonly TimeSpan _interval = TimeSpan.FromHours(24);
+
+    public KeyRotationBackgroundService(IServiceScopeFactory scopeFactory, ILogger<KeyRotationBackgroundService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+                var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+                var rotation = scope.ServiceProvider.GetRequiredService<KeyRotationService>();
+
+                var enabled = await settings.GetAsync("keyRotation.enabled");
+                if (!string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    await Task.Delay(_interval, stoppingToken);
+                    continue;
+                }
+
+                var warningDaysStr = await settings.GetAsync("keyRotation.expiryWarningDays");
+                int.TryParse(warningDaysStr, out var warningDays);
+                if (warningDays <= 0) warningDays = 7;
+
+                var expiringKeys = await db.ApiKeys
+                    .Where(k => k.Status == KeyStatus.Active && k.ExpiresAt.HasValue
+                        && k.ExpiresAt.Value <= DateTime.UtcNow.AddDays(warningDays))
+                    .ToListAsync(stoppingToken);
+
+                foreach (var key in expiringKeys)
+                {
+                    _logger.LogWarning("API key {KeyId} ({Name}) expires in {Days} days; auto-rotation recommended",
+                        key.Id, key.Name, (key.ExpiresAt.Value - DateTime.UtcNow).TotalDays);
+                }
+
+                var staleProviderKeys = await db.ProviderKeys
+                    .Include(k => k.Provider)
+                    .Where(k => k.Status != KeyStatus.Disabled && k.Status != KeyStatus.Expired)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var key in staleProviderKeys)
+                {
+                    if (key.LastHealthCheckAt.HasValue &&
+                        (DateTime.UtcNow - key.LastHealthCheckAt.Value).TotalHours > 72)
+                    {
+                        _logger.LogWarning("Provider key {KeyId} for {Provider} not health checked in 72h; consider rotation",
+                            key.Id, key.Provider.Name);
+                    }
+                }
+
+                await db.SaveChangesAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Key rotation background check failed");
+            }
+
+            await Task.Delay(_interval, stoppingToken);
+        }
     }
 }

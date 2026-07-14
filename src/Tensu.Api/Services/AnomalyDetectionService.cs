@@ -20,12 +20,14 @@ public class AnomalyDetectionService
     private readonly TensuDbContext _db;
     private readonly SettingsService _settings;
     private readonly AuditChannel? _auditChannel;
+    private readonly NotificationService? _notificationService;
 
-    public AnomalyDetectionService(TensuDbContext db, SettingsService settings, AuditChannel? auditChannel = null)
+    public AnomalyDetectionService(TensuDbContext db, SettingsService settings, AuditChannel? auditChannel = null, NotificationService? notificationService = null)
     {
         _db = db;
         _settings = settings;
         _auditChannel = auditChannel;
+        _notificationService = notificationService;
     }
 
     public async Task<List<AnomalyResult>> DetectAsync(DateTime from, DateTime to, int? orgId = null)
@@ -49,6 +51,11 @@ public class AnomalyDetectionService
         anomalies = anomalies.OrderByDescending(a => a.Severity).ThenBy(a => a.DetectedAt).ToList();
 
         await WriteHighSeverityAuditsAsync(anomalies, orgId);
+
+        if (_notificationService != null && anomalies.Any(a => a.Severity is "High" or "Critical"))
+        {
+            await _notificationService.NotifyAsync("anomaly.detected", new { anomalies = anomalies.Where(a => a.Severity is "High" or "Critical"), detectedAt = DateTime.UtcNow });
+        }
 
         return anomalies;
     }

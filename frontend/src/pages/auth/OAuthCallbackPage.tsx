@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Spin, App } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
+import axios from 'axios';
 
 export default function OAuthCallbackPage() {
   const [searchParams] = useSearchParams();
@@ -12,7 +13,7 @@ export default function OAuthCallbackPage() {
   const { message } = App.useApp();
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const code = searchParams.get('code');
     const error = searchParams.get('error');
 
     if (error) {
@@ -21,8 +22,14 @@ export default function OAuthCallbackPage() {
       return;
     }
 
-    if (token) {
-      login(token)
+    if (code) {
+      axios.post('/api/admin/auth/oauth/exchange', { code })
+        .then(res => {
+          if (res.data.code === 0 && res.data.data?.token) {
+            return login(res.data.data.token);
+          }
+          throw new Error(res.data.message || 'Exchange failed');
+        })
         .then(() => {
           message.success(t('common.success'));
           navigate('/', { replace: true });
@@ -34,7 +41,7 @@ export default function OAuthCallbackPage() {
     } else {
       navigate('/login', { replace: true });
     }
-  }, [searchParams, navigate, login, t]);
+  }, [searchParams, navigate, login, t, message]);
 
   return (
     <div style={{

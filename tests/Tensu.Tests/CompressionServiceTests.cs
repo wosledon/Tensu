@@ -48,6 +48,8 @@ public class CompressionServiceTests : IDisposable
 
         var result = await _compression.CompressAsync(body);
 
+        Assert.True(result.Applied);
+        Assert.NotEqual(body, result.CompressedBody);
         Assert.True(result.CompressedBody.Length < body.Length);
         Assert.True(result.OriginalTokenEstimate > 0);
         Assert.True(result.CompressedTokenEstimate <= result.OriginalTokenEstimate);

@@ -36,6 +36,7 @@ public class OAuthProvidersController : AdminBaseController
     public async Task<IActionResult> Create([FromBody] SaveOAuthProviderRequest request)
     {
         var created = await _service.CreateAsync(request);
+        await LogAdminAuditAsync("create", "OAuthProvider", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -44,6 +45,7 @@ public class OAuthProvidersController : AdminBaseController
     {
         var updated = await _service.UpdateAsync(id, request);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "OAuth provider not found"));
+        await LogAdminAuditAsync("update", "OAuthProvider", id.ToString(), $"Name={updated.Name}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -52,6 +54,7 @@ public class OAuthProvidersController : AdminBaseController
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "OAuth provider not found"));
+        await LogAdminAuditAsync("delete", "OAuthProvider", id.ToString());
         return Ok(ApiResponse.Success());
     }
 }

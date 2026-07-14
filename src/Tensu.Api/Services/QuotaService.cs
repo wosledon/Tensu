@@ -44,8 +44,8 @@ public class QuotaService : BaseService
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(q => q.Organization.Name.Contains(request.Keyword));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items, total, request);
     }
 
@@ -96,34 +96,40 @@ public class QuotaService : BaseService
     /// Checks whether the organization is within its daily and monthly token quota.
     /// Returns (allowed, retryAfterSeconds).
     /// </summary>
-    public async Task<(bool allowed, int retryAfterSeconds)> CheckOrgQuotaAsync(int orgId, int estimatedTokens)
+    public async Task<(bool allowed, int retryAfterSeconds)> CheckOrgQuotaAsync(int orgId, int estimatedTokens, int? apiKeyId = null)
     {
         var quota = await GetOrgQuotaAsync(orgId);
-        if (quota == null) return (true, 0);
+        var keyQuota = apiKeyId.HasValue ? await GetApiKeyQuotaAsync(apiKeyId.Value) : null;
+        var effectiveQuota = keyQuota ?? quota;
+        if (effectiveQuota == null) return (true, 0);
 
         var today = DateTime.UtcNow.Date;
         var thisMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        if (quota.DailyTokenLimit.HasValue && quota.DailyTokenLimit.Value > 0)
+        if (effectiveQuota.DailyTokenLimit.HasValue && effectiveQuota.DailyTokenLimit.Value > 0)
         {
-            var dayScope = GetOrgScope(orgId, "day", today.ToString("yyyy-MM-dd"));
-            var used = await GetCounterValueAsync(dayScope);
-            if (used + estimatedTokens > quota.DailyTokenLimit.Value)
+            var scope = apiKeyId.HasValue
+                ? GetKeyScope(apiKeyId.Value, "day", today.ToString("yyyy-MM-dd"))
+                : GetOrgScope(orgId, "day", today.ToString("yyyy-MM-dd"));
+            var used = await GetCounterValueAsync(scope);
+            if (used + estimatedTokens > effectiveQuota.DailyTokenLimit.Value)
             {
                 var retryAfter = (int)(today.AddDays(1) - DateTime.UtcNow).TotalSeconds;
-                _logger.LogWarning("Org {OrgId} daily token quota exceeded: {Used}+{Estimated}/{Limit}", orgId, used, estimatedTokens, quota.DailyTokenLimit.Value);
+                _logger.LogWarning("Quota exceeded for {Scope}: {Used}+{Estimated}/{Limit}", scope, used, estimatedTokens, effectiveQuota.DailyTokenLimit.Value);
                 return (false, retryAfter);
             }
         }
 
-        if (quota.MonthlyTokenLimit.HasValue && quota.MonthlyTokenLimit.Value > 0)
+        if (effectiveQuota.MonthlyTokenLimit.HasValue && effectiveQuota.MonthlyTokenLimit.Value > 0)
         {
-            var monthScope = GetOrgScope(orgId, "month", thisMonth.ToString("yyyy-MM"));
-            var used = await GetCounterValueAsync(monthScope);
-            if (used + estimatedTokens > quota.MonthlyTokenLimit.Value)
+            var scope = apiKeyId.HasValue
+                ? GetKeyScope(apiKeyId.Value, "month", thisMonth.ToString("yyyy-MM"))
+                : GetOrgScope(orgId, "month", thisMonth.ToString("yyyy-MM"));
+            var used = await GetCounterValueAsync(scope);
+            if (used + estimatedTokens > effectiveQuota.MonthlyTokenLimit.Value)
             {
                 var retryAfter = (int)(thisMonth.AddMonths(1) - DateTime.UtcNow).TotalSeconds + 1;
-                _logger.LogWarning("Org {OrgId} monthly token quota exceeded: {Used}+{Estimated}/{Limit}", orgId, used, estimatedTokens, quota.MonthlyTokenLimit.Value);
+                _logger.LogWarning("Quota exceeded for {Scope}: {Used}+{Estimated}/{Limit}", scope, used, estimatedTokens, effectiveQuota.MonthlyTokenLimit.Value);
                 return (false, retryAfter);
             }
         }
@@ -134,17 +140,25 @@ public class QuotaService : BaseService
     /// <summary>
     /// Records organization token usage for the current day and month.
     /// </summary>
-    public async Task RecordOrgUsageAsync(int orgId, int tokens)
+    public async Task RecordOrgUsageAsync(int orgId, int tokens, int? apiKeyId = null)
     {
         if (tokens <= 0) return;
 
         var today = DateTime.UtcNow.Date;
-        var dayScope = GetOrgScope(orgId, "day", today.ToString("yyyy-MM-dd"));
-        await _rateLimiter.IncrementAsync(dayScope, tokens);
-
         var thisMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var monthScope = GetOrgScope(orgId, "month", thisMonth.ToString("yyyy-MM"));
-        await _rateLimiter.IncrementAsync(monthScope, tokens);
+
+        var dayOrgScope = GetOrgScope(orgId, "day", today.ToString("yyyy-MM-dd"));
+        await _rateLimiter.IncrementAsync(dayOrgScope, tokens);
+        var monthOrgScope = GetOrgScope(orgId, "month", thisMonth.ToString("yyyy-MM"));
+        await _rateLimiter.IncrementAsync(monthOrgScope, tokens);
+
+        if (apiKeyId.HasValue)
+        {
+            var dayKeyScope = GetKeyScope(apiKeyId.Value, "day", today.ToString("yyyy-MM-dd"));
+            await _rateLimiter.IncrementAsync(dayKeyScope, tokens);
+            var monthKeyScope = GetKeyScope(apiKeyId.Value, "month", thisMonth.ToString("yyyy-MM"));
+            await _rateLimiter.IncrementAsync(monthKeyScope, tokens);
+        }
     }
 
     /// <summary>
@@ -176,6 +190,14 @@ public class QuotaService : BaseService
             .FirstOrDefaultAsync();
     }
 
+    private async Task<Quota?> GetApiKeyQuotaAsync(int apiKeyId)
+    {
+        return await _db.Quotas
+            .Where(q => q.ApiKeyId == apiKeyId)
+            .OrderByDescending(q => q.Id)
+            .FirstOrDefaultAsync();
+    }
+
     private async Task<long> GetCounterValueAsync(string scope)
     {
         return await _db.RateLimitCounters
@@ -185,4 +207,7 @@ public class QuotaService : BaseService
 
     private static string GetOrgScope(int orgId, string bucketType, string bucketValue) =>
         $"org:{orgId}:{bucketType}:{bucketValue}";
+
+    private static string GetKeyScope(int apiKeyId, string bucketType, string bucketValue) =>
+        $"key:{apiKeyId}:{bucketType}:{bucketValue}";
 }

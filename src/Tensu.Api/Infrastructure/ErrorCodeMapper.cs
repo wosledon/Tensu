@@ -25,8 +25,23 @@ public static class ErrorCodeMapper
             return PlatformErrorCodes.UpstreamConflict;
         if (statusCode == 429)
             return PlatformErrorCodes.UpstreamRateLimited;
+        if (statusCode == 502)
+            return PlatformErrorCodes.UpstreamBadGateway;
         if (statusCode >= 500)
             return PlatformErrorCodes.UpstreamServerError;
+
+        return PlatformErrorCodes.UnknownError;
+    }
+
+    /// <summary>
+    /// Map an upstream exception type to a platform error code.
+    /// </summary>
+    public static string Map(Exception exception)
+    {
+        if (exception is TimeoutException or TaskCanceledException)
+            return PlatformErrorCodes.UpstreamTimeout;
+        if (exception is HttpRequestException)
+            return PlatformErrorCodes.UpstreamConnectionError;
 
         return PlatformErrorCodes.UnknownError;
     }

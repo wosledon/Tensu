@@ -17,6 +17,117 @@ namespace Tensu.Api.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("Tensu.Core.Entities.AdminAuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("details");
+
+                    b.Property<string>("EntityId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ip_address");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("timestamp");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_agent");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Action");
+
+                    b.HasIndex("Timestamp");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("admin_audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("Tensu.Core.Entities.AlertRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Severity")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("severity");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WebhookIds")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_ids");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("alert_rules", (string)null);
+                });
+
             modelBuilder.Entity("Tensu.Core.Entities.ApiKey", b =>
                 {
                     b.Property<int>("Id")
@@ -287,6 +398,182 @@ namespace Tensu.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("compression_mappings", (string)null);
+                });
+
+            modelBuilder.Entity("Tensu.Core.Entities.DailyStat", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("AvgLatencyMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("avg_latency_ms");
+
+                    b.Property<double?>("AvgOutputTokensPerSecond")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("REAL")
+                        .HasColumnName("avg_output_tokens_per_second");
+
+                    b.Property<long?>("AvgTtftMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("avg_ttft_ms");
+
+                    b.Property<int>("CacheHits")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cache_hits");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("date");
+
+                    b.Property<int>("FailedRequests")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("failed_requests");
+
+                    b.Property<string>("ModelName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<int?>("OrganizationId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("organization_id");
+
+                    b.Property<long?>("P50LatencyMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("p50_latency_ms");
+
+                    b.Property<long?>("P95LatencyMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("p95_latency_ms");
+
+                    b.Property<long?>("P99LatencyMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("p99_latency_ms");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_name");
+
+                    b.Property<int>("RateLimitedRequests")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("rate_limited_requests");
+
+                    b.Property<int>("SuccessRequests")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("success_requests");
+
+                    b.Property<decimal>("TotalInputCost")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("total_input_cost");
+
+                    b.Property<long>("TotalInputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_input_tokens");
+
+                    b.Property<long>("TotalInputTokensAfterCompression")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_input_tokens_after_compression");
+
+                    b.Property<decimal>("TotalOutputCost")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("total_output_cost");
+
+                    b.Property<long>("TotalOutputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_output_tokens");
+
+                    b.Property<int>("TotalRequests")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_requests");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("Date", "OrganizationId", "ModelName", "ProviderName")
+                        .IsUnique();
+
+                    b.ToTable("daily_stats", (string)null);
+                });
+
+            modelBuilder.Entity("Tensu.Core.Entities.DataDeletionRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApiKeyId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("api_key_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DeletedArchivedLogs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("deleted_archived_logs");
+
+                    b.Property<int>("DeletedRequestLogs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("deleted_request_logs");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<int?>("OrganizationId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("RequestId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("data_deletion_requests", (string)null);
                 });
 
             modelBuilder.Entity("Tensu.Core.Entities.Model", b =>
@@ -571,6 +858,10 @@ namespace Tensu.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasColumnName("id");
+
+                    b.Property<bool>("CompressionEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("compression_enabled");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT")
@@ -1274,6 +1565,119 @@ namespace Tensu.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("Tensu.Core.Entities.WebhookDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_success");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_attempt_at");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_error_message");
+
+                    b.Property<string>("LastStatusCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_status_code");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<DateTime?>("NextRetryAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_retry_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("WebhookNotificationId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("webhook_notification_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextRetryAt");
+
+                    b.HasIndex("WebhookNotificationId", "IsSuccess");
+
+                    b.ToTable("webhook_deliveries", (string)null);
+                });
+
+            modelBuilder.Entity("Tensu.Core.Entities.WebhookNotification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Events")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("events");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Secret")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("secret");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("webhook_notifications", (string)null);
                 });
 
             modelBuilder.Entity("Tensu.Core.Entities.ApiKey", b =>

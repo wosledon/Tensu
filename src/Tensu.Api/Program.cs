@@ -9,9 +9,22 @@ using Tensu.Core.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// EF Core - SQLite for dev, PostgreSQL for production
-var dbProvider = builder.Configuration.GetValue("Database:Provider", "SQLite");
-if (dbProvider == "PostgreSQL")
+var jwtKey = builder.Configuration["Jwt:Key"];
+var encryptionKey = builder.Configuration["Encryption:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+    Console.WriteLine("[WARNING] Jwt:Key is not configured. Using insecure default. Set Jwt:Key in production.");
+if (string.IsNullOrEmpty(encryptionKey))
+    Console.WriteLine("[WARNING] Encryption:Key is not configured. Using insecure default. Set Encryption:Key in production.");
+
+// EF Core - SQLite for dev, PostgreSQL for production, InMemory for testing
+var isTesting = builder.Environment.EnvironmentName == "Testing";
+var dbProvider = isTesting ? "InMemory" : builder.Configuration.GetValue("Database:Provider", "SQLite");
+if (dbProvider == "InMemory")
+{
+    builder.Services.AddDbContext<TensuDbContext>(options =>
+        options.UseInMemoryDatabase("TensuTestDb"));
+}
+else if (dbProvider == "PostgreSQL")
 {
     builder.Services.AddDbContext<TensuDbContext>(options =>
         options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSQL")));
@@ -23,7 +36,6 @@ else
 }
 
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "TensuDefaultJwtSecretKey32Chars!!";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -35,7 +47,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "Tensu",
             ValidAudience = builder.Configuration["Jwt:Audience"] ?? "Tensu",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+                builder.Configuration["Jwt:Key"] ?? "TensuDefaultJwtSecretKey32Chars!!"))
         };
     });
 builder.Services.AddAuthorization(options =>
@@ -77,10 +90,19 @@ builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<AnomalyDetectionService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<QuotaService>();
-builder.Services.AddHostedService<HealthCheckBackgroundService>();
-builder.Services.AddHostedService<DataRetentionBackgroundService>();
-builder.Services.AddSingleton<KeyRotationService>();
+builder.Services.AddScoped<DataDeletionService>();
+if (!isTesting)
+{
+    builder.Services.AddHostedService<HealthCheckBackgroundService>();
+    builder.Services.AddHostedService<DataRetentionBackgroundService>();
+    builder.Services.AddHostedService<KeyRotationBackgroundService>();
+    builder.Services.AddHostedService<StatsAggregationBackgroundService>();
+}
+builder.Services.AddScoped<KeyRotationService>();
 builder.Services.AddScoped<DesensitizationService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<AdminAuditService>();
+builder.Services.AddScoped<StatsAggregationService>();
 builder.Services.AddHttpClient();
 
 // Controllers
@@ -111,14 +133,17 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
-    try
+    if (builder.Environment.EnvironmentName != "Testing")
     {
-        db.Database.Migrate();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Database migration failed: {ex.Message}");
-        throw;
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Database migration failed: {ex.Message}");
+            throw;
+        }
     }
 
     if (!db.Users.Any())
@@ -146,6 +171,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors();
+app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();

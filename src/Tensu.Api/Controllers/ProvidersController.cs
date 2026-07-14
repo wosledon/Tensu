@@ -40,6 +40,7 @@ public class ProvidersController : AdminBaseController
     public async Task<IActionResult> Create([FromBody] Provider provider)
     {
         var created = await _service.CreateAsync(provider);
+        await LogAdminAuditAsync("create", "Provider", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -48,6 +49,7 @@ public class ProvidersController : AdminBaseController
     {
         var updated = await _service.UpdateAsync(id, provider);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Provider not found"));
+        await LogAdminAuditAsync("update", "Provider", id.ToString(), $"Name={updated.Name}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -58,6 +60,7 @@ public class ProvidersController : AdminBaseController
         {
             var deleted = await _service.DeleteAsync(id);
             if (!deleted) return NotFound(ApiResponse.Error(40401, "Provider not found"));
+            await LogAdminAuditAsync("delete", "Provider", id.ToString());
             return Ok(ApiResponse.Success());
         }
         catch (InvalidOperationException ex)
@@ -86,7 +89,7 @@ public class ProvidersController : AdminBaseController
         };
 
         var created = await _service.AddKeyAsync(id, key);
-        // Don't return the encrypted key value and break object cycles
+        await LogAdminAuditAsync("add_key", "ProviderKey", created.Id.ToString(), $"ProviderId={id}, Name={request.Name}");
         var response = new
         {
             created.Id,
@@ -114,7 +117,7 @@ public class ProvidersController : AdminBaseController
 
         var updated = await _service.UpdateKeyFieldsAsync(providerId, keyId, request.Name, request.Status, request.Weight, request.RateLimitRpm, request.RateLimitTpm);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Key not found"));
-
+        await LogAdminAuditAsync("update_key", "ProviderKey", keyId.ToString(), $"ProviderId={providerId}, Name={request.Name}");
         var response = new
         {
             updated.Id,
@@ -137,6 +140,7 @@ public class ProvidersController : AdminBaseController
     {
         var deleted = await _service.DeleteKeyAsync(providerId, keyId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Key not found"));
+        await LogAdminAuditAsync("delete_key", "ProviderKey", keyId.ToString(), $"ProviderId={providerId}");
         return Ok(ApiResponse.Success());
     }
 
@@ -146,6 +150,7 @@ public class ProvidersController : AdminBaseController
         try
         {
             var newKey = await _keyRotationService.RotateProviderKeyAsync(providerId, keyId);
+            await LogAdminAuditAsync("rotate_key", "ProviderKey", newKey.Id.ToString(), $"ProviderId={providerId}");
             var response = new
             {
                 newKey.Id,
@@ -158,7 +163,7 @@ public class ProvidersController : AdminBaseController
                 newKey.CreatedAt,
                 newKey.UpdatedAt,
                 newKey.LastHealthCheckAt,
-                KeyValue = newKey.KeyValue
+                KeyValue = "***"
             };
             return Ok(ApiResponse<object>.Success(response));
         }
@@ -181,6 +186,7 @@ public class ProvidersController : AdminBaseController
             try
             {
                 var deleted = await _service.DeleteAsync(id);
+                if (deleted) await LogAdminAuditAsync("batch_delete", "Provider", id.ToString());
                 results.Add(new { id, success = deleted });
             }
             catch (Exception ex)
@@ -204,6 +210,7 @@ public class ProvidersController : AdminBaseController
                 if (provider == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 provider.IsEnabled = true;
                 await _service.UpdateAsync(id, provider);
+                await LogAdminAuditAsync("batch_enable", "Provider", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)
@@ -227,6 +234,7 @@ public class ProvidersController : AdminBaseController
                 if (provider == null) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 provider.IsEnabled = false;
                 await _service.UpdateAsync(id, provider);
+                await LogAdminAuditAsync("batch_disable", "Provider", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)

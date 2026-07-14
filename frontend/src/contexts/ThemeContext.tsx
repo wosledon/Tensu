@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useState } from 'react';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
@@ -14,9 +14,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType>({ mode: 'system', isDark: false, setMode: () => {} });
 
-export function useThemeMode() {
-  return useContext(ThemeContext);
-}
+export { ThemeContext };
 
 const lightTokens = {
   colorPrimary: '#007AFF',

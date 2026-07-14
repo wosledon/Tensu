@@ -4,11 +4,12 @@ import {
   DashboardOutlined, ApiOutlined, DeploymentUnitOutlined, BranchesOutlined,
   KeyOutlined, TeamOutlined, UserOutlined, BarChartOutlined, SettingOutlined, ControlOutlined, LineChartOutlined,
   SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  AuditOutlined, NotificationOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useThemeMode } from '../hooks/useThemeMode';
+import { useAuth } from '../hooks/useAuth';
 
 const { Header, Sider, Content } = Layout;
 
@@ -56,6 +57,8 @@ export default function MainLayout() {
       ],
     },
     { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), roles: ['SuperAdmin'] },
+    { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit'), roles: ['SuperAdmin'] },
+    { key: '/webhooks', icon: <NotificationOutlined />, label: t('nav.webhooks'), roles: ['SuperAdmin'] },
   ];
 
   const filterMenuByRole = (items: typeof allMenuItems, role?: string) => {

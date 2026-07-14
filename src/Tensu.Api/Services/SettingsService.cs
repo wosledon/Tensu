@@ -35,6 +35,23 @@ public class SettingsService
         ["anomaly.errorRateThreshold"] = "0.1",
         ["anomaly.rateLimitThreshold"] = "0.05",
         ["anomaly.providerSuccessRateThreshold"] = "0.95",
+        ["desensitization.enabled"] = "true",
+        ["desensitization.maskApiKeys"] = "true",
+        ["desensitization.maskEmails"] = "true",
+        ["desensitization.maskIps"] = "true",
+        ["desensitization.maskTokens"] = "true",
+        ["keyRotation.enabled"] = "true",
+        ["keyRotation.checkIntervalHours"] = "24",
+        ["keyRotation.expiryWarningDays"] = "7",
+        ["retry.maxRetries"] = "2",
+        ["retry.baseDelayMs"] = "500",
+        ["retry.maxDelayMs"] = "5000",
+        ["currency.default"] = "USD",
+        ["currency.rate.USD"] = "1.0",
+        ["currency.rate.CNY"] = "7.2",
+        ["currency.rate.EUR"] = "0.92",
+        ["currency.rate.JPY"] = "150.0",
+        ["currency.rate.GBP"] = "0.79",
     };
 
     public SettingsService(TensuDbContext db)

@@ -108,18 +108,18 @@ export default function ModelsPage() {
     }
   };
 
-  const ensureProviders = async () => {
+  const ensureProviders = useCallback(async () => {
     if (!providers.length) {
       try { setProviders((await providerApi.list({ page: 1, pageSize: 100 })).items); } catch {}
     }
-  };
+  }, [providers]);
 
   const [syncProviderId, setSyncProviderId] = useState<number>();
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     ensureProviders();
-  }, []);
+  }, [ensureProviders]);
 
   const handleSync = async () => {
     if (!syncProviderId) return;

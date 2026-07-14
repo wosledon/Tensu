@@ -37,6 +37,7 @@ public class OrganizationsController : AdminBaseController
     public async Task<IActionResult> Create([FromBody] Organization org, [FromQuery] int? parentId)
     {
         var created = await _service.CreateAsync(org, parentId);
+        await LogAdminAuditAsync("create", "Organization", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -45,6 +46,7 @@ public class OrganizationsController : AdminBaseController
     {
         var updated = await _service.UpdateAsync(id, org);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Organization not found"));
+        await LogAdminAuditAsync("update", "Organization", id.ToString(), $"Name={updated.Name}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -55,6 +57,7 @@ public class OrganizationsController : AdminBaseController
         {
             var deleted = await _service.DeleteAsync(id);
             if (!deleted) return NotFound(ApiResponse.Error(40401, "Organization not found"));
+            await LogAdminAuditAsync("delete", "Organization", id.ToString());
             return Ok(ApiResponse.Success());
         }
         catch (InvalidOperationException ex)

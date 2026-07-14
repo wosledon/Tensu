@@ -68,7 +68,9 @@ export default function ProvidersPage() {
       await providerApi.update(record.id, { isEnabled: !record.isEnabled });
       message.success(t('common.success'));
       fetchData();
-    } catch {}
+    } catch (err: any) {
+      message.error(err?.message || t('common.error'));
+    }
   };
 
   const handleAddKey = async () => {
@@ -105,8 +107,10 @@ export default function ProvidersPage() {
       await providerApi.deleteKey(drawerProvider.id, keyId);
       message.success(t('common.success'));
       fetchData();
-      setDrawerProvider({ ...drawerProvider, keys: (drawerProvider.keys ?? []).filter((k) => k.id !== keyId) });
-    } catch {}
+      setDrawerProvider({ ...drawerProvider, keys: drawerProvider.keys ?? [] });
+    } catch (err: any) {
+      message.error(err?.message || t('common.error'));
+    }
   };
 
   const handleRotateKey = async (key: ProviderKey) => {
@@ -121,7 +125,7 @@ export default function ProvidersPage() {
           const res = await providerApi.rotateKey(drawerProvider.id, key.id);
           message.success(t('provider.rotateSuccess', 'Key rotated successfully'));
           fetchData();
-          setDrawerProvider((prev) => prev ? { ...prev, keys: prev.keys?.map((k) => k.id === res.id ? { ...k, name: res.name, status: 'Active', keyValue: res.keyValue } : k) } : prev);
+          setDrawerProvider((prev) => prev ? { ...prev, keys: prev.keys?.map((k) => k.id === res.id ? { ...k, name: res.name, status: 'Active' } : k) } : prev);
         } catch {
           message.error(t('common.error'));
         }
@@ -289,7 +293,7 @@ export default function ProvidersPage() {
           ) : undefined
         }
         placement="right"
-        size={720}
+        width={720}
         open={!!drawerProvider}
         onClose={() => setDrawerProvider(null)}
       >
@@ -308,7 +312,7 @@ export default function ProvidersPage() {
       </Drawer>
 
       <FormModal title={t('provider.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
-        <Space size={16} style={{ width: '100%' }} orientation="vertical">
+        <Space size={16} style={{ width: '100%' }} direction="vertical">
           <Space size={16} style={{ width: '100%' }} wrap>
             <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
               <Input />

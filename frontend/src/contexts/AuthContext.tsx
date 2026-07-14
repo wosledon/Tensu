@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useState } from 'react';
 import type { CurrentUser } from '../types';
 import { authApi } from '../api';
 
@@ -12,9 +12,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({ user: null, token: null, loading: true, login: async () => {}, logout: () => {} });
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export { AuthContext };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);

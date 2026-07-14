@@ -6,11 +6,24 @@ export type Column = {
   [key: string]: any;
 };
 
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((acc, part) => acc?.[part], obj);
+}
+
+function reactNodeToString(node: React.ReactNode): string {
+  if (node == null) return '';
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (typeof node === 'boolean') return '';
+  if (Array.isArray(node)) return node.map(reactNodeToString).join('');
+  return '';
+}
+
 export function exportTableToCsv(filename: string, columns: Column[], dataSource: readonly any[]) {
   const header = columns
     .filter((col) => col.dataIndex)
     .map((col) => {
-      const title = typeof col.title === 'string' ? col.title : String(col.title ?? col.dataIndex);
+      const title = typeof col.title === 'string' ? col.title : reactNodeToString(col.title) || String(col.dataIndex);
       return `"${title}"`;
     })
     .join(',');
@@ -20,9 +33,10 @@ export function exportTableToCsv(filename: string, columns: Column[], dataSource
       .filter((col) => col.dataIndex != null)
       .map((col) => {
         const key = String(col.dataIndex);
-        const value = row[key];
-        const text = col.render ? col.render(value, row, 0) : value;
-        const stringValue = text == null ? '' : String(text);
+        const value = getNestedValue(row, key);
+        const rendered = col.render ? col.render(value, row, 0) : value;
+        const text = reactNodeToString(rendered);
+        const stringValue = text == null ? '' : text;
         const escaped = stringValue.replace(/"/g, '""');
         return `"${escaped}"`;
       })

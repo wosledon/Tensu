@@ -37,7 +37,9 @@ public class ModelsController : AdminBaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] Model model)
     {
-        var created = await _service.CreateAsync(model);
+        var created = await _service.CreateAsync(model) as Model;
+        if (created == null) return BadRequest(ApiResponse.Error(40001, "Failed to create model"));
+        await LogAdminAuditAsync("create", "Model", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -65,6 +67,7 @@ public class ModelsController : AdminBaseController
             CompressionEnabled = request.CompressionEnabled,
         });
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Model not found"));
+        await LogAdminAuditAsync("update", "Model", id.ToString(), $"Name={request.Name}");
         return Ok(ApiResponse<object>.Success(updated));
     }
 
@@ -73,6 +76,7 @@ public class ModelsController : AdminBaseController
     {
         var deleted = await _service.DeleteAsync(id);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Model not found"));
+        await LogAdminAuditAsync("delete", "Model", id.ToString());
         return Ok(ApiResponse.Success());
     }
 
@@ -82,6 +86,7 @@ public class ModelsController : AdminBaseController
         try
         {
             var result = await _service.SyncModelsFromProviderAsync(providerId);
+            await LogAdminAuditAsync("sync", "Model", providerId.ToString(), $"added={result.Added}, existing={result.Existing}");
             return Ok(ApiResponse<object>.Success(new { added = result.Added, existing = result.Existing, total = result.Total }));
         }
         catch (InvalidOperationException ex)
@@ -102,6 +107,7 @@ public class ModelsController : AdminBaseController
     public async Task<IActionResult> AddPricing(int modelId, [FromBody] ModelPricing pricing)
     {
         var created = await _service.AddPricingAsync(modelId, pricing);
+        await LogAdminAuditAsync("add_pricing", "ModelPricing", created.Id.ToString(), $"ModelId={modelId}");
         return Ok(ApiResponse<object>.Success(created));
     }
 
@@ -116,7 +122,8 @@ public class ModelsController : AdminBaseController
     public async Task<IActionResult> GetCurrentPricing(int id)
     {
         var pricing = await _service.GetCurrentPricingAsync(id);
-        return Ok(ApiResponse<object>.Success(pricing!));
+        if (pricing == null) return NotFound(ApiResponse.Error(40401, "No active pricing found"));
+        return Ok(ApiResponse<object>.Success(pricing));
     }
 
     [HttpGet("all-enabled")]
@@ -139,6 +146,7 @@ public class ModelsController : AdminBaseController
             try
             {
                 var deleted = await _service.DeleteAsync(id);
+                if (deleted) await LogAdminAuditAsync("batch_delete", "Model", id.ToString());
                 results.Add(new { id, success = deleted });
             }
             catch (Exception ex)
@@ -162,6 +170,7 @@ public class ModelsController : AdminBaseController
                 if (modelObj is not Model model) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 model.IsEnabled = true;
                 await _service.UpdateAsync(id, model);
+                await LogAdminAuditAsync("batch_enable", "Model", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)
@@ -185,6 +194,7 @@ public class ModelsController : AdminBaseController
                 if (modelObj is not Model model) { results.Add(new { id, success = false, error = "Not found" }); continue; }
                 model.IsEnabled = false;
                 await _service.UpdateAsync(id, model);
+                await LogAdminAuditAsync("batch_disable", "Model", id.ToString());
                 results.Add(new { id, success = true });
             }
             catch (Exception ex)

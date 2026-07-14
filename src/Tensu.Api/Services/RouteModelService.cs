@@ -26,8 +26,8 @@ public class RouteModelService : BaseService
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(r => r.Name.Contains(request.Keyword));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items, total, request);
     }
 

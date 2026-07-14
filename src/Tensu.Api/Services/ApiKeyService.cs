@@ -28,8 +28,8 @@ public class ApiKeyService : BaseService
         if (!string.IsNullOrEmpty(request.Keyword))
             query = query.Where(k => k.Name.Contains(request.Keyword) || k.KeyPrefix.Contains(request.Keyword));
 
-        query = ApplyPaging(query, request, out var total);
-        var items = await query.ToListAsync();
+        var (pagedQuery, total) = await ApplyPagingAsync(query, request);
+        var items = await pagedQuery.ToListAsync();
         return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
     }
 
