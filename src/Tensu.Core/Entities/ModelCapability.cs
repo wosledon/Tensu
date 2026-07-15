@@ -13,5 +13,5 @@ public class ModelCapability
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public Model Model { get; set; } = null!;
+    public Model? Model { get; set; }
 }

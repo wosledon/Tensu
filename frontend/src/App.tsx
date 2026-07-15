@@ -18,6 +18,7 @@ const ModelMatrixPage = lazy(() => import('./pages/models/ModelMatrixPage'));
 const ModelCapabilitiesPage = lazy(() => import('./pages/models/ModelCapabilitiesPage'));
 const RouteModelsPage = lazy(() => import('./pages/routeModels/RouteModelsPage'));
 const ApiKeysPage = lazy(() => import('./pages/apiKeys/ApiKeysPage'));
+const ApiDocsPage = lazy(() => import('./pages/apiDocs/ApiDocsPage'));
 const OrganizationsPage = lazy(() => import('./pages/organizations/OrganizationsPage'));
 const UsersPage = lazy(() => import('./pages/users/UsersPage'));
 const QuotasPage = lazy(() => import('./pages/quotas/QuotasPage'));
@@ -75,6 +76,7 @@ export default function App() {
                   <Route path="models/capabilities" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><ModelCapabilitiesPage /></Suspense></RequireRole>} />
                   <Route path="route-models" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><RouteModelsPage /></Suspense></RequireRole>} />
                   <Route path="api-keys" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><ApiKeysPage /></Suspense></RequireRole>} />
+                  <Route path="api-docs" element={<RequireRole roles={['SuperAdmin', 'Admin', 'Developer']}><Suspense fallback={<PageLoader />}><ApiDocsPage /></Suspense></RequireRole>} />
                   <Route path="organizations" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><OrganizationsPage /></Suspense></RequireRole>} />
                   <Route path="users" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></RequireRole>} />
                   <Route path="quotas" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><QuotasPage /></Suspense></RequireRole>} />

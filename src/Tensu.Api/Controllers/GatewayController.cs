@@ -85,6 +85,58 @@ public class GatewayController : ControllerBase
     public async Task<IActionResult> Messages()
         => await ProxyRequestAsync("anthropic", "/v1/messages");
 
+    [HttpGet("models")]
+    public async Task<IActionResult> ListModels()
+    {
+        var (apiKey, error) = await GetApiKeyAsync();
+        if (apiKey == null) return error!;
+
+        var models = await _db.Models
+            .AsNoTracking()
+            .Include(m => m.Provider)
+            .Where(m => m.IsEnabled)
+            .ToListAsync();
+
+        var allowedModels = GetAllowedModels(apiKey);
+        var data = models
+            .Where(m => allowedModels == null || allowedModels.Contains($"{m.Provider?.Name}-{m.Name}", StringComparer.OrdinalIgnoreCase))
+            .Select(m => new
+            {
+                id = $"{m.Provider?.Name}-{m.Name}",
+                @object = "model",
+                created = new DateTimeOffset(m.CreatedAt).ToUnixTimeSeconds(),
+                owned_by = m.Provider?.Name ?? "unknown"
+            })
+            .ToList();
+
+        return Ok(new
+        {
+            @object = "list",
+            data
+        });
+    }
+
+    private async Task<(ApiKey? ApiKey, IActionResult? Error)> GetApiKeyAsync()
+    {
+        var authHeader = HttpContext.Request.Headers.Authorization.ToString();
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
+            return (null, Unauthorized(new { error = new { message = "Missing or invalid authorization header", type = "authentication_error" } }));
+
+        var platformKey = authHeader["Bearer ".Length..].Trim();
+        var apiKey = await _apiKeyService.ValidateKeyAsync(platformKey);
+        if (apiKey == null)
+            return (null, Unauthorized(new { error = new { message = "Invalid API key", type = "authentication_error" } }));
+
+        var clientIp = _ipWhitelistService.GetClientIp(HttpContext);
+        if (!_ipWhitelistService.IsAllowed(apiKey.IpWhitelist, clientIp))
+        {
+            await EnqueueIpWhitelistAuditLog(Guid.NewGuid().ToString("N"), apiKey, clientIp);
+            return (null, StatusCode(403, new { error = new { message = "IP not whitelisted", type = "forbidden_error" } }));
+        }
+
+        return (apiKey, null);
+    }
+
     private async Task<IActionResult> ProxyRequestAsync(string protocol, string path)
     {
         var sw = Stopwatch.StartNew();
@@ -92,22 +144,8 @@ public class GatewayController : ControllerBase
         HttpContext.Response.Headers["X-Request-Id"] = requestId;
 
         // ── 1. Authenticate ──
-        var authHeader = HttpContext.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-            return Unauthorized(new { error = new { message = "Missing or invalid authorization header", type = "authentication_error" } });
-
-        var platformKey = authHeader["Bearer ".Length..].Trim();
-        var apiKey = await _apiKeyService.ValidateKeyAsync(platformKey);
-        if (apiKey == null)
-            return Unauthorized(new { error = new { message = "Invalid API key", type = "authentication_error" } });
-
-        // ── IP whitelist check ──
-        var clientIp = _ipWhitelistService.GetClientIp(HttpContext);
-        if (!_ipWhitelistService.IsAllowed(apiKey.IpWhitelist, clientIp))
-        {
-            await EnqueueIpWhitelistAuditLog(requestId, apiKey, clientIp);
-            return StatusCode(403, new { error = new { message = "IP not whitelisted", type = "forbidden_error" } });
-        }
+        var (apiKey, authError) = await GetApiKeyAsync();
+        if (apiKey == null) return authError!;
 
         // ── 2. Rate limit check ──
         var apiKeyRpm = apiKey.RateLimitRpm;
@@ -443,10 +481,13 @@ public class GatewayController : ControllerBase
             return string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(modelName) ? requestedModel : $"{providerName}-{modelName}";
         }
 
-        // Route mode: try LLM-based routing first, then fall back to rule engine
-        if (routeModel.Mode == RouteModelMode.Route && routeModel.RoutingModelId.HasValue)
+        // Route mode: build candidate pool from rule targets + fallback
+        var candidates = await BuildCandidateModelsAsync(routeModel);
+
+        // Try LLM-based routing first, then fall back to rule engine
+        if (routeModel.Mode == RouteModelMode.Route && routeModel.RoutingModelId.HasValue && candidates.Any())
         {
-            var decision = await _routingModelService.RouteAsync(routeModel, requestBody, requestedModel);
+            var decision = await _routingModelService.RouteAsync(routeModel, requestBody, candidates, requestedModel);
             if (decision != null)
             {
                 HttpContext.Response.Headers["X-Routing-Model-Used"] = "true";
@@ -457,7 +498,7 @@ public class GatewayController : ControllerBase
 
         HttpContext.Response.Headers["X-Routing-Model-Used"] = "false";
 
-        // Rule-based fallback
+        // Rule-based fallback: configured rules (algorithmic or legacy) first
         foreach (var rule in routeModel.Rules.Where(r => r.IsEnabled).OrderBy(r => r.Priority))
         {
             if (EvaluateRule(rule, requestBody))
@@ -471,6 +512,14 @@ public class GatewayController : ControllerBase
             }
         }
 
+        // Built-in algorithmic routing: when no configured rule matches, pick from candidates by request characteristics
+        if (candidates.Any())
+        {
+            var algorithmicPick = AlgorithmicRoute(candidates, requestBody);
+            if (algorithmicPick != null)
+                return $"{algorithmicPick.Provider.Name}-{algorithmicPick.Name}";
+        }
+
         if (routeModel.FallbackModelId.HasValue)
         {
             var fallback = await _modelService.GetByIdAsync(routeModel.FallbackModelId.Value);
@@ -481,6 +530,27 @@ public class GatewayController : ControllerBase
         }
 
         return requestedModel;
+    }
+
+    private async Task<List<Model>> BuildCandidateModelsAsync(RouteModel routeModel)
+    {
+        var candidateIds = routeModel.Rules
+            .Where(r => r.IsEnabled)
+            .Select(r => r.TargetModelId)
+            .Distinct()
+            .ToList();
+
+        if (routeModel.FallbackModelId.HasValue && !candidateIds.Contains(routeModel.FallbackModelId.Value))
+            candidateIds.Add(routeModel.FallbackModelId.Value);
+
+        if (!candidateIds.Any()) return new List<Model>();
+
+        var candidates = await _db.Models
+            .Include(m => m.Provider)
+            .Where(m => candidateIds.Contains(m.Id) && m.IsEnabled)
+            .ToListAsync();
+
+        return candidates;
     }
 
     private static string? GetNestedValue(object? source, string path)
@@ -500,18 +570,25 @@ public class GatewayController : ControllerBase
 
     private static bool IsModelAllowed(ApiKey apiKey, string modelName)
     {
-        if (string.IsNullOrEmpty(apiKey.AllowedModels)) return true;
+        var allowed = GetAllowedModels(apiKey);
+        if (allowed == null) return true;
+        return allowed.Contains(modelName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<string>? GetAllowedModels(ApiKey apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey.AllowedModels)) return null;
 
         try
         {
             var allowed = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedModels);
-            if (allowed == null || !allowed.Any()) return true;
-            return allowed.Contains(modelName, StringComparer.OrdinalIgnoreCase);
+            if (allowed == null || !allowed.Any()) return null;
+            return allowed;
         }
         catch (JsonException ex)
         {
             Console.WriteLine($"Malformed AllowedModels JSON for API key {apiKey.Id}: {ex.Message}");
-            return false;
+            return new List<string>();
         }
     }
 
@@ -922,10 +999,118 @@ public class GatewayController : ControllerBase
                     if (condition.RootElement.TryGetProperty("maxTokens", out var maxTokens))
                         return requestBody.Length / 4 <= maxTokens.GetInt32();
                     break;
+                case RouteRuleType.Algorithm:
+                    if (condition.RootElement.TryGetProperty("algorithm", out var algorithm))
+                        return EvaluateAlgorithm(algorithm.GetString() ?? string.Empty, requestBody, condition.RootElement);
+                    break;
             }
         }
         catch { }
         return false;
+    }
+
+    private static bool EvaluateAlgorithm(string algorithm, string requestBody, JsonElement condition)
+    {
+        return algorithm.ToLowerInvariant() switch
+        {
+            "codedetection" => ContainsCode(requestBody),
+            "chinesedetection" => ContainsChinese(requestBody),
+            "contextsize" => condition.TryGetProperty("maxTokens", out var maxTokens)
+                && CompressionService.EstimateTokens(requestBody) <= maxTokens.GetInt32(),
+            "mathdetection" => ContainsMath(requestBody),
+            "translationdetection" => ContainsTranslation(requestBody),
+            _ => false
+        };
+    }
+
+    private static Model? AlgorithmicRoute(List<Model> candidates, string requestBody)
+    {
+        if (candidates.Count == 0) return null;
+
+        var estimatedTokens = CompressionService.EstimateTokens(requestBody);
+        var containsVisionContent = ContainsVisionContent(requestBody);
+        var containsCode = ContainsCode(requestBody);
+        var containsChinese = ContainsChinese(requestBody);
+        var containsMath = ContainsMath(requestBody);
+        var containsTools = ContainsToolUse(requestBody);
+
+        // Vision requests require a vision-capable model
+        if (containsVisionContent)
+        {
+            var vision = candidates.Where(m => m.SupportsVision).OrderByDescending(m => m.InputContextSize).FirstOrDefault();
+            if (vision != null) return vision;
+        }
+
+        // Tool-use requests prefer a model that supports function calling
+        if (containsTools)
+        {
+            var toolUse = candidates.Where(m => m.SupportsToolUse).OrderByDescending(m => m.InputContextSize).FirstOrDefault();
+            if (toolUse != null) return toolUse;
+        }
+
+        // Code / reasoning requests prefer reasoning or thinking models
+        if (containsCode || containsMath)
+        {
+            var reasoning = candidates
+                .Where(m => m.SupportsReasoning || m.SupportsThinking)
+                .OrderByDescending(m => m.InputContextSize)
+                .FirstOrDefault();
+            if (reasoning != null) return reasoning;
+        }
+
+        // Chinese content can benefit from larger context windows; prefer the largest
+        if (containsChinese)
+        {
+            var chinese = candidates.OrderByDescending(m => m.InputContextSize).FirstOrDefault();
+            if (chinese != null) return chinese;
+        }
+
+        // Long context requests need a model with enough input context
+        var maxContext = candidates.Max(m => m.InputContextSize);
+        if (maxContext > 0 && estimatedTokens > maxContext * 0.5)
+        {
+            var longContext = candidates
+                .Where(m => m.InputContextSize >= estimatedTokens)
+                .OrderBy(m => m.InputContextSize)
+                .FirstOrDefault();
+            if (longContext != null) return longContext;
+        }
+
+        // Default: pick the model with the largest context window as a safe general choice
+        return candidates.OrderByDescending(m => m.InputContextSize).FirstOrDefault();
+    }
+
+    private static bool ContainsVisionContent(string requestBody)
+    {
+        return requestBody.Contains("image_url") || requestBody.Contains("data:image/") || requestBody.Contains("base64,");
+    }
+
+    private static bool ContainsToolUse(string requestBody)
+    {
+        return requestBody.Contains("\"tools\"") || requestBody.Contains("\"functions\"");
+    }
+
+    private static bool ContainsCode(string requestBody)
+    {
+        var codeIndicators = new[] { "```", "def ", "function ", "class ", "import ", "#include", "public static", "const ", "let ", "var " };
+        return codeIndicators.Any(indicator => requestBody.Contains(indicator, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsChinese(string requestBody)
+    {
+        return requestBody.Any(c => c >= 0x4E00 && c <= 0x9FFF);
+    }
+
+    private static bool ContainsMath(string requestBody)
+    {
+        var mathIndicators = new[] { "\u003e", "\u003c", "=", "+", "-", "*", "/", "^", "sqrt", "integral", "derivative", "sum", "equation" };
+        return mathIndicators.Any(indicator => requestBody.Contains(indicator, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsTranslation(string requestBody)
+    {
+        var translationIndicators = new[] { "translate", "translation", "translate to", "翻译成", "翻訳" };
+        return translationIndicators.Any(indicator => requestBody.Contains(indicator, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task WriteStreamCacheResponseAsync(

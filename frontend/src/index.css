@@ -3,3 +3,43 @@ html, body, #root {
   padding: 0;
   height: 100%;
 }
+
+.ant-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.ant-table-tbody > tr {
+  transition: background-color 0.15s ease;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background-color: var(--ant-color-bg-text-hover) !important;
+}
+
+.ant-btn-icon-only {
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.ant-menu-item {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ant-card,
+  .ant-table-tbody > tr,
+  .ant-btn-icon-only,
+  .ant-menu-item {
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ant-layout-sider,
+  .ant-layout-header {
+    backdrop-filter: none !important;
+  }
+}

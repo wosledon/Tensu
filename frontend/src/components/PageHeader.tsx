@@ -6,6 +6,7 @@ const { Title } = Typography;
 
 interface PageHeaderProps {
   title: string;
+  icon?: React.ReactNode;
   onCreate?: () => void;
   createLabel?: string;
   onSearch?: (keyword: string) => void;
@@ -13,12 +14,15 @@ interface PageHeaderProps {
   extra?: React.ReactNode;
 }
 
-export default function PageHeader({ title, onCreate, createLabel, onSearch, searchPlaceholder, extra }: PageHeaderProps) {
+export default function PageHeader({ title, icon, onCreate, createLabel, onSearch, searchPlaceholder, extra }: PageHeaderProps) {
   const { t } = useTranslation();
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-      <Title level={4} style={{ margin: 0 }}>{title}</Title>
+      <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {icon && <span style={{ color: 'var(--ant-color-primary)' }}>{icon}</span>}
+        {title}
+      </Title>
       <Space>
         {onSearch && (
           <Input.Search

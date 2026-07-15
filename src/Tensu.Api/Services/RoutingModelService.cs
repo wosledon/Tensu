@@ -35,10 +35,12 @@ public class RoutingModelService
     /// <summary>
     /// Calls the routing model for a given route model and request body.
     /// Returns the recommended model name (Provider-Model or Model) or null if routing fails.
+    /// The LLM is constrained to choose only from the supplied candidate models.
     /// </summary>
-    public async Task<RoutingDecision?> RouteAsync(RouteModel routeModel, string requestBody, string? originalModel = null)
+    public async Task<RoutingDecision?> RouteAsync(RouteModel routeModel, string requestBody, List<Model> candidates, string? originalModel = null)
     {
         if (routeModel.RoutingModelId == null) return null;
+        if (candidates == null || candidates.Count == 0) return null;
 
         var cache = _serviceProvider.GetRequiredService<CacheService>();
         var messagesHash = ComputeMessagesHash(requestBody);
@@ -73,13 +75,13 @@ public class RoutingModelService
         var selectedKey = loadBalancer.SelectKey(provider);
         if (selectedKey == null) return null;
 
-        var routingPrompt = BuildRoutingPrompt(requestBody, originalModel);
+        var routingPrompt = BuildRoutingPrompt(requestBody, candidates, originalModel);
         var routingRequestBody = new
         {
             model = routingModel.Name,
             messages = new[]
             {
-                new { role = "system", content = "You are a routing assistant. Given a user request, recommend the best model. Respond with a JSON object containing only a 'recommended_model' field. The value should be in the format 'Provider-Model' or just 'Model'." },
+                new { role = "system", content = BuildRoutingSystemPrompt(candidates) },
                 new { role = "user", content = routingPrompt }
             },
             response_format = new { type = "json_object" }
@@ -139,6 +141,12 @@ public class RoutingModelService
             if (string.IsNullOrWhiteSpace(recommendation))
                 return null;
 
+            if (!IsValidCandidate(recommendation, candidates))
+            {
+                _logger.LogWarning("Routing model recommended '{Recommendation}' which is not in the candidate set; falling back to rule engine", recommendation);
+                return null;
+            }
+
             var decision = new RoutingDecision
             {
                 RecommendedModel = recommendation.Trim(),
@@ -162,24 +170,57 @@ public class RoutingModelService
         }
     }
 
-    private static string BuildRoutingPrompt(string requestBody, string? originalModel)
+    private static string BuildRoutingSystemPrompt(List<Model> candidates)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("You are a routing assistant. Your job is to pick the single best model from the AVAILABLE_MODELS list below for the incoming user request.");
+        sb.AppendLine("Respond with a JSON object containing only a 'recommended_model' field. The value must be one of the model identifiers listed exactly as shown.");
+        sb.AppendLine();
+        sb.AppendLine("AVAILABLE_MODELS:");
+        foreach (var model in candidates)
+        {
+            var providerName = model.Provider?.Name ?? "unknown";
+            var identifier = $"{providerName}-{model.Name}";
+            sb.AppendLine($"- {identifier}");
+        }
+        sb.AppendLine();
+        sb.AppendLine("Pick the model that best matches the request's requirements (e.g. coding, long context, multilingual, cost, speed). Return only the model identifier.");
+        return sb.ToString();
+    }
+
+    private static string BuildRoutingPrompt(string requestBody, List<Model> candidates, string? originalModel)
     {
         try
         {
             using var doc = JsonDocument.Parse(requestBody);
-            var parts = new List<string>();
+            var sb = new StringBuilder();
             if (!string.IsNullOrEmpty(originalModel))
-                parts.Add($"Original model requested: {originalModel}");
+                sb.AppendLine($"Original model requested: {originalModel}");
 
             if (doc.RootElement.TryGetProperty("messages", out var messages))
-                parts.Add($"Messages: {messages.GetRawText()}");
+                sb.AppendLine($"Messages: {messages.GetRawText()}");
+            else
+                sb.AppendLine($"Request body: {requestBody}");
 
-            return string.Join("\n", parts);
+            return sb.ToString();
         }
         catch
         {
             return requestBody;
         }
+    }
+
+    public static bool IsValidCandidate(string? recommendation, List<Model> candidates)
+    {
+        if (string.IsNullOrWhiteSpace(recommendation)) return false;
+        var normalized = recommendation.Trim();
+        return candidates.Any(m =>
+        {
+            var providerName = m.Provider?.Name ?? string.Empty;
+            var withProvider = string.IsNullOrEmpty(providerName) ? m.Name : $"{providerName}-{m.Name}";
+            return string.Equals(withProvider, normalized, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(m.Name, normalized, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     private static string? ExtractRecommendation(string responseBody)

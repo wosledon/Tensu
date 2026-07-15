@@ -38,6 +38,7 @@
     "models": "Models",
     "routeModels": "Route Models",
     "apiKeys": "API Keys",
+    "apiDocs": "API Docs",
     "organizations": "Organizations",
     "users": "Users",
     "audit": "Audit & Analytics",
@@ -197,6 +198,22 @@
     "revokeConfirm": "Are you sure you want to revoke this key? This cannot be undone.",
     "created": "Key created. Please save it now:",
     "copyKey": "Copy Key"
+  },
+  "apiDocs": {
+    "title": "API Documentation",
+    "subtitle": "Use the standard OpenAI or Anthropic SDK with Tensu",
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "selectKey": "Select an API key",
+    "endpoint": "Endpoint",
+    "model": "Model",
+    "openaiExample": "OpenAI Example",
+    "anthropicExample": "Anthropic Example",
+    "curlExample": "cURL Example",
+    "pythonExample": "Python SDK",
+    "note": "Model identifiers use the format {provider}-{model}.",
+    "availableModels": "Available Models",
+    "noKey": "Create an API key first to see configuration examples."
   },
   "organization": {
     "title": "Organizations",

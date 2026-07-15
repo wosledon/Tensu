@@ -54,6 +54,7 @@ public class RoutingModelServiceTests : IDisposable
     {
         var provider = await CreateProviderAsync();
         var routingModel = await CreateModelAsync(provider, "routing-model");
+        var candidate = await CreateModelAsync(provider, "gpt-4o");
         var routeModel = new RouteModel
         {
             Name = "virtual",
@@ -74,7 +75,8 @@ public class RoutingModelServiceTests : IDisposable
         });
 
         var service = CreateService(responseBody);
-        var decision = await service.RouteAsync(routeModel, """{"messages":[]}""", "virtual");
+        var candidates = new List<Model> { candidate };
+        var decision = await service.RouteAsync(routeModel, """{"messages":[]}""", candidates, "virtual");
 
         Assert.NotNull(decision);
         Assert.Equal("OpenAI-gpt-4o", decision!.RecommendedModel);
@@ -89,6 +91,7 @@ public class RoutingModelServiceTests : IDisposable
     {
         var provider = await CreateProviderAsync();
         var routingModel = await CreateModelAsync(provider, "routing-model");
+        var candidate = await CreateModelAsync(provider, "gpt-4o");
         var routeModel = new RouteModel
         {
             Name = "virtual",
@@ -100,7 +103,8 @@ public class RoutingModelServiceTests : IDisposable
         await _db.SaveChangesAsync();
 
         var service = CreateService(statusCode: HttpStatusCode.InternalServerError);
-        var decision = await service.RouteAsync(routeModel, """{"messages":[]}""", "virtual");
+        var candidates = new List<Model> { candidate };
+        var decision = await service.RouteAsync(routeModel, """{"messages":[]}""", candidates, "virtual");
 
         Assert.Null(decision);
     }
@@ -110,6 +114,7 @@ public class RoutingModelServiceTests : IDisposable
     {
         var provider = await CreateProviderAsync();
         var routingModel = await CreateModelAsync(provider, "routing-model");
+        var candidate = await CreateModelAsync(provider, "gpt-4o");
         var routeModel = new RouteModel
         {
             Name = "virtual",
@@ -133,11 +138,56 @@ public class RoutingModelServiceTests : IDisposable
 
         var handler = new TestHandler();
         var service = CreateService(handler);
-        var result = await service.RouteAsync(routeModel, """{"messages":[]}""", "virtual");
+        var candidates = new List<Model> { candidate };
+        var result = await service.RouteAsync(routeModel, """{"messages":[]}""", candidates, "virtual");
 
         Assert.NotNull(result);
         Assert.Equal("OpenAI-gpt-4o", result!.RecommendedModel);
         Assert.False(handler.WasCalled);
+    }
+
+    [Fact]
+    public async Task RouteAsync_RecommendationNotInCandidateSet_ReturnsNull()
+    {
+        var provider = await CreateProviderAsync();
+        var routingModel = await CreateModelAsync(provider, "routing-model");
+        var candidate = await CreateModelAsync(provider, "gpt-4o");
+        var routeModel = new RouteModel
+        {
+            Name = "virtual",
+            Mode = RouteModelMode.Route,
+            RoutingModelId = routingModel.Id,
+            IsEnabled = true
+        };
+        _db.RouteModels.Add(routeModel);
+        await _db.SaveChangesAsync();
+
+        var responseBody = JsonSerializer.Serialize(new
+        {
+            choices = new[]
+            {
+                new { message = new { content = JsonSerializer.Serialize(new { recommended_model = "OpenAI-unknown-model" }) } }
+            }
+        });
+
+        var service = CreateService(responseBody);
+        var candidates = new List<Model> { candidate };
+        var decision = await service.RouteAsync(routeModel, """{"messages":[]}""", candidates, "virtual");
+
+        Assert.Null(decision);
+    }
+
+    [Fact]
+    public void IsValidCandidate_MatchesProviderModelAndModelName()
+    {
+        var provider = new Provider { Name = "OpenAI" };
+        var model = new Model { Name = "gpt-4o", Provider = provider };
+        var candidates = new List<Model> { model };
+
+        Assert.True(RoutingModelService.IsValidCandidate("OpenAI-gpt-4o", candidates));
+        Assert.True(RoutingModelService.IsValidCandidate("gpt-4o", candidates));
+        Assert.False(RoutingModelService.IsValidCandidate("OpenAI-gpt-4", candidates));
+        Assert.False(RoutingModelService.IsValidCandidate(null, candidates));
     }
 
     private RoutingModelService CreateService(string? responseBody = null, HttpStatusCode statusCode = HttpStatusCode.OK)

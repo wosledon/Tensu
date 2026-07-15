@@ -38,6 +38,7 @@
     "models": "模型",
     "routeModels": "路由模型",
     "apiKeys": "API 密钥",
+    "apiDocs": "API 文档",
     "organizations": "组织与用户",
     "users": "用户管理",
     "audit": "审计与分析",
@@ -197,6 +198,22 @@
     "revokeConfirm": "确定要吊销此密钥吗？吊销后无法恢复。",
     "created": "密钥已创建，请妥善保存：",
     "copyKey": "复制密钥"
+  },
+  "apiDocs": {
+    "title": "API 文档",
+    "subtitle": "使用标准 OpenAI 或 Anthropic SDK 接入 Tensu",
+    "baseUrl": "Base URL",
+    "apiKey": "API 密钥",
+    "selectKey": "选择 API 密钥",
+    "endpoint": "接口地址",
+    "model": "模型",
+    "openaiExample": "OpenAI 示例",
+    "anthropicExample": "Anthropic 示例",
+    "curlExample": "cURL 示例",
+    "pythonExample": "Python SDK",
+    "note": "模型标识格式为 {provider}-{model}。",
+    "availableModels": "可用模型",
+    "noKey": "请先创建 API 密钥以查看配置示例。"
   },
   "organization": {
     "title": "组织管理",

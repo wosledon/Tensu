@@ -1,21 +1,22 @@
-import { Tag } from 'antd';
+import { Tag, theme } from 'antd';
 
 interface StatusDotProps {
   color: 'success' | 'warning' | 'error' | 'default' | 'processing';
   text: string;
 }
 
-const colorMap: Record<string, string> = {
-  success: '#34C759',
-  warning: '#FF9500',
-  error: '#FF3B30',
-  processing: '#AF52DE',
-  default: '#8E8E93',
-};
-
 export default function StatusDot({ color, text }: StatusDotProps) {
+  const { token } = theme.useToken();
+  const colorMap: Record<StatusDotProps['color'], string> = {
+    success: token.colorSuccess,
+    warning: token.colorWarning,
+    error: token.colorError,
+    processing: token.colorPrimary,
+    default: token.colorTextTertiary,
+  };
+
   return (
-    <Tag style={{ borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6, paddingInline: 8 }}>
+    <Tag style={{ borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6, paddingInline: 8, borderColor: 'transparent', background: token.colorFillTertiary }}>
       <span
         style={{
           width: 7, height: 7, borderRadius: '50%',

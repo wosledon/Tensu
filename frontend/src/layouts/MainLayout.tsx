@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Layout, Menu, Dropdown, Space, Button, Avatar } from 'antd';
 import {
   DashboardOutlined, ApiOutlined, DeploymentUnitOutlined, BranchesOutlined,
-  KeyOutlined, TeamOutlined, UserOutlined, BarChartOutlined, SettingOutlined, ControlOutlined, LineChartOutlined,
+  KeyOutlined, CodeOutlined, TeamOutlined, UserOutlined, BarChartOutlined, SettingOutlined, ControlOutlined, LineChartOutlined,
   SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   AuditOutlined, NotificationOutlined,
 } from '@ant-design/icons';
@@ -39,6 +39,7 @@ export default function MainLayout() {
     },
     { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels'), roles: ['SuperAdmin', 'Admin'] },
     { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
+    { key: '/api-docs', icon: <CodeOutlined />, label: t('nav.apiDocs'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
     { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations'), roles: ['SuperAdmin'] },
     { key: '/users', icon: <UserOutlined />, label: t('nav.users'), roles: ['SuperAdmin'] },
     { key: '/quotas', icon: <ControlOutlined />, label: t('quota.title'), roles: ['SuperAdmin'] },
