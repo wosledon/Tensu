@@ -63,8 +63,9 @@ public class RoutingModelService
         }
 
         var db = _serviceProvider.GetRequiredService<TensuDbContext>();
+        if (!routeModel.RoutingModelId.HasValue) return null;
         var routingModel = await db.Models
-            .Include(m => m.Provider).ThenInclude(p => p.Keys)
+            .Include(m => m.Provider!).ThenInclude(p => p.Keys)
             .FirstOrDefaultAsync(m => m.Id == routeModel.RoutingModelId.Value);
 
         if (routingModel == null) return null;
@@ -72,6 +73,7 @@ public class RoutingModelService
         var providerService = _serviceProvider.GetRequiredService<ProviderService>();
         var loadBalancer = _serviceProvider.GetRequiredService<LoadBalancer>();
         var provider = routingModel.Provider;
+        if (provider == null) return null;
         var selectedKey = loadBalancer.SelectKey(provider);
         if (selectedKey == null) return null;
 

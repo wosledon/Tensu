@@ -78,6 +78,7 @@ public class LoadBalancer
         {
             var idx = (startIndex + i) % ordered.Count;
             var model = ordered[idx];
+            if (model.Provider == null) continue;
             var key = keySelector(model.Provider);
             if (key != null)
             {

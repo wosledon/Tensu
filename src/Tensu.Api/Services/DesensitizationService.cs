@@ -117,7 +117,7 @@ public class DesensitizationService
                 return element.EnumerateArray().Select(e => RedactJsonElement(e, sensitiveFields)).ToList();
 
             case JsonValueKind.String:
-                return Desensitize(element.GetString() ?? string.Empty, new Organization { EnableContentLogging = true }) ?? element.GetString();
+                return Desensitize(element.GetString() ?? string.Empty, new Organization { EnableContentLogging = true }) ?? element.GetString() ?? string.Empty;
 
             default:
                 return element.GetRawText();

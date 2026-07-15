@@ -37,8 +37,8 @@ public class StatsAggregationService
                 TotalInputTokensAfterCompression = g.Sum(r => (long)(r.InputTokensAfterCompression ?? r.InputTokens ?? 0)),
                 TotalInputCost = g.Sum(r => r.InputCost ?? 0),
                 TotalOutputCost = g.Sum(r => r.OutputCost ?? 0),
-                AvgLatencyMs = (long?)g.Where(r => r.TotalDurationMs.HasValue).Average(r => (double?)r.TotalDurationMs.Value),
-                AvgTtftMs = (long?)g.Where(r => r.TimeToFirstTokenMs.HasValue).Average(r => (double?)r.TimeToFirstTokenMs.Value),
+                AvgLatencyMs = (long?)g.Where(r => r.TotalDurationMs.HasValue).Average(r => (double?)r.TotalDurationMs!.Value),
+                AvgTtftMs = (long?)g.Where(r => r.TimeToFirstTokenMs.HasValue).Average(r => (double?)r.TimeToFirstTokenMs!.Value),
                 AvgOutputTokensPerSecond = g.Where(r => r.OutputTokensPerSecond.HasValue).Average(r => (double?)r.OutputTokensPerSecond),
             })
             .ToListAsync();

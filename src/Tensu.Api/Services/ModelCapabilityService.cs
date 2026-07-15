@@ -18,8 +18,8 @@ public class ModelCapabilityService : BaseService
     public async Task<PagedResult<ModelCapability>> GetListAsync(PagedRequest request, int? modelId = null, string? dimension = null)
     {
         var query = _db.ModelCapabilities
-            .Include(c => c.Model)
-            .ThenInclude(m => m.Provider)
+            .Include(c => c.Model!)
+            .ThenInclude(m => m!.Provider)
             .AsQueryable();
 
         if (modelId.HasValue)
@@ -39,8 +39,8 @@ public class ModelCapabilityService : BaseService
     public async Task<ModelCapability?> GetByIdAsync(long id)
     {
         return await _db.ModelCapabilities
-            .Include(c => c.Model)
-            .ThenInclude(m => m.Provider)
+            .Include(c => c.Model!)
+            .ThenInclude(m => m!.Provider)
             .FirstOrDefaultAsync(c => c.Id == id);
     }
 

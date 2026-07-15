@@ -107,7 +107,7 @@ public class KeyRotationBackgroundService : BackgroundService
                 foreach (var key in expiringKeys)
                 {
                     _logger.LogWarning("API key {KeyId} ({Name}) expires in {Days} days; auto-rotation recommended",
-                        key.Id, key.Name, (key.ExpiresAt.Value - DateTime.UtcNow).TotalDays);
+                        key.Id, key.Name, (key.ExpiresAt!.Value - DateTime.UtcNow).TotalDays);
                 }
 
                 var staleProviderKeys = await db.ProviderKeys

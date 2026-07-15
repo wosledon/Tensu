@@ -28,9 +28,10 @@ public abstract class AdminBaseController : ControllerBase
 
     protected async Task LogAdminAuditAsync(string action, string entityType, string? entityId = null, string? details = null)
     {
-        var audit = HttpContext?.RequestServices.GetRequiredService<AdminAuditService>();
-        var ipAddress = HttpContext?.Connection.RemoteIpAddress?.ToString();
-        var userAgent = HttpContext?.Request.Headers["User-Agent"].ToString();
+        if (HttpContext == null) return;
+        var audit = HttpContext.RequestServices.GetRequiredService<AdminAuditService>();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
         await audit.LogAsync(CurrentUserId, CurrentUsername, action, entityType, entityId, details, ipAddress, userAgent);
     }
 }

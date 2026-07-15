@@ -249,6 +249,7 @@ public class GatewayController : ControllerBase
             string requestId, ApiKey apiKey, string requestBody, string requestedModel, int estimatedTokens, bool isStream, Stopwatch sw)
         {
             var provider = model.Provider;
+            if (provider == null) return StatusCode(500, new { error = new { message = "Provider not found", type = "server_error" } });
             HttpContext.Response.Headers["X-Upstream-Provider"] = provider.Name;
 
             // ── Concurrency check ──
@@ -521,7 +522,7 @@ public class GatewayController : ControllerBase
         if (candidates.Any())
         {
             var algorithmicPick = AlgorithmicRoute(candidates, requestBody);
-            if (algorithmicPick != null)
+            if (algorithmicPick != null && algorithmicPick.Provider != null)
                 return $"{algorithmicPick.Provider.Name}-{algorithmicPick.Name}";
         }
 
@@ -608,7 +609,7 @@ public class GatewayController : ControllerBase
         if (dashIndex <= 0 || dashIndex >= resolvedModelName.Length - 1)
         {
             return await _db.Models
-                .Include(m => m.Provider).ThenInclude(p => p.Keys)
+                .Include(m => m.Provider!).ThenInclude(p => p.Keys)
                 .Include(m => m.Pricings)
                 .Where(m => m.Name == resolvedModelName && m.IsEnabled)
                 .ToListAsync();
@@ -618,15 +619,15 @@ public class GatewayController : ControllerBase
         var modelName = resolvedModelName[(dashIndex + 1)..];
 
         var exact = await _db.Models
-            .Include(m => m.Provider).ThenInclude(p => p.Keys)
+            .Include(m => m.Provider!).ThenInclude(p => p.Keys)
             .Include(m => m.Pricings)
-            .Where(m => m.Name == modelName && m.Provider.Name == providerName && m.IsEnabled)
+            .Where(m => m.Name == modelName && m.Provider!.Name == providerName && m.IsEnabled)
             .ToListAsync();
 
         if (exact.Any()) return exact;
 
         return await _db.Models
-            .Include(m => m.Provider).ThenInclude(p => p.Keys)
+            .Include(m => m.Provider!).ThenInclude(p => p.Keys)
             .Include(m => m.Pricings)
             .Where(m => m.Name == modelName && m.IsEnabled)
             .ToListAsync();
@@ -1182,9 +1183,9 @@ public class GatewayController : ControllerBase
                 OrganizationId = apiKey.OrganizationId,
                 UserId = apiKey.UserId,
                 ModelName = model.Name,
-                ResolvedModelName = $"{model.Provider.Name}-{model.Name}",
+                ResolvedModelName = $"{model.Provider?.Name ?? "?"}-{model.Name}",
                 ProviderId = model.ProviderId,
-                ProviderName = model.Provider.Name,
+                ProviderName = model.Provider?.Name ?? "?",
                 InputTokens = inputTokens,
                 InputTokensAfterCompression = inputTokensAfterCompression,
                 OutputTokens = outputTokens,
