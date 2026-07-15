@@ -16,11 +16,13 @@ namespace Tensu.Api.Infrastructure;
 public class CompressionService
 {
     private readonly ILogger<CompressionService> _logger;
+    private readonly CompressionChannel _channel;
     private readonly TensuDbContext _db;
 
-    public CompressionService(ILogger<CompressionService> logger, TensuDbContext db)
+    public CompressionService(ILogger<CompressionService> logger, CompressionChannel channel, TensuDbContext db)
     {
         _logger = logger;
+        _channel = channel;
         _db = db;
     }
 
@@ -109,48 +111,15 @@ public class CompressionService
         return mapping.OriginalBody;
     }
 
-    private async Task PersistMappingAsync(string requestBody, string compressedBody, string strategy, string decompressionKey, CancellationToken cancellationToken)
+    private async ValueTask PersistMappingAsync(string requestBody, string compressedBody, string strategy, string decompressionKey, CancellationToken cancellationToken)
     {
-        const int defaultMaxMappingSize = 10000;
-        var maxMappingSizeSetting = await _db.Settings
-            .AsNoTracking()
-            .Where(s => s.Key == "compression.maxMappingSize")
-            .Select(s => s.Value)
-            .FirstOrDefaultAsync(cancellationToken);
-        var maxMappingSize = int.TryParse(maxMappingSizeSetting, out var parsed) ? parsed : defaultMaxMappingSize;
-
-        // For very large bodies we do not store the full original body in the mapping.
-        // The compressed request is still forwarded upstream, and the audit log records
-        // the original token estimate. Full restoration is only supported for small bodies.
-        if (requestBody.Length > maxMappingSize)
+        await _channel.EnqueueAsync(new CompressionMappingEntry
         {
-            _logger.LogInformation(
-                "Request body length {Length} exceeds max mapping size {MaxMappingSize}; storing compressed body only.",
-                requestBody.Length, maxMappingSize);
-        }
-
-        var mapping = await _db.CompressionMappings
-            .FirstOrDefaultAsync(m => m.DecompressionKey == decompressionKey && m.Strategy == strategy, cancellationToken);
-
-        if (mapping != null)
-        {
-            mapping.CompressedBody = compressedBody;
-            mapping.OriginalBody = requestBody.Length <= maxMappingSize ? requestBody : null;
-            mapping.CreatedAt = DateTime.UtcNow;
-        }
-        else
-        {
-            _db.CompressionMappings.Add(new CompressionMapping
-            {
-                DecompressionKey = decompressionKey,
-                Strategy = strategy,
-                CompressedBody = compressedBody,
-                OriginalBody = requestBody.Length <= maxMappingSize ? requestBody : null,
-                CreatedAt = DateTime.UtcNow
-            });
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
+            OriginalBody = requestBody,
+            CompressedBody = compressedBody,
+            Strategy = strategy,
+            DecompressionKey = decompressionKey,
+        }, cancellationToken);
     }
 
     private string MinifyJson(JsonElement element)

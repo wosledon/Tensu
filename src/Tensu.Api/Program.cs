@@ -63,6 +63,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<AuditChannel>();
+builder.Services.AddSingleton<CompressionChannel>();
 builder.Services.AddSingleton<LoadBalancer>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<RateLimiter>();
@@ -72,6 +73,7 @@ builder.Services.AddSingleton<CacheService>();
 builder.Services.AddSingleton<MetricsCollector>();
 builder.Services.AddScoped<IpWhitelistService>();
 builder.Services.AddHostedService<AuditBackgroundService>();
+builder.Services.AddHostedService<CompressionBackgroundService>();
 
 // Business services
 builder.Services.AddScoped<AuthService>();

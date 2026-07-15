@@ -267,13 +267,17 @@ public class GatewayController : ControllerBase
             {
                 // ── Token estimation & compression ──
                 var inputTokens = CompressionService.EstimateTokens(requestBody);
-                var compressionResult = await _compression.CompressAsync(requestBody);
                 var compressionEnabled = await IsCompressionEnabledAsync(model.Id, apiKey.OrganizationId);
-                var compressionApplied = compressionResult.Applied && compressionEnabled;
-                var compressionStrategy = compressionApplied ? compressionResult.Strategy : "none";
-                var inputTokensAfterCompression = compressionApplied ? compressionResult.CompressedTokenEstimate : inputTokens;
-                var bodyToSend = compressionApplied ? compressionResult.CompressedBody : requestBody;
-                var compressionMappingKey = compressionApplied ? compressionResult.DecompressionKey : null;
+                CompressionService.CompressionResult? compressionResult = null;
+                if (compressionEnabled)
+                {
+                    compressionResult = await _compression.CompressAsync(requestBody);
+                }
+                var compressionApplied = compressionResult?.Applied == true;
+                var compressionStrategy = compressionApplied ? compressionResult!.Strategy : "none";
+                var inputTokensAfterCompression = compressionApplied ? compressionResult!.CompressedTokenEstimate : inputTokens;
+                var bodyToSend = compressionApplied ? compressionResult!.CompressedBody : requestBody;
+                var compressionMappingKey = compressionApplied ? compressionResult!.DecompressionKey : null;
 
                 // ── Cache check ──
                 var cacheEnabled = await IsCacheEnabledAsync();
@@ -1003,7 +1007,7 @@ public class GatewayController : ControllerBase
                     break;
                 case RouteRuleType.ContextSize:
                     if (condition.RootElement.TryGetProperty("maxTokens", out var maxTokens))
-                        return requestBody.Length / 4 <= maxTokens.GetInt32();
+                        return CompressionService.EstimateTokens(requestBody) <= maxTokens.GetInt32();
                     break;
                 case RouteRuleType.Algorithm:
                     if (condition.RootElement.TryGetProperty("algorithm", out var algorithm))

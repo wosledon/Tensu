@@ -28,7 +28,7 @@ public class GatewayCostCalculationTests : IDisposable
         var loadBalancer = new LoadBalancer();
         var rateLimiter = new RateLimiter(_db, new Mock<ILogger<RateLimiter>>().Object);
         var retryPolicy = new RetryPolicy(new Mock<ILogger<RetryPolicy>>().Object, loadBalancer);
-        var compression = new CompressionService(new Mock<ILogger<CompressionService>>().Object, _db);
+        var compression = new CompressionService(new Mock<ILogger<CompressionService>>().Object, new CompressionChannel(), _db);
         var cache = new CacheService(new Mock<ILogger<CacheService>>().Object);
         var settingsService = new SettingsService(_db);
         var quotaService = new QuotaService(_db, rateLimiter, new Mock<ILogger<QuotaService>>().Object);

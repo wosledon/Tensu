@@ -20,7 +20,7 @@ public class CompressionServiceTests : IDisposable
         _db.Database.EnsureCreated();
 
         var logger = new Mock<ILogger<CompressionService>>();
-        _compression = new CompressionService(logger.Object, _db);
+        _compression = new CompressionService(logger.Object, new CompressionChannel(), _db);
     }
 
     public void Dispose()
