@@ -16,20 +16,20 @@ export default function ModelMatrixPage() {
   const [providerFilter, setProviderFilter] = useState<number | undefined>();
   const [selectedModel, setSelectedModel] = useState<number | undefined>();
 
-  const fetchMatrix = async (providerId?: number) => {
-    setLoading(true);
+  const fetchMatrix = async (providerId?: number, showLoading?: boolean) => {
+    if (showLoading) setLoading(true);
     try {
       const data = await modelCapabilityApi.matrix(providerId);
       setMatrix(data);
       if (data.models.length > 0) setSelectedModel(data.models[0].modelId);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     providerApi.list({ page: 1, pageSize: 100 }).then((p) => setProviders(p.items));
-    fetchMatrix();
+    fetchMatrix(undefined, true);
   }, []);
 
   useEffect(() => {
@@ -159,10 +159,11 @@ export default function ModelMatrixPage() {
         <Space wrap>
           <Select
             allowClear
+            value={providerFilter}
             placeholder={t('model.provider')}
             style={{ width: 200 }}
             options={providers.map((p) => ({ value: p.id, label: `${p.name} (${p.protocol})` }))}
-            onChange={(v) => setProviderFilter(v)}
+            onChange={(v) => setProviderFilter(v ?? undefined)}
           />
           {providerFilter && (
             <Button onClick={() => setProviderFilter(undefined)}>{t('common.reset')}</Button>
