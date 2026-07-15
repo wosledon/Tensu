@@ -3,7 +3,7 @@ import { Layout, Menu, Dropdown, Space, Button, Avatar } from 'antd';
 import {
   DashboardOutlined, DeploymentUnitOutlined, ApiOutlined, BranchesOutlined, AppstoreOutlined, ThunderboltOutlined, CodeOutlined,
   KeyOutlined, TeamOutlined, UserOutlined, ControlOutlined, BarChartOutlined, AuditOutlined, LineChartOutlined, DollarOutlined, RocketOutlined,
-  CloudOutlined, WarningOutlined, SettingOutlined, NotificationOutlined, GlobalOutlined,
+  CloudOutlined, WarningOutlined, SettingOutlined, NotificationOutlined, GlobalOutlined, RobotOutlined,
   SunOutlined, MoonOutlined, DesktopOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -35,6 +35,7 @@ export default function MainLayout() {
         { key: '/models/matrix', icon: <AppstoreOutlined />, label: t('capability.matrixTitle') },
         { key: '/models/capabilities', icon: <ThunderboltOutlined />, label: t('capability.title') },
         { key: '/route-models', icon: <CodeOutlined />, label: t('nav.routeModels') },
+        { key: '/chat', icon: <RobotOutlined />, label: t('nav.chat') },
       ],
     },
     {
@@ -113,7 +114,7 @@ export default function MainLayout() {
   const selectedPath = location.pathname;
   const getDefaultOpenKeys = (path: string): string[] => {
     const keys: string[] = [];
-    if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models')) keys.push('gateway-group');
+    if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models') || path.startsWith('/chat')) keys.push('gateway-group');
     if (path.startsWith('/audit') || path.startsWith('/analytics') || path.startsWith('/admin-audit') || path.startsWith('/alert-rules')) keys.push('ops-group');
     if (path.startsWith('/api-keys') || path.startsWith('/oauth-providers')) keys.push('access-group');
     if (path.startsWith('/organizations') || path.startsWith('/users') || path.startsWith('/quotas')) keys.push('org-group');

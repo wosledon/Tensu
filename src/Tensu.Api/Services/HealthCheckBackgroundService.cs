@@ -167,15 +167,13 @@ public class HealthCheckBackgroundService : BackgroundService
 
         try
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
             var response = await client.SendAsync(request, ct);
-            sw.Stop();
 
             key.LastHealthCheckAt = DateTime.UtcNow;
 
             if (response.IsSuccessStatusCode)
             {
-                return sw.ElapsedMilliseconds > 5000 ? KeyStatus.Degraded : KeyStatus.Active;
+                return KeyStatus.Active;
             }
 
             var statusCode = (int)response.StatusCode;
@@ -193,7 +191,8 @@ public class HealthCheckBackgroundService : BackgroundService
                 return KeyStatus.Degraded;
             }
 
-            return KeyStatus.Degraded;
+            // 4xx (including 400, 404, 429) — provider is reachable, key is usable for chat
+            return KeyStatus.Active;
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {

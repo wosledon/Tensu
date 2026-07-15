@@ -33,6 +33,7 @@ const AdminAuditPage = lazy(() => import('./pages/adminAudit/AdminAuditPage'));
 const WebhooksPage = lazy(() => import('./pages/webhooks/WebhooksPage'));
 const OAuthProvidersPage = lazy(() => import('./pages/oauthProviders/OAuthProvidersPage'));
 const CompressionRestorePage = lazy(() => import('./pages/compression/CompressionRestorePage'));
+const ChatPage = lazy(() => import('./pages/chat/ChatPage'));
 const AlertRulesPage = lazy(() => import('./pages/alertRules/AlertRulesPage'));
 
 function PageLoader() {
@@ -91,6 +92,7 @@ export default function App() {
                   <Route path="webhooks" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><WebhooksPage /></Suspense></RequireRole>} />
                   <Route path="oauth-providers" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><OAuthProvidersPage /></Suspense></RequireRole>} />
                   <Route path="compression/restore" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><CompressionRestorePage /></Suspense></RequireRole>} />
+                  <Route path="chat" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><ChatPage /></Suspense></RequireRole>} />
                   <Route path="alert-rules" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><AlertRulesPage /></Suspense></RequireRole>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>

@@ -52,6 +52,7 @@
     "alertRules": "Alert Rules",
     "compressionRestore": "Compression Restore",
     "groupGateway": "Gateway Config",
+    "chat": "Chat",
     "groupAccess": "Access",
     "groupOrganization": "Organization",
     "groupOps": "Operations",

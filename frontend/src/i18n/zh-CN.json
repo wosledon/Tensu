@@ -52,6 +52,7 @@
     "alertRules": "告警规则",
     "compressionRestore": "压缩还原",
     "groupGateway": "网关配置",
+    "chat": "聊天测试",
     "groupAccess": "访问管理",
     "groupOrganization": "组织管理",
     "groupOps": "监控运维",
