@@ -101,7 +101,7 @@ public class RouteModelService : BaseService
             .Include(r => r.TargetModel).ThenInclude(m => m!.Provider)
             .Include(r => r.FallbackModel)
             .Include(r => r.RoutingModel)
-            .Include(r => r.Rules).ThenInclude(r => r.TargetModel).ThenInclude(m => m.Provider)
+            .Include(r => r.Rules).ThenInclude(r => r.TargetModel).ThenInclude(m => m!.Provider)
             .FirstOrDefaultAsync(r => r.Name == modelName && r.IsEnabled);
     }
 

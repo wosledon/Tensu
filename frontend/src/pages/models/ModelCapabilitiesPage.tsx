@@ -124,7 +124,7 @@ export default function ModelCapabilitiesPage() {
         <Form.Item name="dimension" label={t('capability.dimension')} rules={[{ required: true }]}>
           <Select options={dimensions.map((d) => ({ value: d, label: d }))} showSearch />
         </Form.Item>
-        <Form.Item name="score" label={t('capability.score')} rules={[{ required: true, min: 0, max: 100 }]}>
+        <Form.Item name="score" label={t('capability.score')} initialValue={0} rules={[{ required: true, type: 'number' }]}>
           <InputNumber min={0} max={100} step={0.1} precision={2} style={{ width: '100%' }} addonAfter="0-100" />
         </Form.Item>
         <Form.Item name="source" label={t('capability.source')} rules={[{ required: true }]} initialValue="manual">

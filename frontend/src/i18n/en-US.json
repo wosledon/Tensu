@@ -43,7 +43,9 @@
     "audit": "Audit & Analytics",
     "analytics": "Analytics",
     "settings": "Settings",
-    "oauthProviders": "OAuth Providers"
+    "oauthProviders": "OAuth Providers",
+    "adminAudit": "Admin Audit",
+    "webhooks": "Webhooks"
   },
   "auth": {
     "login": "Login",
@@ -74,6 +76,7 @@
     "editKey": "Edit Key",
     "keyName": "Key Name",
     "keyValue": "Key Value",
+    "keyValuePlaceholder": "sk-...",
     "weight": "Weight",
     "healthy": "Healthy",
     "degraded": "Degraded",
@@ -82,7 +85,13 @@
     "rotate": "Rotate Key",
     "rotateConfirm": "Are you sure you want to rotate this key?",
     "rotateWarning": "A new key will be generated. Please copy it immediately; it will not be shown again.",
-    "rotateSuccess": "Key rotated successfully"
+    "rotateSuccess": "Key rotated successfully",
+    "basicInfo": "Basic Information",
+    "configuration": "Configuration",
+    "loadBalanceStrategy": "Load Balance Strategy",
+    "roundRobin": "Round Robin",
+    "weighted": "Weighted",
+    "leastRequests": "Least Requests"
   },
   "model": {
     "title": "Models",
@@ -299,8 +308,13 @@
     "severity": "Severity",
     "noMatch": "No matching anomalies",
     "loadError": "Failed to load data",
-    "loadError": "Failed to load anomalies",
     "lastRefreshed": "Last refreshed",
+    "refreshInterval": {
+      "15": "15s",
+      "30": "30s",
+      "60": "1m",
+      "120": "2m"
+    },
     "severityLevel": {
       "Critical": "Critical",
       "High": "High",
@@ -317,12 +331,15 @@
       "RateLimitSpike": "Rate Limit Spike",
       "ProviderDegraded": "Provider Degraded"
     },
-    "refreshInterval": {
-      "15": "15s",
-      "30": "30s",
-      "60": "1m",
-      "120": "2m"
-    }
+    "from": "From",
+    "to": "To",
+    "usageSpikeMultiplier": "Usage spike multiplier",
+    "usageDropMultiplier": "Usage drop multiplier",
+    "costSpikeMultiplier": "Cost spike multiplier",
+    "latencySpikeMultiplier": "Latency spike multiplier",
+    "errorRateThreshold": "Error rate threshold",
+    "rateLimitThreshold": "Rate limit threshold",
+    "providerSuccessRateThreshold": "Provider success rate threshold"
   },
   "settings": {
     "title": "Settings",
@@ -435,10 +452,6 @@
     "modelDistribution": "Model Distribution",
     "providerHealth": "Provider Health"
   },
-  "nav": {
-    "adminAudit": "Admin Audit",
-    "webhooks": "Webhooks"
-  },
   "adminAudit": {
     "timestamp": "Timestamp",
     "username": "User",
@@ -457,23 +470,6 @@
     "eventsPlaceholder": "Select or enter event types",
     "create": "Create Webhook",
     "edit": "Edit Webhook"
-  },
-  "oauthProvider": {
-    "title": "OAuth Providers",
-    "name": "Name",
-    "displayName": "Display Name",
-    "protocol": "Protocol",
-    "protocolOAuth2": "OAuth 2.0",
-    "protocolOIDC": "OIDC",
-    "clientId": "Client ID",
-    "clientSecret": "Client Secret",
-    "authorizationEndpoint": "Authorization Endpoint",
-    "tokenEndpoint": "Token Endpoint",
-    "userInfoEndpoint": "User Info Endpoint",
-    "issuer": "Issuer",
-    "scope": "Scope",
-    "create": "Create OAuth Provider",
-    "edit": "Edit OAuth Provider"
   },
   "error": {
     "title": "Something went wrong",

@@ -43,7 +43,9 @@
     "audit": "审计与分析",
     "analytics": "分析报表",
     "settings": "系统设置",
-    "oauthProviders": "OAuth 提供商"
+    "oauthProviders": "OAuth 提供商",
+    "adminAudit": "管理审计",
+    "webhooks": "Webhook 通知"
   },
   "auth": {
     "login": "登录",
@@ -74,6 +76,7 @@
     "editKey": "编辑密钥",
     "keyName": "密钥名称",
     "keyValue": "密钥值",
+    "keyValuePlaceholder": "sk-...",
     "weight": "权重",
     "healthy": "健康",
     "degraded": "降级",
@@ -82,7 +85,13 @@
     "rotate": "轮换密钥",
     "rotateConfirm": "确定要轮换此密钥吗？",
     "rotateWarning": "将生成新密钥，请立即复制保存，新密钥仅会展示一次。",
-    "rotateSuccess": "密钥轮换成功"
+    "rotateSuccess": "密钥轮换成功",
+    "basicInfo": "基础信息",
+    "configuration": "配置",
+    "loadBalanceStrategy": "负载均衡策略",
+    "roundRobin": "轮询",
+    "weighted": "权重",
+    "leastRequests": "最少请求"
   },
   "model": {
     "title": "模型管理",
@@ -299,8 +308,13 @@
     "severity": "严重程度",
     "noMatch": "没有匹配的异常",
     "loadError": "加载数据失败",
-    "loadError": "加载异常数据失败",
     "lastRefreshed": "最后刷新",
+    "refreshInterval": {
+      "15": "15秒",
+      "30": "30秒",
+      "60": "1分钟",
+      "120": "2分钟"
+    },
     "severityLevel": {
       "Critical": "严重",
       "High": "高",
@@ -317,12 +331,13 @@
       "RateLimitSpike": "限流突增",
       "ProviderDegraded": "供应商降级"
     },
-    "refreshInterval": {
-      "15": "15秒",
-      "30": "30秒",
-      "60": "1分钟",
-      "120": "2分钟"
-    }
+    "usageSpikeMultiplier": "用量突增倍数",
+    "usageDropMultiplier": "用量骤降倍数",
+    "costSpikeMultiplier": "成本突增倍数",
+    "latencySpikeMultiplier": "延迟突增倍数",
+    "errorRateThreshold": "错误率阈值",
+    "rateLimitThreshold": "限流比例阈值",
+    "providerSuccessRateThreshold": "供应商成功率阈值"
   },
   "settings": {
     "title": "系统设置",
@@ -435,10 +450,6 @@
     "modelDistribution": "模型分布",
     "providerHealth": "供应商状态"
   },
-  "nav": {
-    "adminAudit": "管理审计",
-    "webhooks": "Webhook 通知"
-  },
   "adminAudit": {
     "timestamp": "时间",
     "username": "用户",
@@ -457,23 +468,6 @@
     "eventsPlaceholder": "选择或输入事件类型",
     "create": "创建 Webhook",
     "edit": "编辑 Webhook"
-  },
-  "oauthProvider": {
-    "title": "OAuth 提供商管理",
-    "name": "名称",
-    "displayName": "显示名称",
-    "protocol": "协议",
-    "protocolOAuth2": "OAuth 2.0",
-    "protocolOIDC": "OIDC",
-    "clientId": "Client ID",
-    "clientSecret": "Client Secret",
-    "authorizationEndpoint": "授权端点",
-    "tokenEndpoint": "令牌端点",
-    "userInfoEndpoint": "用户信息端点",
-    "issuer": "Issuer",
-    "scope": "权限范围",
-    "create": "创建 OAuth 提供商",
-    "edit": "编辑 OAuth 提供商"
   },
   "error": {
     "title": "出错了",

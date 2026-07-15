@@ -42,7 +42,7 @@ public class QuotaService : BaseService
         }
 
         if (!string.IsNullOrEmpty(request.Keyword))
-            query = query.Where(q => q.Organization.Name.Contains(request.Keyword));
+            query = query.Where(q => q.Organization != null && q.Organization.Name.Contains(request.Keyword));
 
         var (pagedQuery, total) = await ApplyPagingAsync(query, request);
         var items = await pagedQuery.ToListAsync();

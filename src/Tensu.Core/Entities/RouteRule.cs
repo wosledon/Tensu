@@ -14,6 +14,6 @@ public class RouteRule
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public RouteModel RouteModel { get; set; } = null!;
-    public Model TargetModel { get; set; } = null!;
+    public RouteModel? RouteModel { get; set; }
+    public Model? TargetModel { get; set; }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, InputNumber, App, Drawer, Empty, Modal } from 'antd';
-import { EditOutlined, DeleteOutlined, KeyOutlined, PlusOutlined, ExportOutlined, RedoOutlined } from '@ant-design/icons';
+import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, InputNumber, App, Drawer, Empty, Modal, Row, Col, theme } from 'antd';
+import { EditOutlined, DeleteOutlined, KeyOutlined, PlusOutlined, ExportOutlined, RedoOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { providerApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
@@ -10,6 +10,7 @@ import { exportTableToCsv } from '../../utils/export';
 
 export default function ProvidersPage() {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
 
   const fetchFn = useCallback((params: any) => providerApi.list(params), []);
@@ -311,30 +312,83 @@ export default function ProvidersPage() {
         )}
       </Drawer>
 
-      <FormModal title={t('provider.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
-        <Space size={16} style={{ width: '100%' }} direction="vertical">
-          <Space size={16} style={{ width: '100%' }} wrap>
-            <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="protocol" label={t('provider.protocol')} rules={[{ required: true }]} style={{ width: '100%', marginBottom: 0 }}>
-              <Select options={[{ value: 'OpenAI', label: t('provider.protocolOpenAI') }, { value: 'Anthropic', label: t('provider.protocolAnthropic') }]} />
-            </Form.Item>
-          </Space>
-          <Form.Item name="baseUrl" label={t('provider.baseUrl')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
-            <Input placeholder="https://api.openai.com" />
-          </Form.Item>
-          <Form.Item name="description" label={t('provider.description')} style={{ marginBottom: 0 }}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true} style={{ marginBottom: 0 }}>
-            <Switch />
-          </Form.Item>
-        </Space>
+      <FormModal title={t('provider.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close} width={640}>
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <GlobalOutlined style={{ color: token.colorPrimary }} />
+              <span>{t('provider.basicInfo', 'Basic Information')}</span>
+            </div>
+          }
+          style={{ marginBottom: 16, borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label={t('provider.name')} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="protocol" label={t('provider.protocol')} rules={[{ required: true }]}>
+                <Select options={[{ value: 'OpenAI', label: t('provider.protocolOpenAI') }, { value: 'Anthropic', label: t('provider.protocolAnthropic') }]} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="baseUrl" label={t('provider.baseUrl')} rules={[{ required: true }]}>
+                <Input placeholder="https://api.openai.com" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="description" label={t('provider.description')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        <Card
+          size="small"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SettingOutlined style={{ color: token.colorSuccess }} />
+              <span>{t('provider.configuration', 'Configuration')}</span>
+            </div>
+          }
+          style={{ borderRadius: token.borderRadiusLG, border: 'none' }}
+          styles={{ body: { backgroundColor: token.colorFillQuaternary, borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px` } }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="keyLoadBalanceStrategy" label={t('provider.loadBalanceStrategy')} initialValue="RoundRobin">
+                <Select options={[
+                  { value: 'RoundRobin', label: t('provider.roundRobin', 'Round Robin') },
+                  { value: 'Weighted', label: t('provider.weighted', 'Weighted') },
+                  { value: 'LeastRequests', label: t('provider.leastRequests', 'Least Requests') },
+                ]} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
       </FormModal>
 
       <FormModal title={editingKey ? t('provider.editKey') : t('provider.addKey')} open={keyOpen} form={keyForm} editing={!!editingKey} submitting={submitting} onOk={editingKey ? handleUpdateKey : handleAddKey} onCancel={() => { setKeyOpen(false); setEditingKey(null); }}>
         <Form.Item name="name" label={t('provider.keyName')} rules={[{ required: true }]}><Input /></Form.Item>
+        {!editingKey && (
+          <Form.Item name="keyValue" label={t('provider.keyValue')} rules={[{ required: true }]}>
+            <Input.Password placeholder={t('provider.keyValuePlaceholder', 'sk-...')} />
+          </Form.Item>
+        )}
         <Form.Item name="status" label={t('common.status')} rules={[{ required: true }]}>
           <Select options={[{ value: 'Active', label: t('common.enabled') }, { value: 'Degraded', label: t('provider.degraded') }, { value: 'Inactive', label: t('common.disabled') }]} />
         </Form.Item>

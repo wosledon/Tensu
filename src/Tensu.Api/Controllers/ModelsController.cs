@@ -37,13 +37,12 @@ public class ModelsController : AdminBaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] Model model)
     {
-        var created = await _service.CreateAsync(model) as Model;
-        if (created == null) return BadRequest(ApiResponse.Error(40001, "Failed to create model"));
+        var created = await _service.CreateAsync(model);
         await LogAdminAuditAsync("create", "Model", created.Id.ToString(), $"Name={created.Name}");
-        return Ok(ApiResponse<object>.Success(created));
+        return Ok(ApiResponse<object>.Success(ModelService.MapToListDto(created)));
     }
 
-    public record UpdateModelRequest(string Name, string? DisplayName = null, string? Description = null, bool SupportsVision = false, bool SupportsReasoning = false, bool SupportsToolUse = false, bool SupportsThinking = false, string? ThinkingStrengths = null, int InputContextSize = 0, int OutputContextSize = 0, bool IsEnabled = true, bool CompressionEnabled = true);
+    public record UpdateModelRequest(int ProviderId, string Name, string? DisplayName = null, string? Description = null, bool SupportsVision = false, bool SupportsReasoning = false, bool SupportsToolUse = false, bool SupportsThinking = false, string? ThinkingStrengths = null, int InputContextSize = 0, int OutputContextSize = 0, bool IsEnabled = true, bool CompressionEnabled = true);
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateModelRequest request)
@@ -53,6 +52,7 @@ public class ModelsController : AdminBaseController
 
         var updated = await _service.UpdateAsync(id, new Model
         {
+            ProviderId = request.ProviderId,
             Name = request.Name,
             DisplayName = request.DisplayName,
             Description = request.Description,
@@ -68,7 +68,7 @@ public class ModelsController : AdminBaseController
         });
         if (updated == null) return NotFound(ApiResponse.Error(40401, "Model not found"));
         await LogAdminAuditAsync("update", "Model", id.ToString(), $"Name={request.Name}");
-        return Ok(ApiResponse<object>.Success(updated));
+        return Ok(ApiResponse<object>.Success(ModelService.MapToListDto(updated)));
     }
 
     [HttpDelete("{id}")]

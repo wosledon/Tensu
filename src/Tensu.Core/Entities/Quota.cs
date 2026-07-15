@@ -14,6 +14,6 @@ public class Quota
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public Organization Organization { get; set; } = null!;
+    public Organization? Organization { get; set; }
     public ApiKey? ApiKey { get; set; }
 }

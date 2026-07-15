@@ -37,7 +37,7 @@ public class ModelService : BaseService
         return ToPagedResult(items.Select(MapToListDto).ToList(), total, request);
     }
 
-    private static object MapToListDto(Model m)
+    public static object MapToListDto(Model m)
     {
         return new
         {
@@ -93,21 +93,22 @@ public class ModelService : BaseService
         return MapToListDto(model);
     }
 
-    public async Task<object> CreateAsync(Model model)
+    public async Task<Model> CreateAsync(Model model)
     {
         model.CreatedAt = DateTime.UtcNow;
         model.UpdatedAt = DateTime.UtcNow;
         _db.Models.Add(model);
         await _db.SaveChangesAsync();
-        return MapToListDto(model);
+        return model;
     }
 
-    public async Task<object?> UpdateAsync(int id, Model updated)
+    public async Task<Model?> UpdateAsync(int id, Model updated)
     {
         var model = await _db.Models.FindAsync(id);
         if (model == null) return null;
 
         model.Name = updated.Name;
+        model.ProviderId = updated.ProviderId;
         model.DisplayName = updated.DisplayName;
         model.Description = updated.Description;
         model.SupportsVision = updated.SupportsVision;
@@ -121,7 +122,7 @@ public class ModelService : BaseService
         model.CompressionEnabled = updated.CompressionEnabled;
         model.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        return MapToListDto(model);
+        return model;
     }
 
     public async Task<bool> DeleteAsync(int id)

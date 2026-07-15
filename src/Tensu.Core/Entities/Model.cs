@@ -20,7 +20,7 @@ public class Model
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public Provider Provider { get; set; } = null!;
+    public Provider? Provider { get; set; }
     public ICollection<ModelPricing> Pricings { get; set; } = [];
     public ICollection<ModelCapability> Capabilities { get; set; } = [];
 }

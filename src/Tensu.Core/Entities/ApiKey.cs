@@ -20,6 +20,6 @@ public class ApiKey
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    public Organization Organization { get; set; } = null!;
+    public Organization? Organization { get; set; }
     public User? User { get; set; }
 }

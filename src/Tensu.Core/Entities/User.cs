@@ -20,6 +20,6 @@ public class User
     public DateTime? LastLoginAt { get; set; }
 
     // Navigation
-    public Organization Organization { get; set; } = null!;
+    public Organization? Organization { get; set; }
     public ICollection<ApiKey> ApiKeys { get; set; } = [];
 }
