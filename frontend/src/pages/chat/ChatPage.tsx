@@ -85,26 +85,55 @@ export default function ChatPage() {
         return;
       }
 
-      // 用 text() 读取完整响应再解析 SSE，避免 ReadableStream 在浏览器中被缓冲提前关闭
-      const rawText = await res.text();
-      const events = rawText.split('\n').filter((l: string) => l.startsWith('data:'));
-      let fullContent = '';
-      for (const line of events) {
-        const data = line.slice(5).trim();
-        if (!data || data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const d = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || parsed.content?.[0]?.text || '';
-          if (d) fullContent += d;
-        } catch {}
+      // 流式读取 SSE 响应
+      const reader = res.body?.getReader();
+      if (!reader) { setSending(false); return; }
+
+      const decoder = new TextDecoder();
+      let tail = '';
+      let contentLength = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        tail += decoder.decode(value, { stream: true });
+        const lines = tail.split('\n');
+        tail = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const d = parsed.choices?.[0]?.delta?.content || parsed.choices?.[0]?.text || parsed.content?.[0]?.text || '';
+            if (d) {
+              contentLength += d.length;
+              accumulatedRef.current += d;
+              setStreamingContent(accumulatedRef.current);
+            }
+          } catch {}
+        }
       }
-      if (!fullContent) {
+
+      // 非 SSE 兜底
+      if (!contentLength && tail.trim()) {
         try {
-          const f = JSON.parse(rawText);
-          fullContent = f.choices?.[0]?.message?.content || f.choices?.[0]?.text || f.content?.[0]?.text || rawText;
-        } catch { fullContent = rawText; }
+          const f = JSON.parse(tail.trim());
+          const text = f.choices?.[0]?.message?.content || f.choices?.[0]?.text || f.content?.[0]?.text || tail;
+          accumulatedRef.current = text;
+          setStreamingContent(text);
+        } catch {
+          accumulatedRef.current = tail;
+          setStreamingContent(tail);
+        }
       }
-      setMessages((prev) => [...prev, { role: 'assistant', content: fullContent }]);
+
+      const finalContent = accumulatedRef.current;
+      if (finalContent) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: finalContent }]);
+      }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setMessages((prev) => [...prev, { role: 'assistant', content: '⛔ Request failed' }]);
