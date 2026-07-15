@@ -114,7 +114,7 @@ export default function ModelCapabilitiesPage() {
         </Tag>
       ),
     },
-    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120, render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
+    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120, render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{t(`capability.src${v.charAt(0).toUpperCase() + v.slice(1)}`)}</span> },
     {
       title: t('capability.evidence'), dataIndex: 'evidence', key: 'evidence', ellipsis: true,
       render: (v?: string) => v || <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>,
