@@ -30,7 +30,9 @@
     "refresh": "刷新",
     "export": "导出",
     "enable": "启用",
-    "disable": "禁用"
+    "disable": "禁用",
+    "up": "上移",
+    "down": "下移"
   },
   "nav": {
     "dashboard": "总览",
@@ -46,7 +48,14 @@
     "settings": "系统设置",
     "oauthProviders": "OAuth 提供商",
     "adminAudit": "管理审计",
-    "webhooks": "Webhook 通知"
+    "webhooks": "Webhook 通知",
+    "alertRules": "告警规则",
+    "compressionRestore": "压缩还原",
+    "groupProviderModel": "供应商与模型",
+    "groupAccess": "访问控制",
+    "groupOrganization": "组织管理",
+    "groupMonitoring": "监控",
+    "groupSystem": "系统"
   },
   "auth": {
     "login": "登录",
@@ -148,7 +157,25 @@
     "modelDetail": "模型详情",
     "autoEvaluate": "自动评估",
     "dimensions": "评估维度",
-    "autoEvaluateHint": "仅 Latency / Throughput / CostEfficiency 支持基于历史日志的自动评估"
+    "autoEvaluateHint": "仅 Latency / Throughput / CostEfficiency 支持基于历史日志的自动评估",
+    "dimReasoning": "推理",
+    "dimCode": "代码",
+    "dimVision": "视觉",
+    "dimMath": "数学",
+    "dimToolUse": "工具调用",
+    "dimMultilingual": "多语言",
+    "dimSafety": "安全",
+    "dimLatency": "延迟",
+    "dimThroughput": "吞吐量",
+    "dimCostEfficiency": "成本效率",
+    "srcBenchmark": "基准测试",
+    "srcManual": "人工评分",
+    "srcSynthetic": "合成评估",
+    "srcCustom": "自定义",
+    "selectMultipleHint": "选择多个维度分别评分",
+    "scores": "各维度评分",
+    "noScores": "请至少填写一个维度的分数",
+    "modelCount": "共 {{count}} 个模型"
   },
   "routeModel": {
     "title": "路由模型",
@@ -160,6 +187,11 @@
     "fallback": "降级模型",
     "rules": "路由规则",
     "addRule": "添加规则",
+    "addTarget": "挂载模型",
+    "targets": "挂载模型",
+    "targetsHint": "可挂载多个真实模型，影子模式第一项默认为活跃目标",
+    "selectTargets": "选择要挂载的模型",
+    "noTargets": "暂无挂载模型",
     "condition": "条件",
     "priority": "优先级",
     "ruleType": "规则类型",

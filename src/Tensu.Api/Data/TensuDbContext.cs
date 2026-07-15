@@ -19,6 +19,7 @@ public class TensuDbContext : DbContext
     public DbSet<Quota> Quotas => Set<Quota>();
     public DbSet<RateLimitCounter> RateLimitCounters => Set<RateLimitCounter>();
     public DbSet<RouteModel> RouteModels => Set<RouteModel>();
+    public DbSet<RouteModelTarget> RouteModelTargets => Set<RouteModelTarget>();
     public DbSet<RouteRule> RouteRules => Set<RouteRule>();
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
     public DbSet<ArchivedRequestLog> ArchivedRequestLogs => Set<ArchivedRequestLog>();

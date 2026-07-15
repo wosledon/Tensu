@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, RouteModel, RouteModelTarget, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
 import { getApiErrorMessage } from './errorHandler';
 
 const api = axios.create({
@@ -186,6 +186,16 @@ export const routeModelApi = {
     api.post<ApiResponse<object>>('/route-models/batch/enable', ids).then(unwrap),
   batchDisable: (ids: number[]) =>
     api.post<ApiResponse<object>>('/route-models/batch/disable', ids).then(unwrap),
+  // Targets
+  addTarget: (routeModelId: number, modelId: number) =>
+    api.post<ApiResponse<RouteModelTarget>>(`/route-models/${routeModelId}/targets`, { modelId }).then(unwrap),
+  removeTarget: (routeModelId: number, targetId: number) =>
+    api.delete<ApiResponse<void>>(`/route-models/${routeModelId}/targets/${targetId}`).then(unwrap),
+  setActiveTarget: (routeModelId: number, targetId: number) =>
+    api.post<ApiResponse<RouteModelTarget[]>>(`/route-models/${routeModelId}/targets/active`, { targetId }).then(unwrap),
+  updateTargetPriority: (routeModelId: number, targetId: number, priority: number) =>
+    api.put<ApiResponse<void>>(`/route-models/${routeModelId}/targets/priority`, { targetId, priority }).then(unwrap),
+  // Rules
   addRule: (routeModelId: number, data: Partial<RouteRule>) =>
     api.post<ApiResponse<RouteRule>>(`/route-models/${routeModelId}/rules`, data).then(unwrap),
   deleteRule: (routeModelId: number, ruleId: number) =>

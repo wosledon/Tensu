@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Layout, Menu, Dropdown, Space, Button, Avatar } from 'antd';
 import {
-  DashboardOutlined, ApiOutlined, DeploymentUnitOutlined, BranchesOutlined,
-  KeyOutlined, CodeOutlined, TeamOutlined, UserOutlined, BarChartOutlined, SettingOutlined, ControlOutlined, LineChartOutlined,
-  SunOutlined, MoonOutlined, DesktopOutlined, GlobalOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  AuditOutlined, NotificationOutlined,
+  DashboardOutlined, DeploymentUnitOutlined, ApiOutlined, BranchesOutlined, AppstoreOutlined, ThunderboltOutlined, CodeOutlined,
+  KeyOutlined, TeamOutlined, UserOutlined, ControlOutlined, BarChartOutlined, AuditOutlined, LineChartOutlined, DollarOutlined, RocketOutlined,
+  CloudOutlined, WarningOutlined, SettingOutlined, NotificationOutlined, GlobalOutlined,
+  SunOutlined, MoonOutlined, DesktopOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -25,41 +25,58 @@ export default function MainLayout() {
 
   const allMenuItems = [
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard'), roles: allRoles },
-    { key: '/providers', icon: <ApiOutlined />, label: t('nav.providers'), roles: ['SuperAdmin', 'Admin'] },
-    {
-      key: 'models-group',
-      icon: <DeploymentUnitOutlined />,
-      label: t('nav.models'),
-      roles: ['SuperAdmin', 'Admin'],
-      children: [
-        { key: '/models', label: t('model.title') },
-        { key: '/models/matrix', label: t('capability.matrixTitle') },
-        { key: '/models/capabilities', label: t('capability.title') },
-      ],
-    },
-    { key: '/route-models', icon: <BranchesOutlined />, label: t('nav.routeModels'), roles: ['SuperAdmin', 'Admin'] },
-    { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
     { key: '/api-docs', icon: <CodeOutlined />, label: t('nav.apiDocs'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
-    { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations'), roles: ['SuperAdmin'] },
-    { key: '/users', icon: <UserOutlined />, label: t('nav.users'), roles: ['SuperAdmin'] },
-    { key: '/quotas', icon: <ControlOutlined />, label: t('quota.title'), roles: ['SuperAdmin'] },
-    { key: '/audit', icon: <BarChartOutlined />, label: t('nav.audit'), roles: allRoles },
     {
-      key: 'analytics-group',
-      icon: <LineChartOutlined />,
-      label: t('nav.analytics'),
-      roles: allRoles,
+      key: 'provider-model-group', icon: <DeploymentUnitOutlined />,
+      label: t('nav.groupProviderModel'), roles: ['SuperAdmin', 'Admin'],
       children: [
-        { key: '/analytics/usage', label: t('analytics.usage') },
-        { key: '/analytics/cost', label: t('analytics.cost') },
-        { key: '/analytics/performance', label: t('analytics.performance') },
-        { key: '/analytics/cache', label: t('analytics.cache') },
-        { key: '/analytics/anomalies', label: t('analytics.anomalies') },
+        { key: '/providers', icon: <ApiOutlined />, label: t('nav.providers') },
+        { key: '/models', icon: <BranchesOutlined />, label: t('model.title') },
+        { key: '/models/matrix', icon: <AppstoreOutlined />, label: t('capability.matrixTitle') },
+        { key: '/models/capabilities', icon: <ThunderboltOutlined />, label: t('capability.title') },
+        { key: '/route-models', icon: <CodeOutlined />, label: t('nav.routeModels') },
       ],
     },
-    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings'), roles: ['SuperAdmin'] },
-    { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit'), roles: ['SuperAdmin'] },
-    { key: '/webhooks', icon: <NotificationOutlined />, label: t('nav.webhooks'), roles: ['SuperAdmin'] },
+    {
+      key: 'access-group', icon: <KeyOutlined />,
+      label: t('nav.groupAccess'), roles: ['SuperAdmin', 'Admin', 'Developer'],
+      children: [
+        { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys') },
+      ],
+    },
+    {
+      key: 'org-group', icon: <TeamOutlined />,
+      label: t('nav.groupOrganization'), roles: ['SuperAdmin'],
+      children: [
+        { key: '/organizations', icon: <TeamOutlined />, label: t('nav.organizations') },
+        { key: '/users', icon: <UserOutlined />, label: t('nav.users') },
+        { key: '/quotas', icon: <ControlOutlined />, label: t('quota.title') },
+      ],
+    },
+    {
+      key: 'monitoring-group', icon: <BarChartOutlined />,
+      label: t('nav.groupMonitoring'), roles: allRoles,
+      children: [
+        { key: '/audit', icon: <AuditOutlined />, label: t('nav.audit') },
+        { key: '/analytics/usage', icon: <LineChartOutlined />, label: t('analytics.usage') },
+        { key: '/analytics/cost', icon: <DollarOutlined />, label: t('analytics.cost') },
+        { key: '/analytics/performance', icon: <RocketOutlined />, label: t('analytics.performance') },
+        { key: '/analytics/cache', icon: <CloudOutlined />, label: t('analytics.cache') },
+        { key: '/analytics/anomalies', icon: <WarningOutlined />, label: t('analytics.anomalies') },
+      ],
+    },
+    {
+      key: 'system-group', icon: <SettingOutlined />,
+      label: t('nav.groupSystem'), roles: ['SuperAdmin'],
+      children: [
+        { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
+        { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit') },
+        { key: '/webhooks', icon: <NotificationOutlined />, label: t('nav.webhooks') },
+        { key: '/oauth-providers', icon: <GlobalOutlined />, label: t('nav.oauthProviders') },
+        { key: '/alert-rules', icon: <WarningOutlined />, label: t('nav.alertRules') },
+        { key: '/compression/restore', icon: <CodeOutlined />, label: t('nav.compressionRestore') },
+      ],
+    },
   ];
 
   const filterMenuByRole = (items: typeof allMenuItems, role?: string) => {
@@ -69,7 +86,7 @@ export default function MainLayout() {
         key: item.key,
         icon: item.icon,
         label: item.label,
-        children: item.children?.map((child) => ({ key: child.key, label: child.label })),
+        children: item.children?.map((child) => ({ key: child.key, icon: child.icon, label: child.label })),
       }));
   };
 
@@ -90,8 +107,16 @@ export default function MainLayout() {
     { key: 'logout', icon: <LogoutOutlined />, label: t('auth.logout'), onClick: () => { logout(); navigate('/login'); } },
   ];
 
-  const selectedKey = location.pathname;
-  const openKey = selectedKey.startsWith('/models') ? 'models-group' : selectedKey.startsWith('/analytics') ? 'analytics-group' : undefined;
+  const selectedPath = location.pathname;
+  const getDefaultOpenKeys = (path: string): string[] => {
+    const keys: string[] = [];
+    if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models')) keys.push('provider-model-group');
+    if (path.startsWith('/audit') || path.startsWith('/analytics')) keys.push('monitoring-group');
+    if (path.startsWith('/api-keys') || path.startsWith('/api-docs')) keys.push('access-group');
+    if (path.startsWith('/organizations') || path.startsWith('/users') || path.startsWith('/quotas')) keys.push('org-group');
+    if (path.startsWith('/settings') || path.startsWith('/admin-audit') || path.startsWith('/webhooks') || path.startsWith('/oauth-providers') || path.startsWith('/alert-rules') || path.startsWith('/compression')) keys.push('system-group');
+    return keys;
+  };
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -121,8 +146,8 @@ export default function MainLayout() {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[selectedKey]}
-          defaultOpenKeys={openKey ? [openKey] : []}
+          selectedKeys={[selectedPath]}
+          defaultOpenKeys={getDefaultOpenKeys(selectedPath)}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ borderInlineEnd: 'none', background: 'transparent' }}

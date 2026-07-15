@@ -182,14 +182,23 @@ export interface RouteModel {
   name: string;
   description?: string;
   mode: 'Shadow' | 'Route';
-  targetModelId?: number;
-  targetModel?: Model;
+  targets: RouteModelTarget[];
   fallbackModelId?: number;
   fallbackModel?: Model;
   routingModelId?: number;
   routingModel?: Model;
   isEnabled: boolean;
   rules: RouteRule[];
+  createdAt: string;
+}
+
+export interface RouteModelTarget {
+  id: number;
+  routeModelId: number;
+  modelId: number;
+  model?: Model;
+  isActive: boolean;
+  priority: number;
   createdAt: string;
 }
 

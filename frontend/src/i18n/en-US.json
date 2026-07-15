@@ -30,7 +30,9 @@
     "refresh": "Refresh",
     "export": "Export",
     "enable": "Enable",
-    "disable": "Disable"
+    "disable": "Disable",
+    "up": "Up",
+    "down": "Down"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -46,7 +48,14 @@
     "settings": "Settings",
     "oauthProviders": "OAuth Providers",
     "adminAudit": "Admin Audit",
-    "webhooks": "Webhooks"
+    "webhooks": "Webhooks",
+    "alertRules": "Alert Rules",
+    "compressionRestore": "Compression Restore",
+    "groupProviderModel": "Provider & Model",
+    "groupAccess": "Access",
+    "groupOrganization": "Organization",
+    "groupMonitoring": "Monitoring",
+    "groupSystem": "System"
   },
   "auth": {
     "login": "Login",
@@ -148,7 +157,25 @@
     "modelDetail": "Model Detail",
     "autoEvaluate": "Auto Evaluate",
     "dimensions": "Dimensions",
-    "autoEvaluateHint": "Only Latency / Throughput / CostEfficiency can be auto-evaluated from request logs"
+    "autoEvaluateHint": "Only Latency / Throughput / CostEfficiency can be auto-evaluated from request logs",
+    "dimReasoning": "Reasoning",
+    "dimCode": "Code",
+    "dimVision": "Vision",
+    "dimMath": "Math",
+    "dimToolUse": "Tool Use",
+    "dimMultilingual": "Multilingual",
+    "dimSafety": "Safety",
+    "dimLatency": "Latency",
+    "dimThroughput": "Throughput",
+    "dimCostEfficiency": "Cost Efficiency",
+    "srcBenchmark": "Benchmark",
+    "srcManual": "Manual",
+    "srcSynthetic": "Synthetic",
+    "srcCustom": "Custom",
+    "selectMultipleHint": "Select dimensions and score each",
+    "scores": "Scores",
+    "noScores": "Please enter at least one score",
+    "modelCount": "{{count}} models"
   },
   "routeModel": {
     "title": "Route Models",
@@ -160,6 +187,11 @@
     "fallback": "Fallback",
     "rules": "Rules",
     "addRule": "Add Rule",
+    "addTarget": "Attach Model",
+    "targets": "Targets",
+    "targetsHint": "Attach multiple models. For Shadow mode, the first one becomes active.",
+    "selectTargets": "Select models to attach",
+    "noTargets": "No targets attached",
     "condition": "Condition",
     "priority": "Priority",
     "ruleType": "Rule Type",

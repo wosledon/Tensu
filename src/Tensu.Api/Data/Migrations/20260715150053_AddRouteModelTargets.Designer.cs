@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Tensu.Api.Data;
 
@@ -10,9 +11,11 @@ using Tensu.Api.Data;
 namespace Tensu.Api.Data.Migrations
 {
     [DbContext(typeof(TensuDbContext))]
-    partial class TensuDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715150053_AddRouteModelTargets")]
+    partial class AddRouteModelTargets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");

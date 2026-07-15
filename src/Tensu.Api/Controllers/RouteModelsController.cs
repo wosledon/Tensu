@@ -36,18 +36,32 @@ public class RouteModelsController : AdminBaseController
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] RouteModel routeModel)
     {
-        var created = await _service.CreateAsync(routeModel);
-        await LogAdminAuditAsync("create", "RouteModel", created.Id.ToString(), $"Name={created.Name}");
-        return Ok(ApiResponse<object>.Success(created));
+        try
+        {
+            var created = await _service.CreateAsync(routeModel);
+            await LogAdminAuditAsync("create", "RouteModel", created.Id.ToString(), $"Name={created.Name}");
+            return Ok(ApiResponse<object>.Success(created));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse.Error(40001, ex.Message));
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] RouteModel routeModel)
     {
-        var updated = await _service.UpdateAsync(id, routeModel);
-        if (updated == null) return NotFound(ApiResponse.Error(40401, "Route model not found"));
-        await LogAdminAuditAsync("update", "RouteModel", id.ToString(), $"Name={updated.Name}");
-        return Ok(ApiResponse<object>.Success(updated));
+        try
+        {
+            var updated = await _service.UpdateAsync(id, routeModel);
+            if (updated == null) return NotFound(ApiResponse.Error(40401, "Route model not found"));
+            await LogAdminAuditAsync("update", "RouteModel", id.ToString(), $"Name={updated.Name}");
+            return Ok(ApiResponse<object>.Success(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse.Error(40001, ex.Message));
+        }
     }
 
     [HttpGet("batch-test")]
@@ -66,7 +80,7 @@ public class RouteModelsController : AdminBaseController
                 mode = rm?.Mode.ToString(),
                 isEnabled = rm?.IsEnabled ?? false,
                 ruleCount = rm?.Rules?.Count ?? 0,
-                hasTarget = rm?.TargetModelId.HasValue ?? false,
+                targetCount = rm?.Targets?.Count ?? 0,
                 hasFallback = rm?.FallbackModelId.HasValue ?? false
             });
         }
@@ -169,6 +183,54 @@ public class RouteModelsController : AdminBaseController
         var deleted = await _service.DeleteRuleAsync(routeModelId, ruleId);
         if (!deleted) return NotFound(ApiResponse.Error(40401, "Rule not found"));
         await LogAdminAuditAsync("delete_rule", "RouteRule", ruleId.ToString(), $"RouteModelId={routeModelId}");
+        return Ok(ApiResponse.Success());
+    }
+
+    // ── Targets ──
+
+    public record AddTargetRequest(int ModelId);
+
+    [HttpPost("{id}/targets")]
+    public async Task<IActionResult> AddTarget(int id, [FromBody] AddTargetRequest request)
+    {
+        var target = await _service.AddTargetAsync(id, request.ModelId);
+        await LogAdminAuditAsync("add_target", "RouteModelTarget", target.Id.ToString(), $"RouteModelId={id}, ModelId={request.ModelId}");
+        return Ok(ApiResponse<object>.Success(target));
+    }
+
+    [HttpDelete("{routeModelId}/targets/{targetId}")]
+    public async Task<IActionResult> RemoveTarget(int routeModelId, int targetId)
+    {
+        var deleted = await _service.RemoveTargetAsync(routeModelId, targetId);
+        if (!deleted) return NotFound(ApiResponse.Error(40401, "Target not found"));
+        await LogAdminAuditAsync("remove_target", "RouteModelTarget", targetId.ToString(), $"RouteModelId={routeModelId}");
+        return Ok(ApiResponse.Success());
+    }
+
+    public record SetActiveTargetRequest(int TargetId);
+
+    /// <summary>影子模式：设置活跃目标</summary>
+    [HttpPost("{id}/targets/active")]
+    public async Task<IActionResult> SetActiveTarget(int id, [FromBody] SetActiveTargetRequest request)
+    {
+        try
+        {
+            var targets = await _service.SetActiveTargetAsync(id, request.TargetId);
+            await LogAdminAuditAsync("set_active_target", "RouteModel", id.ToString(), $"TargetId={request.TargetId}");
+            return Ok(ApiResponse<object>.Success(targets));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse.Error(40001, ex.Message));
+        }
+    }
+
+    public record UpdateTargetPriorityRequest(int TargetId, int Priority);
+
+    [HttpPut("{id}/targets/priority")]
+    public async Task<IActionResult> UpdateTargetPriority(int id, [FromBody] UpdateTargetPriorityRequest request)
+    {
+        await _service.UpdateTargetPriorityAsync(id, request.TargetId, request.Priority);
         return Ok(ApiResponse.Success());
     }
 

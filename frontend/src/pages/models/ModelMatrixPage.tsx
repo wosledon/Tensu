@@ -42,7 +42,7 @@ export default function ModelMatrixPage() {
     tooltip: { trigger: 'item' },
     legend: { data: matrix?.models.map((m) => `${m.providerName}-${m.modelName}`) ?? [] },
     radar: {
-      indicator: dimensions.map((d) => ({ name: d, max: 100 })),
+      indicator: dimensions.map((d) => ({ name: t(`capability.dim${d}`), max: 100 })),
       radius: '65%',
     },
     series: [
@@ -70,7 +70,7 @@ export default function ModelMatrixPage() {
       ),
     },
     ...dimensions.map((d) => ({
-      title: d,
+      title: t(`capability.dim${d}`),
       key: d,
       width: 100,
       align: 'center' as const,
@@ -132,7 +132,7 @@ export default function ModelMatrixPage() {
                 </div>
                 {dimensions.map((d) => (
                   <div key={d} style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{d}</span>
+                    <span>{t(`capability.dim${d}`)}</span>
                     <span style={{ fontFamily: 'monospace' }}>
                       {selected.scores[d] !== undefined ? selected.scores[d].toFixed(1) : '—'}
                     </span>
@@ -159,7 +159,7 @@ export default function ModelMatrixPage() {
             <Button onClick={() => setProviderFilter(undefined)}>{t('common.reset')}</Button>
           )}
           <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
-            {matrix?.models.length ?? 0} models
+            {t('capability.modelCount', { count: matrix?.models.length ?? 0 })}
           </span>
         </Space>
       </Card>

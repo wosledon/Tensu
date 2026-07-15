@@ -263,16 +263,15 @@ public class RouteModelConfiguration : IEntityTypeConfiguration<RouteModel>
         builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
         builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
         builder.Property(e => e.Mode).HasColumnName("mode").HasConversion<string>().HasMaxLength(20);
-        builder.Property(e => e.TargetModelId).HasColumnName("target_model_id");
         builder.Property(e => e.FallbackModelId).HasColumnName("fallback_model_id");
         builder.Property(e => e.RoutingModelId).HasColumnName("routing_model_id");
         builder.Property(e => e.IsEnabled).HasColumnName("is_enabled");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
-        builder.HasOne(e => e.TargetModel).WithMany().HasForeignKey(e => e.TargetModelId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne(e => e.FallbackModel).WithMany().HasForeignKey(e => e.FallbackModelId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne(e => e.RoutingModel).WithMany().HasForeignKey(e => e.RoutingModelId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasMany(e => e.Targets).WithOne(e => e.RouteModel).HasForeignKey(e => e.RouteModelId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(e => e.Name).IsUnique();
     }
 }
@@ -294,6 +293,25 @@ public class RouteRuleConfiguration : IEntityTypeConfiguration<RouteRule>
 
         builder.HasOne(e => e.RouteModel).WithMany(e => e.Rules).HasForeignKey(e => e.RouteModelId);
         builder.HasOne(e => e.TargetModel).WithMany().HasForeignKey(e => e.TargetModelId);
+    }
+}
+
+public class RouteModelTargetConfiguration : IEntityTypeConfiguration<RouteModelTarget>
+{
+    public void Configure(EntityTypeBuilder<RouteModelTarget> builder)
+    {
+        builder.ToTable("route_model_targets");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.RouteModelId).HasColumnName("route_model_id");
+        builder.Property(e => e.ModelId).HasColumnName("model_id");
+        builder.Property(e => e.IsActive).HasColumnName("is_active");
+        builder.Property(e => e.Priority).HasColumnName("priority");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasOne(e => e.RouteModel).WithMany(e => e.Targets).HasForeignKey(e => e.RouteModelId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(e => e.Model).WithMany().HasForeignKey(e => e.ModelId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(e => new { e.RouteModelId, e.ModelId }).IsUnique();
     }
 }
 

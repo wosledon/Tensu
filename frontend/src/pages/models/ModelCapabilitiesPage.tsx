@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
-import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip } from 'antd';
+import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip, DatePicker, App } from 'antd';
 import { EditOutlined, DeleteOutlined, ThunderboltOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { modelCapabilityApi, modelApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, FormModal } from '../../components';
+import { getApiErrorMessage } from '../../api/errorHandler';
 import type { ModelCapability, Model } from '../../types';
 import { exportTableToCsv } from '../../utils/export';
 
@@ -13,6 +15,7 @@ const sources = ['benchmark', 'manual', 'synthetic', 'custom'];
 
 export default function ModelCapabilitiesPage() {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [models, setModels] = useState<Model[]>([]);
   const [modelFilter, setModelFilter] = useState<number | undefined>();
   const [autoEvalOpen, setAutoEvalOpen] = useState(false);
@@ -21,11 +24,61 @@ export default function ModelCapabilitiesPage() {
 
   const fetchFn = useCallback((params: any) => modelCapabilityApi.list({ ...params, modelId: modelFilter }), [modelFilter]);
   const { data, total, loading, params, fetchData, setPage } = useCrudList<ModelCapability, any>({ fetchFn });
-  const { form, open, editing, submitting, openCreate, openEdit, close, submit } = useFormModal<ModelCapability>({
+  const { form, open, editing, submitting, openCreate, openEdit, close } = useFormModal<ModelCapability>({
     createFn: modelCapabilityApi.create,
     updateFn: modelCapabilityApi.update,
     onSuccess: fetchData,
+    transformRecord: (record) => ({
+      ...record,
+      evaluatedAt: record.evaluatedAt ? dayjs(record.evaluatedAt) : dayjs(),
+    } as any),
+    transformSubmit: (values) => ({
+      ...values,
+      evaluatedAt: (values as any).evaluatedAt ? dayjs((values as any).evaluatedAt).toISOString() : values.evaluatedAt,
+    }),
   });
+
+  // 自定义提交：每条记录 = 一个模型 + 一个维度 + 对应分数
+  const handleFormOk = async () => {
+    const values = await form.validateFields();
+    const evaluatedAt = values.evaluatedAt ? dayjs(values.evaluatedAt).toISOString() : new Date().toISOString();
+    try {
+      if (editing) {
+        await modelCapabilityApi.update(editing.id, {
+          modelId: values.modelId,
+          dimension: values.dimension,
+          score: values.score,
+          source: values.source,
+          evidence: values.evidence,
+          evaluatedAt,
+        });
+      } else {
+        // 批量创建：从 scores 对象生成每条记录
+        const scores: Record<string, number> = values.scores ?? {};
+        const records = Object.entries(scores)
+          .filter(([_, score]) => score != null)
+          .map(([dim, score]) => ({
+            modelId: values.modelId,
+            dimension: dim,
+            score,
+            source: values.source,
+            evidence: values.evidence,
+            evaluatedAt,
+          }));
+        if (records.length === 0) {
+          message.warning(t('capability.noScores'));
+          return;
+        }
+        await modelCapabilityApi.import(records);
+      }
+      message.success(t('common.success'));
+      close();
+      fetchData();
+    } catch (e) {
+      message.error(getApiErrorMessage(e, t('common.error')));
+    }
+  };
+
   const { handleDelete } = useConfirmDelete(modelCapabilityApi.delete, fetchData);
 
   const ensureModels = async () => {
@@ -52,7 +105,7 @@ export default function ModelCapabilitiesPage() {
       title: t('model.name'), key: 'model',
       render: (_: any, r: ModelCapability) => <span style={{ fontFamily: 'monospace' }}>{r.model?.provider?.name}-{r.model?.name}</span>,
     },
-    { title: t('capability.dimension'), dataIndex: 'dimension', key: 'dimension' },
+    { title: t('capability.dimension'), dataIndex: 'dimension', key: 'dimension', render: (v: string) => t(`capability.dim${v}`) },
     {
       title: t('capability.score'), key: 'score', align: 'right' as const, width: 100,
       render: (_: any, r: ModelCapability) => (
@@ -61,7 +114,7 @@ export default function ModelCapabilitiesPage() {
         </Tag>
       ),
     },
-    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120 },
+    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120, render: (v: string) => t(`capability.src${v.charAt(0).toUpperCase() + v.slice(1)}`) },
     {
       title: t('capability.evidence'), dataIndex: 'evidence', key: 'evidence', ellipsis: true,
       render: (v?: string) => v || <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>,
@@ -117,33 +170,70 @@ export default function ModelCapabilitiesPage() {
         />
       </Card>
 
-      <FormModal title={t('capability.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={submit} onCancel={close}>
+      <FormModal title={t('capability.title')} open={open} form={form} editing={!!editing} submitting={submitting} onOk={handleFormOk} onCancel={close} width={640}>
         <Form.Item name="modelId" label={t('model.name')} rules={[{ required: true }]}>
           <Select options={modelOptions} showSearch optionFilterProp="label" />
         </Form.Item>
-        <Form.Item name="dimension" label={t('capability.dimension')} rules={[{ required: true }]}>
-          <Select options={dimensions.map((d) => ({ value: d, label: d }))} showSearch />
-        </Form.Item>
-        <Form.Item name="score" label={t('capability.score')} initialValue={0} rules={[{ required: true, type: 'number' }]}>
-          <InputNumber min={0} max={100} step={0.1} precision={2} style={{ width: '100%' }} addonAfter="0-100" />
-        </Form.Item>
+
+        {editing ? (
+          // 编辑模式：单维度单分数
+          <>
+            <Form.Item name="dimension" label={t('capability.dimension')} rules={[{ required: true }]}>
+              <Select options={dimensions.map((d) => ({ value: d, label: t(`capability.dim${d}`) }))} showSearch />
+            </Form.Item>
+            <Form.Item name="score" label={t('capability.score')} rules={[{ required: true, type: 'number' }]}>
+              <InputNumber min={0} max={100} step={0.1} precision={2} style={{ width: '100%' }} addonAfter="0-100" />
+            </Form.Item>
+          </>
+        ) : (
+          // 创建模式：选择维度后逐维评分
+          <>
+            <Form.Item name="dimensions" label={t('capability.dimensions')} rules={[{ required: true, type: 'array', min: 1 }]}
+              tooltip={t('capability.selectMultipleHint')}
+            >
+              <Select mode="multiple" options={dimensions.map((d) => ({ value: d, label: t(`capability.dim${d}`) }))} showSearch placeholder={t('capability.selectMultipleHint')} />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.dimensions !== cur.dimensions}>
+              {({ getFieldValue }) => {
+                const selected: string[] = getFieldValue('dimensions') ?? [];
+                if (selected.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 500, marginBottom: 8 }}>{t('capability.scores')}</div>
+                    <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                      {selected.map((dim) => (
+                        <div key={dim} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Tag style={{ width: 120, textAlign: 'center', margin: 0 }}>{t(`capability.dim${dim}`)}</Tag>
+                          <Form.Item name={['scores', dim]} rules={[{ required: true, type: 'number', min: 0, max: 100 }]} noStyle initialValue={85}>
+                            <InputNumber min={0} max={100} step={0.1} precision={2} style={{ width: 160 }} addonAfter="0-100" />
+                          </Form.Item>
+                        </div>
+                      ))}
+                    </Space>
+                  </div>
+                );
+              }}
+            </Form.Item>
+          </>
+        )}
+
         <Form.Item name="source" label={t('capability.source')} rules={[{ required: true }]} initialValue="manual">
-          <Select options={sources.map((s) => ({ value: s, label: s }))} />
+          <Select options={sources.map((s) => ({ value: s, label: t(`capability.src${s.charAt(0).toUpperCase() + s.slice(1)}`) }))} />
         </Form.Item>
         <Form.Item name="evidence" label={t('capability.evidence')}>
           <Input.TextArea rows={3} />
         </Form.Item>
-        <Form.Item name="evaluatedAt" label={t('capability.evaluatedAt')} rules={[{ required: true }]} initialValue={new Date().toISOString()}>
-          <Input type="datetime-local" />
+        <Form.Item name="evaluatedAt" label={t('capability.evaluatedAt')} rules={[{ required: true }]} initialValue={dayjs()}>
+          <DatePicker showTime style={{ width: '100%' }} />
         </Form.Item>
       </FormModal>
 
       <FormModal title={t('capability.autoEvaluate')} open={autoEvalOpen} form={autoEvalForm} editing={false} onOk={handleAutoEvaluate} onCancel={() => setAutoEvalOpen(false)}>
         <Form.Item name="dimensions" label={t('capability.dimensions')} rules={[{ required: true }]}>
           <Select mode="multiple" options={[
-            { value: 'Latency', label: 'Latency' },
-            { value: 'Throughput', label: 'Throughput' },
-            { value: 'CostEfficiency', label: 'CostEfficiency' },
+            { value: 'Latency', label: t('capability.dimLatency') },
+            { value: 'Throughput', label: t('capability.dimThroughput') },
+            { value: 'CostEfficiency', label: t('capability.dimCostEfficiency') },
           ]} />
         </Form.Item>
         <Tooltip title={t('capability.autoEvaluateHint')}>

@@ -473,15 +473,16 @@ public class GatewayController : ControllerBase
 
         if (routeModel.Mode == RouteModelMode.Shadow)
         {
-            if (routeModel.TargetModelId == null) return requestedModel;
-            var target = await _modelService.GetByIdAsync(routeModel.TargetModelId.Value);
-            if (target == null) return requestedModel;
-            var providerName = GetNestedValue(target, "Provider.Name") ?? string.Empty;
-            var modelName = GetNestedValue(target, "Name") ?? string.Empty;
-            return string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(modelName) ? requestedModel : $"{providerName}-{modelName}";
+            var activeTarget = routeModel.Targets
+                .FirstOrDefault(t => t.IsActive && t.Model != null && t.Model.IsEnabled);
+            // 如果没有活跃目标，尝试第一个可用目标
+            activeTarget ??= routeModel.Targets
+                .FirstOrDefault(t => t.Model != null && t.Model.IsEnabled);
+            if (activeTarget?.Model == null) return requestedModel;
+            return $"{activeTarget.Model.Provider?.Name}-{activeTarget.Model.Name}";
         }
 
-        // Route mode: build candidate pool from rule targets + fallback
+        // Route mode: build candidate pool from direct targets + rules + fallback
         var candidates = await BuildCandidateModelsAsync(routeModel);
 
         // Try LLM-based routing first, then fall back to rule engine
@@ -534,16 +535,21 @@ public class GatewayController : ControllerBase
 
     private async Task<List<Model>> BuildCandidateModelsAsync(RouteModel routeModel)
     {
-        var candidateIds = routeModel.Rules
-            .Where(r => r.IsEnabled)
-            .Select(r => r.TargetModelId)
-            .Distinct()
-            .ToList();
+        var candidateIds = new HashSet<int>();
 
-        if (routeModel.FallbackModelId.HasValue && !candidateIds.Contains(routeModel.FallbackModelId.Value))
+        // 直接挂载的目标
+        foreach (var t in routeModel.Targets.Where(t => t.Model != null && t.Model.IsEnabled))
+            candidateIds.Add(t.ModelId);
+
+        // 规则中的目标
+        foreach (var r in routeModel.Rules.Where(r => r.IsEnabled))
+            candidateIds.Add(r.TargetModelId);
+
+        // 回退模型
+        if (routeModel.FallbackModelId.HasValue)
             candidateIds.Add(routeModel.FallbackModelId.Value);
 
-        if (!candidateIds.Any()) return new List<Model>();
+        if (candidateIds.Count == 0) return new List<Model>();
 
         var candidates = await _db.Models
             .Include(m => m.Provider)
