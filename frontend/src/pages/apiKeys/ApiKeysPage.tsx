@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App } from 'antd';
+import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App, Tooltip, Alert } from 'antd';
 import { DeleteOutlined, StopOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiKeyApi, modelApi, orgApi } from '../../api';
@@ -122,13 +122,31 @@ export default function ApiKeysPage() {
     catch { message.error(t('common.error')); }
   };
 
+  const handleEnable = async (id: number) => {
+    try { await apiKeyApi.enable(id); message.success(t('common.success')); fetchData(); }
+    catch { message.error(t('common.error')); }
+  };
+
   const statusColors: Record<string, 'success' | 'default' | 'warning' | 'error'> = { Active: 'success', Disabled: 'default', RateLimited: 'warning', Expired: 'error' };
 
   const columns = [
     { title: t('apiKey.name'), dataIndex: 'name', key: 'name', sorter: true },
     {
       title: t('apiKey.key'), key: 'keyPrefix',
-      render: (_: any, r: ApiKey) => <span style={{ fontFamily: 'monospace' }}>{r.keyPrefix}...</span>,
+      render: (_: any, r: ApiKey) => (
+        <Space size={4}>
+          <span style={{ fontFamily: 'monospace' }}>{r.keyPrefix}...</span>
+          <Tooltip title={t('common.copy')}>
+            <Button type="text" size="small" icon={<CopyOutlined />} onClick={async () => {
+              try {
+                const res = await apiKeyApi.reveal(r.id);
+                await navigator.clipboard.writeText(res.key);
+                message.success(t('common.copied'));
+              } catch { message.error(t('common.error')); }
+            }} />
+          </Tooltip>
+        </Space>
+      ),
     },
     { title: t('apiKey.organization'), key: 'org', render: (_: any, r: ApiKey) => r.organization?.name },
     {
@@ -146,6 +164,9 @@ export default function ApiKeysPage() {
         <Space>
           {r.status === 'Active' && (
             <Button type="text" danger icon={<StopOutlined />} onClick={() => handleRevoke(r.id)} title={t('apiKey.revoke')} />
+          )}
+          {r.status === 'Disabled' && (
+            <Button type="text" icon={<span style={{ fontSize: 14 }}>↻</span>} onClick={() => handleEnable(r.id)} title={t('common.enable')} />
           )}
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
         </Space>
@@ -199,10 +220,33 @@ export default function ApiKeysPage() {
       >
         {createdKey ? (
           <div>
-            <Input.TextArea value={createdKey} readOnly rows={3} style={{ fontFamily: 'monospace', marginBottom: 12 }} />
-            <Button icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(createdKey); message.success(t('common.copied')); }}>
-              {t('common.copy')}
-            </Button>
+            <Alert type="warning" showIcon message={t('apiKey.copyWarning')} style={{ marginBottom: 16, borderRadius: 8 }} />
+            <div style={{
+              background: 'var(--ant-color-bg-elevated)',
+              border: '1px solid var(--ant-color-border)',
+              borderRadius: 12,
+              padding: '16px 20px',
+              marginBottom: 16,
+              position: 'relative',
+            }}>
+              <div style={{
+                fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 14,
+                wordBreak: 'break-all', lineHeight: 1.6,
+                color: 'var(--ant-color-primary)',
+                fontWeight: 500,
+                userSelect: 'all',
+              }}>
+                {createdKey}
+              </div>
+              <Button
+                type="primary"
+                icon={<CopyOutlined />}
+                onClick={() => { navigator.clipboard.writeText(createdKey); message.success(t('common.copied')); }}
+                style={{ position: 'absolute', top: 12, right: 12 }}
+              >
+                {t('common.copy')}
+              </Button>
+            </div>
           </div>
         ) : (
           <>

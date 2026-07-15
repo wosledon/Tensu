@@ -87,6 +87,20 @@ public class ApiKeysController : AdminBaseController
         return Ok(ApiResponse.Success());
     }
 
+    [HttpPost("{id}/enable")]
+    public async Task<IActionResult> Enable(int id)
+    {
+        var existing = await _service.GetEntityByIdAsync(id);
+        if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
+            return Forbid();
+
+        var enabled = await _service.EnableAsync(id);
+        if (!enabled) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        await LogAdminAuditAsync("enable", "ApiKey", id.ToString());
+        return Ok(ApiResponse.Success());
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -99,6 +113,20 @@ public class ApiKeysController : AdminBaseController
         if (!deleted) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         await LogAdminAuditAsync("delete", "ApiKey", id.ToString());
         return Ok(ApiResponse.Success());
+    }
+
+    [HttpPost("{id}/reveal")]
+    public async Task<IActionResult> Reveal(int id)
+    {
+        var existing = await _service.GetEntityByIdAsync(id);
+        if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
+            return Forbid();
+
+        var plainText = await _service.RevealAsync(id);
+        if (plainText == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
+        await LogAdminAuditAsync("reveal", "ApiKey", id.ToString(), "Key revealed for copy");
+        return Ok(ApiResponse<object>.Success(new { key = plainText }));
     }
 
     public record BatchIdsRequest(int[] Ids);

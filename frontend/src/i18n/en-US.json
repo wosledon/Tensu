@@ -229,7 +229,8 @@
     "revoke": "Revoke",
     "revokeConfirm": "Are you sure you want to revoke this key? This cannot be undone.",
     "created": "Key created. Please save it now:",
-    "copyKey": "Copy Key"
+    "copyKey": "Copy Key",
+    "copyWarning": "Copy this key now. It will not be shown again after closing"
   },
   "apiDocs": {
     "title": "API Documentation",

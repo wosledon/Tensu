@@ -76,6 +76,13 @@ public class ApiKeyService : BaseService
         };
     }
 
+    public async Task<string?> RevealAsync(int id)
+    {
+        var key = await _db.ApiKeys.FindAsync(id);
+        if (key == null) return null;
+        return _encryption.Decrypt(key.KeyValue);
+    }
+
     private static object MapToDetailDto(ApiKey k)
     {
         return MapToListDto(k);
@@ -115,6 +122,16 @@ public class ApiKeyService : BaseService
         var key = await _db.ApiKeys.FindAsync(id);
         if (key == null) return false;
         key.Status = KeyStatus.Disabled;
+        key.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> EnableAsync(int id)
+    {
+        var key = await _db.ApiKeys.FindAsync(id);
+        if (key == null) return false;
+        key.Status = KeyStatus.Active;
         key.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return true;

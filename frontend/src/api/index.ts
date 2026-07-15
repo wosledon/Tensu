@@ -160,12 +160,16 @@ export const apiKeyApi = {
     api.put<ApiResponse<ApiKey>>(`/api-keys/${id}`, data).then(unwrap),
   revoke: (id: number) =>
     api.post<ApiResponse<void>>(`/api-keys/${id}/revoke`).then(unwrap),
+  enable: (id: number) =>
+    api.post<ApiResponse<void>>(`/api-keys/${id}/enable`).then(unwrap),
   delete: (id: number) =>
     api.delete<ApiResponse<void>>(`/api-keys/${id}`).then(unwrap),
   batchDelete: (ids: number[]) =>
     api.delete<ApiResponse<object>>('/api-keys/batch', { data: { ids } }).then(unwrap),
   batchRevoke: (ids: number[]) =>
     api.post<ApiResponse<object>>('/api-keys/batch/revoke', ids).then(unwrap),
+  reveal: (id: number) =>
+    api.post<ApiResponse<{ key: string }>>(`/api-keys/${id}/reveal`).then(unwrap),
 };
 
 // Route Models

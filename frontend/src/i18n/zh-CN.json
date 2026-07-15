@@ -229,7 +229,8 @@
     "revoke": "吊销",
     "revokeConfirm": "确定要吊销此密钥吗？吊销后无法恢复。",
     "created": "密钥已创建，请妥善保存：",
-    "copyKey": "复制密钥"
+    "copyKey": "复制密钥",
+    "copyWarning": "请立即复制此密钥，关闭后不会再显示完整密钥"
   },
   "apiDocs": {
     "title": "API 文档",
