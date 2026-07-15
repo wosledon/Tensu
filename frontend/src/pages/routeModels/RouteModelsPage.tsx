@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, App, Tooltip, Popconfirm } from 'antd';
+import { Table, Form, Input, Select, Space, Tag, Card, Button, App, Tooltip, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, ExportOutlined, BranchesOutlined, CloseOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { routeModelApi, modelApi } from '../../api';
@@ -267,7 +267,40 @@ export default function RouteModelsPage() {
             );
           }}
         </Form.Item>
-        <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}>
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.isEnabled !== cur.isEnabled}>
+            {({ getFieldValue, setFieldValue }) => {
+              const checked = getFieldValue('isEnabled');
+              return (
+                <div onClick={() => setFieldValue('isEnabled', !checked)}
+                  style={{
+                    padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
+                    backgroundColor: checked ? '#34C75918' : 'var(--ant-color-fill-quaternary)',
+                    border: `1.5px solid ${checked ? '#34C759' : 'transparent'}`,
+                    transition: 'all 200ms ease', userSelect: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ fontWeight: 500, fontSize: 14, color: checked ? '#34C759' : 'var(--ant-color-text-secondary)' }}>
+                    {checked ? t('common.yes') : t('common.no')}
+                  </span>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: checked ? '#34C759' : 'var(--ant-color-border-secondary)',
+                    transition: 'all 200ms ease', flexShrink: 0,
+                  }}>
+                    {checked && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              );
+            }}
+          </Form.Item>
+        </Form.Item>
       </FormModal>
     </div>
   );

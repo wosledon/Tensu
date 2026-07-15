@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Table, Form, Input, InputNumber, Select, Switch, Space, Tag, Card, Button, Tooltip, Typography, theme, App, Row, Col } from 'antd';
+import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip, Typography, theme, App, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, DollarOutlined, EyeOutlined, BulbOutlined, ToolOutlined, ExperimentOutlined, ContainerOutlined, ThunderboltOutlined, CompressOutlined, SettingOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelApi, providerApi } from '../../api';
@@ -19,29 +19,48 @@ interface CapabilityItemProps {
 function CapabilityItem({ icon: Icon, label, hint, name, color }: CapabilityItemProps) {
   const { token } = theme.useToken();
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '12px 16px',
-        borderRadius: token.borderRadiusLG,
-        backgroundColor: token.colorFillQuaternary,
-        transition: 'background-color 200ms ease',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Icon style={{ fontSize: 18, color: color ?? token.colorPrimary }} />
-        <div>
-          <div style={{ fontWeight: 500, fontSize: 14 }}>{label}</div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{hint}</Typography.Text>
-        </div>
-      </div>
-      <Form.Item name={name} valuePropName="checked" style={{ marginBottom: 0 }}>
-        <Switch />
+    <Form.Item name={name} valuePropName="checked" style={{ marginBottom: 0 }}>
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev[name] !== cur[name]}>
+        {({ getFieldValue, setFieldValue }) => {
+          const checked = getFieldValue(name);
+          return (
+            <div
+              onClick={() => setFieldValue(name, !checked)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 16px',
+                borderRadius: token.borderRadiusLG,
+                backgroundColor: checked ? `${color ?? token.colorPrimary}0F` : token.colorFillQuaternary,
+                border: `1.5px solid ${checked ? color ?? token.colorPrimary : 'transparent'}`,
+                cursor: 'pointer',
+                transition: 'all 200ms ease',
+                userSelect: 'none',
+              }}
+            >
+              <Icon style={{ fontSize: 18, color: checked ? color ?? token.colorPrimary : token.colorTextQuaternary }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500, fontSize: 14, color: checked ? undefined : token.colorTextSecondary }}>{label}</div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{hint}</Typography.Text>
+              </div>
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: checked ? color ?? token.colorPrimary : token.colorBorderSecondary,
+                transition: 'all 200ms ease', flexShrink: 0,
+              }}>
+                {checked && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          );
+        }}
       </Form.Item>
-    </div>
+    </Form.Item>
   );
 }
 
@@ -154,7 +173,7 @@ export default function ModelsPage() {
     { title: t('model.displayName'), dataIndex: 'displayName', key: 'displayName' },
     { title: t('model.provider'), key: 'provider', render: (_: any, r: Model) => r.provider?.name },
     {
-      title: t('model.vision'), key: 'capabilities', width: 220,
+      title: t('model.capabilities'), key: 'capabilities', width: 280,
       render: (_: any, r: Model) => <CapabilityTags vision={r.supportsVision} reasoning={r.supportsReasoning} toolUse={r.supportsToolUse} thinking={r.supportsThinking} />,
     },
     {
@@ -389,12 +408,74 @@ export default function ModelsPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}>
-                <Switch />
+                <Form.Item noStyle shouldUpdate={(prev, cur) => prev.isEnabled !== cur.isEnabled}>
+                  {({ getFieldValue, setFieldValue }) => {
+                    const checked = getFieldValue('isEnabled');
+                    return (
+                      <div onClick={() => setFieldValue('isEnabled', !checked)}
+                        style={{
+                          padding: '10px 16px', borderRadius: token.borderRadiusLG, cursor: 'pointer',
+                          backgroundColor: checked ? '#34C75918' : token.colorFillQuaternary,
+                          border: `1.5px solid ${checked ? '#34C759' : 'transparent'}`,
+                          transition: 'all 200ms ease', userSelect: 'none',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        }}
+                      >
+                        <span style={{ fontWeight: 500, fontSize: 14, color: checked ? '#34C759' : token.colorTextSecondary }}>
+                          {checked ? t('common.yes') : t('common.no')}
+                        </span>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          backgroundColor: checked ? '#34C759' : token.colorBorderSecondary,
+                          transition: 'all 200ms ease', flexShrink: 0,
+                        }}>
+                          {checked && (
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }}
+                </Form.Item>
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="compressionEnabled" label={t('model.compression')} valuePropName="checked" initialValue={true}>
-                <Switch />
+                <Form.Item noStyle shouldUpdate={(prev, cur) => prev.compressionEnabled !== cur.compressionEnabled}>
+                  {({ getFieldValue, setFieldValue }) => {
+                    const checked = getFieldValue('compressionEnabled');
+                    return (
+                      <div onClick={() => setFieldValue('compressionEnabled', !checked)}
+                        style={{
+                          padding: '10px 16px', borderRadius: token.borderRadiusLG, cursor: 'pointer',
+                          backgroundColor: checked ? '#007AFF18' : token.colorFillQuaternary,
+                          border: `1.5px solid ${checked ? '#007AFF' : 'transparent'}`,
+                          transition: 'all 200ms ease', userSelect: 'none',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        }}
+                      >
+                        <span style={{ fontWeight: 500, fontSize: 14, color: checked ? '#007AFF' : token.colorTextSecondary }}>
+                          {checked ? t('common.yes') : t('common.no')}
+                        </span>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          backgroundColor: checked ? '#007AFF' : token.colorBorderSecondary,
+                          transition: 'all 200ms ease', flexShrink: 0,
+                        }}>
+                          {checked && (
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }}
+                </Form.Item>
               </Form.Item>
             </Col>
           </Row>

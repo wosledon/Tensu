@@ -105,7 +105,7 @@ export default function ModelCapabilitiesPage() {
       title: t('model.name'), key: 'model',
       render: (_: any, r: ModelCapability) => <span style={{ fontFamily: 'monospace' }}>{r.model?.provider?.name}-{r.model?.name}</span>,
     },
-    { title: t('capability.dimension'), dataIndex: 'dimension', key: 'dimension', render: (v: string) => t(`capability.dim${v}`) },
+    { title: t('capability.dimension'), dataIndex: 'dimension', key: 'dimension', render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
     {
       title: t('capability.score'), key: 'score', align: 'right' as const, width: 100,
       render: (_: any, r: ModelCapability) => (
@@ -114,7 +114,7 @@ export default function ModelCapabilitiesPage() {
         </Tag>
       ),
     },
-    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120, render: (v: string) => t(`capability.src${v.charAt(0).toUpperCase() + v.slice(1)}`) },
+    { title: t('capability.source'), dataIndex: 'source', key: 'source', width: 120, render: (v: string) => <span style={{ fontFamily: 'monospace' }}>{v}</span> },
     {
       title: t('capability.evidence'), dataIndex: 'evidence', key: 'evidence', ellipsis: true,
       render: (v?: string) => v || <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>,

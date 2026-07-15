@@ -113,34 +113,35 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 24 }}>{t('dashboard.title')}</Title>
+      <Title level={4} style={{ margin: 0, marginBottom: 32 }}>{t('dashboard.title')}</Title>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+        {stats.map((s, i) => (
+          <Card key={i} style={{ borderRadius: 18, cursor: s.onClick ? 'pointer' : undefined, transition: 'box-shadow 0.2s, transform 0.2s' }}
+            hoverable
+            onClick={s.onClick}
+          >
+            <Statistic
+              title={s.title}
+              value={s.value}
+              prefix={s.prefix}
+              suffix={s.suffix}
+              precision={s.precision}
+              valueStyle={{ color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 }}
+            />
+          </Card>
+        ))}
+      </div>
 
       <Row gutter={[24, 24]}>
-        {stats.map((s, i) => (
-          <Col key={i} xs={24} sm={12} lg={6}>
-            <Card style={{ borderRadius: 18, cursor: s.onClick ? 'pointer' : undefined }} onClick={s.onClick}>
-              <Statistic
-                title={s.title}
-                value={s.value}
-                prefix={s.prefix}
-                suffix={s.suffix}
-                precision={s.precision}
-                styles={{ content: { color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 } }}
-              />
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
           <Card title={t('dashboard.requestTrend')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={trendOption} style={{ height: 280 }} />
+            <ReactECharts option={trendOption} style={{ height: 300 }} />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
           <Card title={t('dashboard.modelDistribution')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={modelPieOption} style={{ height: 280 }} />
+            <ReactECharts option={modelPieOption} style={{ height: 300 }} />
           </Card>
         </Col>
       </Row>
@@ -148,25 +149,33 @@ export default function DashboardPage() {
       <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={14}>
           <Card title={t('audit.latency') + ' & ' + t('audit.status')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={latencyOption} style={{ height: 280 }} />
+            <ReactECharts option={latencyOption} style={{ height: 300 }} />
           </Card>
         </Col>
         <Col xs={24} lg={10}>
           <Card title={t('dashboard.providerHealth')} style={{ borderRadius: 18 }}>
-            {data?.providers?.length ? data.providers.map((p: any) => {
-              const statusLabel = p.healthStatus === 'Healthy' ? t('provider.healthy') : p.healthStatus === 'Degraded' ? t('provider.degraded') : p.healthStatus === 'Unhealthy' ? t('provider.unhealthy') : t('provider.unknown');
-              const statusColor = p.healthStatus === 'Healthy' ? '#34C759' : p.healthStatus === 'Unhealthy' ? '#FF3B30' : '#FF9500';
-              return (
-                <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--ant-color-border-secondary)' }}>
-                  <span>{p.name}</span>
-                  <span style={{ color: statusColor, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                    {statusLabel}
-                  </span>
-                </div>
-              );
-            }) : (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
+            {data?.providers?.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {data.providers.map((p: any) => {
+                  const statusLabel = p.healthStatus === 'Healthy' ? t('provider.healthy') : p.healthStatus === 'Degraded' ? t('provider.degraded') : p.healthStatus === 'Unhealthy' ? t('provider.unhealthy') : t('provider.unknown');
+                  const statusColor = p.healthStatus === 'Healthy' ? '#34C759' : p.healthStatus === 'Unhealthy' ? '#FF3B30' : '#FF9500';
+                  return (
+                    <div key={p.name} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px 16px', borderRadius: 12,
+                      background: 'var(--ant-color-bg-elevated)', transition: 'background 0.2s',
+                    }}>
+                      <span style={{ fontWeight: 500 }}>{p.name}</span>
+                      <span style={{ color: statusColor, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                        {statusLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--ant-color-text-secondary)' }}>{t('common.noData')}</div>
             )}
           </Card>
         </Col>

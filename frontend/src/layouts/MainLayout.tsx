@@ -27,8 +27,8 @@ export default function MainLayout() {
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard'), roles: allRoles },
     { key: '/api-docs', icon: <CodeOutlined />, label: t('nav.apiDocs'), roles: ['SuperAdmin', 'Admin', 'Developer'] },
     {
-      key: 'provider-model-group', icon: <DeploymentUnitOutlined />,
-      label: t('nav.groupProviderModel'), roles: ['SuperAdmin', 'Admin'],
+      key: 'gateway-group', icon: <DeploymentUnitOutlined />,
+      label: t('nav.groupGateway'), roles: ['SuperAdmin', 'Admin'],
       children: [
         { key: '/providers', icon: <ApiOutlined />, label: t('nav.providers') },
         { key: '/models', icon: <BranchesOutlined />, label: t('model.title') },
@@ -39,9 +39,10 @@ export default function MainLayout() {
     },
     {
       key: 'access-group', icon: <KeyOutlined />,
-      label: t('nav.groupAccess'), roles: ['SuperAdmin', 'Admin', 'Developer'],
+      label: t('nav.groupAccess'), roles: ['SuperAdmin', 'Admin'],
       children: [
         { key: '/api-keys', icon: <KeyOutlined />, label: t('nav.apiKeys') },
+        { key: '/oauth-providers', icon: <GlobalOutlined />, label: t('nav.oauthProviders') },
       ],
     },
     {
@@ -54,8 +55,8 @@ export default function MainLayout() {
       ],
     },
     {
-      key: 'monitoring-group', icon: <BarChartOutlined />,
-      label: t('nav.groupMonitoring'), roles: allRoles,
+      key: 'ops-group', icon: <BarChartOutlined />,
+      label: t('nav.groupOps'), roles: allRoles,
       children: [
         { key: '/audit', icon: <AuditOutlined />, label: t('nav.audit') },
         { key: '/analytics/usage', icon: <LineChartOutlined />, label: t('analytics.usage') },
@@ -63,6 +64,8 @@ export default function MainLayout() {
         { key: '/analytics/performance', icon: <RocketOutlined />, label: t('analytics.performance') },
         { key: '/analytics/cache', icon: <CloudOutlined />, label: t('analytics.cache') },
         { key: '/analytics/anomalies', icon: <WarningOutlined />, label: t('analytics.anomalies') },
+        { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit'), roles: ['SuperAdmin'] },
+        { key: '/alert-rules', icon: <WarningOutlined />, label: t('nav.alertRules'), roles: ['SuperAdmin'] },
       ],
     },
     {
@@ -70,10 +73,7 @@ export default function MainLayout() {
       label: t('nav.groupSystem'), roles: ['SuperAdmin'],
       children: [
         { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
-        { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit') },
         { key: '/webhooks', icon: <NotificationOutlined />, label: t('nav.webhooks') },
-        { key: '/oauth-providers', icon: <GlobalOutlined />, label: t('nav.oauthProviders') },
-        { key: '/alert-rules', icon: <WarningOutlined />, label: t('nav.alertRules') },
         { key: '/compression/restore', icon: <CodeOutlined />, label: t('nav.compressionRestore') },
       ],
     },
@@ -86,8 +86,11 @@ export default function MainLayout() {
         key: item.key,
         icon: item.icon,
         label: item.label,
-        children: item.children?.map((child) => ({ key: child.key, icon: child.icon, label: child.label })),
-      }));
+        children: item.children
+          ?.filter((child) => !('roles' in child) || (child as any).roles?.includes(role || ''))
+          .map((child) => ({ key: child.key, icon: child.icon, label: child.label })),
+      }))
+      .filter((item) => !item.children || item.children.length > 0);
   };
 
   const menuItems = filterMenuByRole(allMenuItems, user?.role);
@@ -110,9 +113,9 @@ export default function MainLayout() {
   const selectedPath = location.pathname;
   const getDefaultOpenKeys = (path: string): string[] => {
     const keys: string[] = [];
-    if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models')) keys.push('provider-model-group');
-    if (path.startsWith('/audit') || path.startsWith('/analytics')) keys.push('monitoring-group');
-    if (path.startsWith('/api-keys') || path.startsWith('/api-docs')) keys.push('access-group');
+    if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models')) keys.push('gateway-group');
+    if (path.startsWith('/audit') || path.startsWith('/analytics') || path.startsWith('/admin-audit') || path.startsWith('/alert-rules')) keys.push('ops-group');
+    if (path.startsWith('/api-keys') || path.startsWith('/oauth-providers')) keys.push('access-group');
     if (path.startsWith('/organizations') || path.startsWith('/users') || path.startsWith('/quotas')) keys.push('org-group');
     if (path.startsWith('/settings') || path.startsWith('/admin-audit') || path.startsWith('/webhooks') || path.startsWith('/oauth-providers') || path.startsWith('/alert-rules') || path.startsWith('/compression')) keys.push('system-group');
     return keys;

@@ -51,11 +51,11 @@
     "webhooks": "Webhook 通知",
     "alertRules": "告警规则",
     "compressionRestore": "压缩还原",
-    "groupProviderModel": "供应商与模型",
-    "groupAccess": "访问控制",
+    "groupGateway": "网关配置",
+    "groupAccess": "访问管理",
     "groupOrganization": "组织管理",
-    "groupMonitoring": "监控",
-    "groupSystem": "系统"
+    "groupOps": "监控运维",
+    "groupSystem": "系统设置"
   },
   "auth": {
     "login": "登录",

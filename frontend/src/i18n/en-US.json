@@ -51,11 +51,11 @@
     "webhooks": "Webhooks",
     "alertRules": "Alert Rules",
     "compressionRestore": "Compression Restore",
-    "groupProviderModel": "Provider & Model",
+    "groupGateway": "Gateway Config",
     "groupAccess": "Access",
     "groupOrganization": "Organization",
-    "groupMonitoring": "Monitoring",
-    "groupSystem": "System"
+    "groupOps": "Operations",
+    "groupSystem": "Settings"
   },
   "auth": {
     "login": "Login",

@@ -104,6 +104,13 @@ export default function ModelMatrixPage() {
 
   return (
     <div>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.3s ease; }
+      `}</style>
       <PageHeader
         title={t('model.title') + ' - ' + t('capability.matrixTitle')}
         extra={
@@ -116,13 +123,15 @@ export default function ModelMatrixPage() {
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={16}>
           <Card style={{ borderRadius: 18 }} loading={loading}>
-            <ReactECharts option={radarOption} style={{ height: 400 }} />
+            <div key={matrix?.models.length ?? 0} className="fade-in">
+              <ReactECharts option={radarOption} style={{ height: 400 }} />
+            </div>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
           <Card style={{ borderRadius: 18 }} title={t('capability.modelDetail')} loading={loading}>
             {selected ? (
-              <div>
+              <div key={selected.modelId} className="fade-in">
                 <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
                   {selected.providerName}-{selected.modelName}
                 </div>
