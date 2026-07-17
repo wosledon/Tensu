@@ -18,11 +18,15 @@ export default function ModelCapabilitiesPage() {
   const { message } = App.useApp();
   const [models, setModels] = useState<Model[]>([]);
   const [modelFilter, setModelFilter] = useState<number | undefined>();
+  const [dimensionFilter, setDimensionFilter] = useState<string | undefined>();
   const [autoEvalOpen, setAutoEvalOpen] = useState(false);
   const [autoEvalTarget, setAutoEvalTarget] = useState<ModelCapability | null>(null);
   const [autoEvalForm] = Form.useForm();
 
-  const fetchFn = useCallback((params: any) => modelCapabilityApi.list({ ...params, modelId: modelFilter }), [modelFilter]);
+  const fetchFn = useCallback(
+    (params: any) => modelCapabilityApi.list({ ...params, modelId: modelFilter, dimension: dimensionFilter }),
+    [modelFilter, dimensionFilter],
+  );
   const { data, total, loading, params, fetchData, setPage } = useCrudList<ModelCapability, any>({ fetchFn });
   const { form, open, editing, submitting, openCreate, openEdit, close } = useFormModal<ModelCapability>({
     createFn: modelCapabilityApi.create,
@@ -159,7 +163,17 @@ export default function ModelCapabilitiesPage() {
             options={modelOptions}
             onChange={(v) => setModelFilter(v)}
           />
-          {modelFilter && <Button onClick={() => setModelFilter(undefined)}>{t('common.reset')}</Button>}
+          <Select
+            allowClear
+            placeholder={t('capability.dimension')}
+            style={{ width: 200 }}
+            options={dimensions.map((d) => ({ value: d, label: t(`capability.dim${d}`) }))}
+            value={dimensionFilter}
+            onChange={(v) => setDimensionFilter(v)}
+          />
+          {(modelFilter || dimensionFilter) && (
+            <Button onClick={() => { setModelFilter(undefined); setDimensionFilter(undefined); }}>{t('common.reset')}</Button>
+          )}
         </Space>
       </Card>
       <Card style={{ borderRadius: 18 }}>
@@ -230,11 +244,7 @@ export default function ModelCapabilitiesPage() {
 
       <FormModal title={t('capability.autoEvaluate')} open={autoEvalOpen} form={autoEvalForm} editing={false} onOk={handleAutoEvaluate} onCancel={() => setAutoEvalOpen(false)}>
         <Form.Item name="dimensions" label={t('capability.dimensions')} rules={[{ required: true }]}>
-          <Select mode="multiple" options={[
-            { value: 'Latency', label: t('capability.dimLatency') },
-            { value: 'Throughput', label: t('capability.dimThroughput') },
-            { value: 'CostEfficiency', label: t('capability.dimCostEfficiency') },
-          ]} />
+          <Select mode="multiple" options={dimensions.map((d) => ({ value: d, label: t(`capability.dim${d}`) }))} />
         </Form.Item>
         <Tooltip title={t('capability.autoEvaluateHint')}>
           <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>{t('capability.autoEvaluateHint')}</span>

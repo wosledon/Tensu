@@ -140,7 +140,7 @@ public class GatewayController : ControllerBase
     private async Task<IActionResult> ProxyRequestAsync(string protocol, string path)
     {
         var sw = Stopwatch.StartNew();
-        var requestId = Guid.NewGuid().ToString("N");
+        var requestId = HttpContext.Items[RequestIdMiddleware.ItemKey] as string ?? Guid.NewGuid().ToString("N");
         HttpContext.Response.Headers["X-Request-Id"] = requestId;
 
         // ── 1. Authenticate ──
@@ -252,8 +252,28 @@ public class GatewayController : ControllerBase
             if (provider == null) return StatusCode(500, new { error = new { message = "Provider not found", type = "server_error" } });
             HttpContext.Response.Headers["X-Upstream-Provider"] = provider.Name;
 
+            // ── Model-scoped quota check (RPM/TPM + daily/monthly token limits) ──
+            var modelQuota = await _quotaService.GetModelQuotaAsync(apiKey.OrganizationId, model.Id);
+            var modelScope = $"model:{model.Id}";
+            if (modelQuota != null)
+            {
+                var (modelRateAllowed, modelRateRetryAfter) = await _rateLimiter.CheckRateLimitAsync(modelScope, modelQuota.Rpm, modelQuota.Tpm, estimatedTokens);
+                if (!modelRateAllowed)
+                {
+                    HttpContext.Response.Headers["Retry-After"] = modelRateRetryAfter.ToString();
+                    return StatusCode(429, new { error = new { message = "Model rate limit exceeded", type = "rate_limit_error", retry_after = modelRateRetryAfter } });
+                }
+
+                var (modelTokenAllowed, modelTokenRetryAfter) = await _quotaService.CheckModelTokenQuotaAsync(modelQuota, model.Id, estimatedTokens);
+                if (!modelTokenAllowed)
+                {
+                    HttpContext.Response.Headers["Retry-After"] = modelTokenRetryAfter.ToString();
+                    return StatusCode(429, new { error = new { message = "Model token quota exceeded", type = "rate_limit_error", retry_after = modelTokenRetryAfter } });
+                }
+            }
+
             // ── Concurrency check ──
-            var concurrentLimit = await _quotaService.GetConcurrentRequestLimitAsync(apiKey.OrganizationId, apiKey.Id);
+            var concurrentLimit = await _quotaService.GetConcurrentRequestLimitAsync(apiKey.OrganizationId, apiKey.Id, model.Id);
             bool concurrencyAcquired = false;
             if (concurrentLimit.HasValue)
             {
@@ -290,12 +310,17 @@ public class GatewayController : ControllerBase
 
                 if (cacheEnabled)
                 {
-                    var cacheHit = _cache.TryGet(cacheKey);
+                    var cacheHit = await _cache.TryGetAsync(cacheKey);
                     if (cacheHit.HasValue && cacheHit.Value.hit)
                     {
                         HttpContext.Response.Headers["X-Cache"] = "HIT";
                         await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
                         await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
+                        if (modelQuota != null)
+                        {
+                            await _rateLimiter.RecordRequestAsync(modelScope, 0);
+                            await _quotaService.RecordModelUsageAsync(model.Id, estimatedTokens);
+                        }
 
                         var cachedResponse = cacheHit.Value.responseBody!;
                         var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, cacheHit.Value.isStream);
@@ -330,6 +355,11 @@ public class GatewayController : ControllerBase
                             HttpContext.Response.Headers["X-Cache"] = "HIT_SEMANTIC";
                             await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
                             await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
+                            if (modelQuota != null)
+                            {
+                                await _rateLimiter.RecordRequestAsync(modelScope, 0);
+                                await _quotaService.RecordModelUsageAsync(model.Id, estimatedTokens);
+                            }
 
                             var cachedResponse = semanticHit.Value.responseBody!;
                             var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, semanticHit.Value.isStream);
@@ -369,23 +399,44 @@ public class GatewayController : ControllerBase
                 {
                     HttpResponseMessage? response;
 
+                    var maxRetriesValue = await _settingsService.GetAsync("retry.maxRetries");
+                    var baseDelayMsValue = await _settingsService.GetAsync("retry.baseDelayMs");
+                    var maxDelayMsValue = await _settingsService.GetAsync("retry.maxDelayMs");
+                    int.TryParse(maxRetriesValue, out var parsedMaxRetries);
+                    int.TryParse(baseDelayMsValue, out var parsedBaseDelayMs);
+                    int.TryParse(maxDelayMsValue, out var parsedMaxDelayMs);
+
                     if (isStream)
                     {
-                        var upstreamRequest = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, selectedKey);
-                        response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead);
-                        var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled, semanticCacheEnabled, semanticCacheThreshold, semanticCacheTtl, requestedModel, compressionMappingKey, provider, selectedKey);
+                        // Retry is safe here: nothing has been written to the client yet.
+                        // Mid-stream failures are handled by HandleStreamResponse (marked interrupted, no retry).
+                        response = await _retryPolicy.ExecuteWithRetryAsync(
+                            async (key) =>
+                            {
+                                var req = BuildUpstreamRequest(upstreamUrl, bodyToSend, provider, key);
+                                return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+                            },
+                            provider,
+                            selectedKey,
+                            isStream: false,
+                            maxRetries: parsedMaxRetries > 0 ? parsedMaxRetries : null,
+                            baseDelayMs: parsedBaseDelayMs > 0 ? parsedBaseDelayMs : null,
+                            maxDelayMs: parsedMaxDelayMs > 0 ? parsedMaxDelayMs : null);
+
+                        if (response == null)
+                        {
+                            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, 0, rateLimited: false);
+                            return StatusCode(502, new { error = new { message = "All retry attempts failed", type = "proxy_error" } });
+                        }
+
+                        var streamResult = await HandleStreamResponse(response, requestId, model, apiKey, sw, requestBody, inputTokens, inputTokensAfterCompression, compressionStrategy, compressionApplied, cacheKey, cacheTtl, cacheEnabled, semanticCacheEnabled, semanticCacheThreshold, semanticCacheTtl, requestedModel, compressionMappingKey, provider, selectedKey, modelQuota);
                         await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, estimatedTokens, apiKey.Id);
+                        if (modelQuota != null)
+                            await _quotaService.RecordModelUsageAsync(model.Id, estimatedTokens);
                         return streamResult;
                     }
                     else
                     {
-                        var maxRetriesValue = await _settingsService.GetAsync("retry.maxRetries");
-                        var baseDelayMsValue = await _settingsService.GetAsync("retry.baseDelayMs");
-                        var maxDelayMsValue = await _settingsService.GetAsync("retry.maxDelayMs");
-                        int.TryParse(maxRetriesValue, out var parsedMaxRetries);
-                        int.TryParse(baseDelayMsValue, out var parsedBaseDelayMs);
-                        int.TryParse(maxDelayMsValue, out var parsedMaxDelayMs);
-
                         response = await _retryPolicy.ExecuteWithRetryAsync(
                             async (key) =>
                             {
@@ -424,6 +475,8 @@ public class GatewayController : ControllerBase
                         ForwardHeaders(response);
 
                         await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
+                        if (modelQuota != null)
+                            await _rateLimiter.RecordRequestAsync(modelScope, 0);
                         _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
                         _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
@@ -431,12 +484,14 @@ public class GatewayController : ControllerBase
                         var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
 
                         if (cacheEnabled)
-                            _cache.Set(cacheKey, responseBody, isStream: false, cacheTtl);
+                            await _cache.SetAsync(cacheKey, responseBody, isStream: false, cacheTtl);
 
                         if (semanticCacheEnabled)
                             await _cache.SetSemanticAsync(requestedModel, requestBody, responseBody, isStream: false, semanticCacheTtl, CancellationToken.None);
 
                         await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, inputTokens + outputTokens, apiKey.Id);
+                        if (modelQuota != null)
+                            await _quotaService.RecordModelUsageAsync(model.Id, inputTokens + outputTokens);
 
                         await EnqueueAuditLog(requestId, model, apiKey, responseBody, sw.ElapsedMilliseconds, false,
                             RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
@@ -882,7 +937,7 @@ public class GatewayController : ControllerBase
     private async Task<IActionResult> HandleStreamResponse(
         HttpResponseMessage response, string requestId, Model model, ApiKey apiKey, Stopwatch sw,
         string requestBody, int inputTokens, int inputTokensAfterCompression, string compressionStrategy, bool compressionApplied,
-        string cacheKey, TimeSpan? cacheTtl, bool cacheEnabled, bool semanticCacheEnabled, float semanticCacheThreshold, TimeSpan? semanticCacheTtl, string requestedModel, string? compressionMappingKey, Provider provider, ProviderKey selectedKey)
+        string cacheKey, TimeSpan? cacheTtl, bool cacheEnabled, bool semanticCacheEnabled, float semanticCacheThreshold, TimeSpan? semanticCacheTtl, string requestedModel, string? compressionMappingKey, Provider provider, ProviderKey selectedKey, Quota? modelQuota = null)
     {
         sw.Stop();
 
@@ -945,6 +1000,8 @@ public class GatewayController : ControllerBase
 
             sw.Stop();
             await _rateLimiter.RecordRequestAsync(apiKey.Id, 0);
+            if (modelQuota != null)
+                await _rateLimiter.RecordRequestAsync($"model:{model.Id}", 0);
             _loadBalancer.RecordLatency(model.ProviderId, sw.ElapsedMilliseconds);
             _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
@@ -955,7 +1012,7 @@ public class GatewayController : ControllerBase
 
             var aggregatedSseBody = aggregatedSse.ToString();
             if (cacheEnabled)
-                _cache.Set(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
+                await _cache.SetAsync(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
 
             if (semanticCacheEnabled)
                 await _cache.SetSemanticAsync(requestedModel, requestBody, aggregatedSseBody, isStream: true, semanticCacheTtl, CancellationToken.None);
@@ -977,7 +1034,7 @@ public class GatewayController : ControllerBase
 
             var aggregatedSseBody = aggregatedSse.ToString();
             if (cacheEnabled && aggregatedSseBody.Length > 0)
-                _cache.Set(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
+                await _cache.SetAsync(cacheKey, aggregatedSseBody, isStream: true, cacheTtl);
 
             if (semanticCacheEnabled && aggregatedSseBody.Length > 0)
                 await _cache.SetSemanticAsync(requestedModel, requestBody, aggregatedSseBody, isStream: true, semanticCacheTtl, CancellationToken.None);

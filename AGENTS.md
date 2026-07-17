@@ -46,12 +46,12 @@ tests/Tensu.Tests/  — xunit + Moq + WebApplicationFactory + coverlet
 
 | 问题 | 位置 | 说明 |
 |------|------|------|
-| **SettingsService.SetAsync 限制 key** | `SettingsService.cs:85` | 只允许写入 `Defaults` 字典中已有的 key，前端 SettingsPage 尝试写入未知 key 时会抛异常 |
-| **QuotasPage 的 `model` scope 后端不支持** | `QuotaService` 只按 ApiKeyId 过滤 | 前端下拉选了也不会生效 |
-| **ModelCapabilitiesPage dimension 筛选参数丢失** | 前端 filter state 只跟踪 modelId，不跟踪 dimension | 实际传参未生效 |
-| **语义缓存是词袋模型** | `CacheService.GenerateEmbedding` | 100 维词频向量，非真实 embedding |
-| **流式请求不重试** | `GatewayController` | 仅非流式走 RetryPolicy，流式直接透传 |
-| **模型自动评估未调用 LLM** | `ModelCapabilityService.RunSyntheticEvaluationAsync` | 只基于历史日志计算指标，未调用 LLM 做真实评估 |
+| **SettingsService.SetAsync 校验 key 格式** | `SettingsService.cs` | key 必须匹配 `^[A-Za-z][A-Za-z0-9._-]{0,99}$`，value ≤ 4000 字符；支持任意自定义 key |
+| **流式重试仅限首字节前** | `GatewayController` | 流式请求在向客户端写入任何字节前失败会重试并故障转移；流中段失败标记 `interrupted` 不重试 |
+| **语义缓存是本地特征哈希** | `CacheService.GenerateEmbedding` | 256 维 FNV 特征哈希（unigram+bigram，CJK 单字），非真实 embedding 模型；旧 100 维条目自动失效 |
+| **审计内容加密开关** | `audit.encryptContent` | 开启后新写入的 RequestContent/ResponseContent 以 `enc:v1:` 前缀 AES 加密，读取自动解密；历史明文兼容 |
+| **模型自动评估会真实调用上游** | `ModelCapabilityService` | Latency/Throughput/CostEfficiency 走历史日志；其余维度发送真实 LLM 探测请求（产生少量上游计费） |
+| **缓存后端可配置** | `cache.backend` = `memory`(默认)/`database` | database 模式走 `exact_cache_entries` 表，多实例共享；配置 60s 热加载 |
 
 ## 已完成但需注意的缺口
 
@@ -60,6 +60,7 @@ tests/Tensu.Tests/  — xunit + Moq + WebApplicationFactory + coverlet
 - 货币汇率管理已通过 Settings 页面集成（`currency.*` keys），`ModelPricing.ExchangeRate` 字段已存在但无自动换算逻辑
 - Webhook 投递已加入重试队列（`WebhookDelivery` 实体 + `NotificationService` 自动重试失败投递）
 - 告警规则配置页面已补充（路由 `/alert-rules`，CRUD 端点 `/api/admin/alert-rules`）
+- 性能目标（PRD §4.2 P99 < 10ms/30ms）通过 `/metrics` 的 `tensu_latency_percentile_ms` gauge（P50/P95/P99）观测，无内置负载测试环境
 
 ## 技术栈速查
 

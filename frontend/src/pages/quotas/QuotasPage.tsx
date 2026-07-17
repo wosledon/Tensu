@@ -1,11 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Table, Form, InputNumber, Select, Space, Card, Button, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { quotaApi } from '../../api';
+import { quotaApi, orgApi, modelApi } from '../../api';
 import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, FormModal } from '../../components';
-import type { Quota } from '../../types';
+import type { Quota, Organization, Model } from '../../types';
 import { exportTableToCsv } from '../../utils/export';
 
 const scopeOptions = [
@@ -14,8 +14,22 @@ const scopeOptions = [
   { value: 'model', label: 'quota.scopeModel' },
 ];
 
+function flattenOrgs(orgs: Organization[]): Organization[] {
+  const result: Organization[] = [];
+  const walk = (list: Organization[]) => {
+    for (const org of list) {
+      result.push(org);
+      if (org.children?.length) walk(org.children);
+    }
+  };
+  walk(orgs);
+  return result;
+}
+
 export default function QuotasPage() {
   const { t } = useTranslation();
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
 
   const fetchFn = useCallback((params: any) => quotaApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<Quota, any>({ fetchFn });
@@ -25,6 +39,15 @@ export default function QuotasPage() {
     onSuccess: fetchData,
   });
   const { handleDelete } = useConfirmDelete(quotaApi.delete, fetchData);
+
+  const ensureOptions = async () => {
+    if (!orgs.length) {
+      try { setOrgs(flattenOrgs(await orgApi.tree())); } catch {}
+    }
+    if (!models.length) {
+      try { setModels(await modelApi.allEnabled()); } catch {}
+    }
+  };
 
   const scopeLabelMap: Record<string, string> = {
     org: t('quota.scopeOrg'),
@@ -42,17 +65,20 @@ export default function QuotasPage() {
     {
       title: t('quota.organization'),
       key: 'organization',
-      render: (_: any, r: Quota) => (r.scope === 'org' ? r.organizationId ?? '-' : '-'),
+      render: (_: any, r: Quota) => r.organization?.name ?? r.organizationId ?? '-',
     },
     {
       title: t('quota.apiKey'),
       key: 'apiKey',
-      render: (_: any, r: Quota) => (r.scope === 'key' ? r.apiKeyId ?? '-' : '-'),
+      render: (_: any, r: Quota) => (r.apiKeyId != null ? <span style={{ fontFamily: 'monospace' }}>{r.apiKeyId}</span> : '-'),
     },
     {
       title: t('quota.model'),
       key: 'model',
-      render: (_: any, r: Quota) => (r.scope === 'model' ? r.modelId ?? '-' : '-'),
+      render: (_: any, r: Quota) =>
+        r.model ? (
+          <span style={{ fontFamily: 'monospace' }}>{r.model.provider?.name}-{r.model.name}</span>
+        ) : (r.modelId ?? '-'),
     },
     { title: t('quota.rpm'), dataIndex: 'rpm', key: 'rpm' },
     { title: t('quota.tpm'), dataIndex: 'tpm', key: 'tpm' },
@@ -66,7 +92,7 @@ export default function QuotasPage() {
       width: 120,
       render: (_: any, r: Quota) => (
         <Space>
-          <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+          <Button type="text" icon={<EditOutlined />} onClick={async () => { await ensureOptions(); openEdit(r); }} />
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
         </Space>
       ),
@@ -77,11 +103,14 @@ export default function QuotasPage() {
     exportTableToCsv('quotas', columns, data);
   };
 
+  const orgOptions = orgs.map((o) => ({ value: o.id, label: o.name }));
+  const modelOptions = models.map((m) => ({ value: m.id, label: `${m.provider?.name}-${m.name}` }));
+
   return (
     <div>
       <PageHeader
         title={t('quota.title')}
-        onCreate={openCreate}
+        onCreate={async () => { await ensureOptions(); openCreate(); }}
         onSearch={setKeyword}
         extra={
           <Button icon={<ExportOutlined />} onClick={handleExport}>
@@ -115,16 +144,12 @@ export default function QuotasPage() {
             placeholder={t('common.all')}
           />
         </Form.Item>
+        <Form.Item name="organizationId" label={t('quota.organization')} rules={[{ required: true }]}>
+          <Select options={orgOptions} showSearch optionFilterProp="label" />
+        </Form.Item>
         <Form.Item noStyle shouldUpdate={(prev, cur) => prev.scope !== cur.scope}>
           {({ getFieldValue }) => {
             const scope = getFieldValue('scope');
-            if (scope === 'org') {
-              return (
-                <Form.Item name="organizationId" label={t('quota.organization')} rules={[{ required: true }]}>
-                  <InputNumber min={1} style={{ width: '100%' }} />
-                </Form.Item>
-              );
-            }
             if (scope === 'key') {
               return (
                 <Form.Item name="apiKeyId" label={t('quota.apiKey')} rules={[{ required: true }]}>
@@ -135,7 +160,7 @@ export default function QuotasPage() {
             if (scope === 'model') {
               return (
                 <Form.Item name="modelId" label={t('quota.model')} rules={[{ required: true }]}>
-                  <InputNumber min={1} style={{ width: '100%' }} />
+                  <Select options={modelOptions} showSearch optionFilterProp="label" />
                 </Form.Item>
               );
             }

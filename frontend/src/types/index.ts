@@ -222,6 +222,8 @@ export interface Quota {
   organizationId?: number;
   apiKeyId?: number;
   modelId?: number;
+  organization?: Organization;
+  model?: Model;
   rpm?: number;
   tpm?: number;
   dailyTokenLimit?: number;

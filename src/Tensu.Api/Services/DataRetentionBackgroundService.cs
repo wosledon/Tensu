@@ -46,8 +46,8 @@ public class DataRetentionBackgroundService : BackgroundService
         var settingsService = scope.ServiceProvider.GetRequiredService<SettingsService>();
 
         var retentionValue = await settingsService.GetAsync("audit.dataRetentionDays");
-        if (!int.TryParse(retentionValue, out var retentionDays) || retentionDays <= 0)
-            retentionDays = 30;
+        if (!int.TryParse(retentionValue, out var globalRetentionDays) || globalRetentionDays <= 0)
+            globalRetentionDays = 30;
 
         var archiveBeforeDeleteValue = await settingsService.GetAsync("audit.archiveBeforeDelete");
         var archiveBeforeDelete = string.Equals(archiveBeforeDeleteValue, "true", StringComparison.OrdinalIgnoreCase);
@@ -56,59 +56,42 @@ public class DataRetentionBackgroundService : BackgroundService
         if (!int.TryParse(archivedRetentionValue, out var archivedRetentionDays) || archivedRetentionDays <= 0)
             archivedRetentionDays = 365;
 
-        var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
         var archivedCutoff = DateTime.UtcNow.AddDays(-archivedRetentionDays);
         var now = DateTime.UtcNow;
+
+        // Per-organization retention: orgs may configure 7~180 days (PRD §3.6.4);
+        // logs without an organization (or with an unknown one) use the global setting.
+        var orgRetentions = await db.Organizations
+            .AsNoTracking()
+            .Select(o => new { o.Id, o.DataRetentionDays })
+            .ToListAsync(ct);
+
+        var retentionByOrg = orgRetentions.ToDictionary(
+            o => o.Id,
+            o => o.DataRetentionDays > 0 ? Math.Clamp(o.DataRetentionDays, 7, 180) : globalRetentionDays);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         int totalArchived = 0;
         int totalDeleted = 0;
 
-        if (archiveBeforeDelete)
+        foreach (var (orgId, retentionDays) in retentionByOrg)
         {
-            const int batchSize = 1000;
-            while (true)
-            {
-                var logs = await db.RequestLogs
-                    .Where(r => r.Timestamp < cutoff)
-                    .OrderBy(r => r.Id)
-                    .Take(batchSize)
-                    .ToListAsync(ct);
-
-                if (logs.Count == 0)
-                    break;
-
-                var requestIds = logs.Select(l => l.RequestId).ToList();
-                var existingArchivedIds = await db.ArchivedRequestLogs
-                    .Where(a => requestIds.Contains(a.RequestId))
-                    .Select(a => a.RequestId)
-                    .ToListAsync(ct);
-
-                var logsToArchive = logs
-                    .Where(l => !existingArchivedIds.Contains(l.RequestId))
-                    .ToList();
-
-                if (logsToArchive.Count > 0)
-                {
-                    db.ArchivedRequestLogs.AddRange(logsToArchive.Select(MapToArchive));
-                    await db.SaveChangesAsync(ct);
-                    totalArchived += logsToArchive.Count;
-                }
-
-                var idsToDelete = logs.Select(l => l.Id).ToList();
-                var deleted = await db.RequestLogs
-                    .Where(r => idsToDelete.Contains(r.Id))
-                    .ExecuteDeleteAsync(ct);
-                totalDeleted += deleted;
-            }
+            var cutoff = now.AddDays(-retentionDays);
+            var (archived, deleted) = await ArchiveAndDeleteBatchAsync(db, archiveBeforeDelete,
+                db.RequestLogs.Where(r => r.OrganizationId == orgId && r.Timestamp < cutoff), ct);
+            totalArchived += archived;
+            totalDeleted += deleted;
         }
-        else
-        {
-            totalDeleted = await db.RequestLogs
-                .Where(r => r.Timestamp < cutoff)
-                .ExecuteDeleteAsync(ct);
-        }
+
+        // Logs with no organization or an organization that no longer exists.
+        var orgIds = retentionByOrg.Keys.ToList();
+        var globalCutoff = now.AddDays(-globalRetentionDays);
+        var (globalArchived, globalDeleted) = await ArchiveAndDeleteBatchAsync(db, archiveBeforeDelete,
+            db.RequestLogs.Where(r => r.Timestamp < globalCutoff &&
+                (r.OrganizationId == null || !orgIds.Contains(r.OrganizationId.Value))), ct);
+        totalArchived += globalArchived;
+        totalDeleted += globalDeleted;
 
         var archivedDeleted = await db.ArchivedRequestLogs
             .Where(a => a.Timestamp < archivedCutoff)
@@ -123,6 +106,10 @@ public class DataRetentionBackgroundService : BackgroundService
             .ExecuteDeleteAsync(ct);
 
         var semanticCacheDeleted = await db.SemanticCacheEntries
+            .Where(e => e.ExpiresAt < now)
+            .ExecuteDeleteAsync(ct);
+
+        var exactCacheDeleted = await db.ExactCacheEntries
             .Where(e => e.ExpiresAt < now)
             .ExecuteDeleteAsync(ct);
 
@@ -141,8 +128,8 @@ public class DataRetentionBackgroundService : BackgroundService
         await transaction.CommitAsync(ct);
 
         _logger.LogInformation(
-            "Data retention archived {Archived} and deleted {Deleted} audit logs older than {Cutoff:O}",
-            totalArchived, totalDeleted, cutoff);
+            "Data retention archived {Archived} and deleted {Deleted} audit logs (per-organization retention, global {GlobalDays} days)",
+            totalArchived, totalDeleted, globalRetentionDays);
         _logger.LogInformation(
             "Data retention removed {Count} archived logs older than {ArchivedCutoff:O}",
             archivedDeleted, archivedCutoff);
@@ -153,12 +140,68 @@ public class DataRetentionBackgroundService : BackgroundService
         _logger.LogInformation(
             "Data retention removed {Count} expired semantic cache entries", semanticCacheDeleted);
         _logger.LogInformation(
+            "Data retention removed {Count} expired exact cache entries", exactCacheDeleted);
+        _logger.LogInformation(
             "Data retention removed {Count} daily stats older than {ArchivedCutoff:O}",
             dailyStatsDeleted, archivedCutoff);
         _logger.LogInformation(
             "Data retention removed {Count} admin audit logs older than 180 days", adminAuditDeleted);
         _logger.LogInformation(
             "Data retention removed {Count} completed data deletion requests", dataDeletionDeleted);
+    }
+
+    /// <summary>
+    /// Archives (optional) then deletes all logs matching the given filter, in batches.
+    /// Returns (archivedCount, deletedCount).
+    /// </summary>
+    private static async Task<(int archived, int deleted)> ArchiveAndDeleteBatchAsync(
+        TensuDbContext db, bool archiveBeforeDelete, IQueryable<RequestLog> filter, CancellationToken ct)
+    {
+        if (!archiveBeforeDelete)
+        {
+            var deletedOnly = await filter.ExecuteDeleteAsync(ct);
+            return (0, deletedOnly);
+        }
+
+        var totalArchived = 0;
+        var totalDeleted = 0;
+        const int batchSize = 1000;
+
+        while (true)
+        {
+            var logs = await filter
+                .OrderBy(r => r.Id)
+                .Take(batchSize)
+                .ToListAsync(ct);
+
+            if (logs.Count == 0)
+                break;
+
+            var requestIds = logs.Select(l => l.RequestId).ToList();
+            var existingArchivedIds = await db.ArchivedRequestLogs
+                .Where(a => requestIds.Contains(a.RequestId))
+                .Select(a => a.RequestId)
+                .ToListAsync(ct);
+
+            var logsToArchive = logs
+                .Where(l => !existingArchivedIds.Contains(l.RequestId))
+                .ToList();
+
+            if (logsToArchive.Count > 0)
+            {
+                db.ArchivedRequestLogs.AddRange(logsToArchive.Select(MapToArchive));
+                await db.SaveChangesAsync(ct);
+                totalArchived += logsToArchive.Count;
+            }
+
+            var idsToDelete = logs.Select(l => l.Id).ToList();
+            var deleted = await db.RequestLogs
+                .Where(r => idsToDelete.Contains(r.Id))
+                .ExecuteDeleteAsync(ct);
+            totalDeleted += deleted;
+        }
+
+        return (totalArchived, totalDeleted);
     }
 
     private static ArchivedRequestLog MapToArchive(RequestLog log)

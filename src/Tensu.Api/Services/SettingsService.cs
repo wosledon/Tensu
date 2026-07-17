@@ -46,6 +46,8 @@ public class SettingsService
         ["retry.maxRetries"] = "2",
         ["retry.baseDelayMs"] = "500",
         ["retry.maxDelayMs"] = "5000",
+        ["cache.backend"] = "memory",
+        ["audit.encryptContent"] = "false",
         ["currency.default"] = "USD",
         ["currency.rate.USD"] = "1.0",
         ["currency.rate.CNY"] = "7.2",
@@ -86,10 +88,19 @@ public class SettingsService
         return value;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex KeyPattern =
+        new(@"^[A-Za-z][A-Za-z0-9._-]{0,99}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public async Task SetAsync(string key, string value)
     {
-        if (!Defaults.ContainsKey(key))
-            throw new ArgumentException($"Unknown setting key: {key}");
+        if (string.IsNullOrWhiteSpace(key) || !KeyPattern.IsMatch(key))
+            throw new ArgumentException($"Invalid setting key: {key}");
+
+        if (value == null)
+            throw new ArgumentException("Setting value cannot be null");
+
+        if (value.Length > 4000)
+            throw new ArgumentException("Setting value exceeds maximum length of 4000 characters");
 
         var existing = await _db.Settings.FirstOrDefaultAsync(s => s.Key == key);
         if (existing != null)

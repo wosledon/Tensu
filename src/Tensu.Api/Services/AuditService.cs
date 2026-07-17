@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Tensu.Api.Data;
+using Tensu.Api.Infrastructure;
 using Tensu.Core.Common;
 using Tensu.Core.Entities;
 
@@ -8,10 +9,12 @@ namespace Tensu.Api.Services;
 public class AuditService : BaseService
 {
     private readonly TensuDbContext _db;
+    private readonly EncryptionService _encryptionService;
 
-    public AuditService(TensuDbContext db)
+    public AuditService(TensuDbContext db, EncryptionService encryptionService)
     {
         _db = db;
+        _encryptionService = encryptionService;
     }
 
     public async Task<PagedResult<RequestLog>> GetListAsync(PagedRequest request, int? orgId = null, string? modelName = null)
@@ -33,12 +36,24 @@ public class AuditService : BaseService
 
         var (pagedQuery, total) = await ApplyPagingAsync(query, request);
         var items = await pagedQuery.ToListAsync();
+        // Decrypt after materialization to avoid per-row work in the database.
+        foreach (var item in items)
+        {
+            item.RequestContent = _encryptionService.DecryptAuditContent(item.RequestContent);
+            item.ResponseContent = _encryptionService.DecryptAuditContent(item.ResponseContent);
+        }
         return ToPagedResult(items, total, request);
     }
 
     public async Task<RequestLog?> GetByRequestIdAsync(string requestId)
     {
-        return await _db.RequestLogs.FirstOrDefaultAsync(r => r.RequestId == requestId);
+        var log = await _db.RequestLogs.FirstOrDefaultAsync(r => r.RequestId == requestId);
+        if (log != null)
+        {
+            log.RequestContent = _encryptionService.DecryptAuditContent(log.RequestContent);
+            log.ResponseContent = _encryptionService.DecryptAuditContent(log.ResponseContent);
+        }
+        return log;
     }
 
     public async Task<object> GetSummaryAsync(DateTime from, DateTime to, int? orgId = null)
@@ -104,11 +119,22 @@ public class AuditService : BaseService
 
         var (pagedQuery, total) = await ApplyPagingAsync(query, request);
         var items = await pagedQuery.ToListAsync();
+        foreach (var item in items)
+        {
+            item.RequestContent = _encryptionService.DecryptAuditContent(item.RequestContent);
+            item.ResponseContent = _encryptionService.DecryptAuditContent(item.ResponseContent);
+        }
         return ToPagedResult(items, total, request);
     }
 
     public async Task<ArchivedRequestLog?> GetArchivedByRequestIdAsync(string requestId)
     {
-        return await _db.ArchivedRequestLogs.FirstOrDefaultAsync(r => r.RequestId == requestId);
+        var log = await _db.ArchivedRequestLogs.FirstOrDefaultAsync(r => r.RequestId == requestId);
+        if (log != null)
+        {
+            log.RequestContent = _encryptionService.DecryptAuditContent(log.RequestContent);
+            log.ResponseContent = _encryptionService.DecryptAuditContent(log.ResponseContent);
+        }
+        return log;
     }
 }

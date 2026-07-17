@@ -23,9 +23,17 @@ public class RateLimiter
     /// Check if a request is allowed under the rate limit.
     /// Returns (allowed, retryAfterSeconds).
     /// </summary>
-    public async Task<(bool allowed, int retryAfterSeconds)> CheckRateLimitAsync(int apiKeyId, int? rpmLimit, int? tpmLimit, int estimatedTokens = 0)
+    public Task<(bool allowed, int retryAfterSeconds)> CheckRateLimitAsync(int apiKeyId, int? rpmLimit, int? tpmLimit, int estimatedTokens = 0)
+        => CheckRateLimitAsync($"key:{apiKeyId}", rpmLimit, tpmLimit, estimatedTokens);
+
+    /// <summary>
+    /// Check if a request is allowed under the rate limit for an arbitrary scope prefix
+    /// (e.g. "model:5"). Buckets "{scopePrefix}:rpm" and "{scopePrefix}:tpm" are used.
+    /// Returns (allowed, retryAfterSeconds).
+    /// </summary>
+    public async Task<(bool allowed, int retryAfterSeconds)> CheckRateLimitAsync(string scopePrefix, int? rpmLimit, int? tpmLimit, int estimatedTokens = 0)
     {
-        var keyPrefix = $"key:{apiKeyId}";
+        var keyPrefix = scopePrefix;
         var now = DateTime.UtcNow;
         var cutoff = now.AddSeconds(-WindowSeconds);
 
@@ -38,7 +46,7 @@ public class RateLimiter
         if (rpmLimit.HasValue && rpmLimit.Value > 0 && currentRpm >= rpmLimit.Value)
         {
             var retryAfter = await GetSecondsUntilSlotAvailable($"{keyPrefix}:rpm", cutoff, now);
-            _logger.LogWarning("Rate limit exceeded for API key {ApiKeyId}: RPM {Current}/{Limit}", apiKeyId, currentRpm, rpmLimit.Value);
+            _logger.LogWarning("Rate limit exceeded for scope {Scope}: RPM {Current}/{Limit}", scopePrefix, currentRpm, rpmLimit.Value);
             return (false, retryAfter);
         }
 
@@ -46,17 +54,20 @@ public class RateLimiter
         if (tpmLimit.HasValue && tpmLimit.Value > 0 && estimatedTokens > 0 && currentTpm + estimatedTokens > tpmLimit.Value)
         {
             var retryAfter = await GetSecondsUntilSlotAvailable($"{keyPrefix}:tpm", cutoff, now);
-            _logger.LogWarning("TPM limit exceeded for API key {ApiKeyId}: TPM {Current}+{Estimated}/{Limit}", apiKeyId, currentTpm, estimatedTokens, tpmLimit.Value);
+            _logger.LogWarning("TPM limit exceeded for scope {Scope}: TPM {Current}+{Estimated}/{Limit}", scopePrefix, currentTpm, estimatedTokens, tpmLimit.Value);
             return (false, retryAfter);
         }
 
         return (true, 0);
     }
 
-    public async Task RecordRequestAsync(int apiKeyId, int tokensUsed)
+    public Task RecordRequestAsync(int apiKeyId, int tokensUsed)
+        => RecordRequestAsync($"key:{apiKeyId}", tokensUsed);
+
+    public async Task RecordRequestAsync(string scopePrefix, int tokensUsed)
     {
-        await IncrementAsync($"key:{apiKeyId}:rpm", 1);
-        await IncrementAsync($"key:{apiKeyId}:tpm", tokensUsed);
+        await IncrementAsync($"{scopePrefix}:rpm", 1);
+        await IncrementAsync($"{scopePrefix}:tpm", tokensUsed);
     }
 
     /// <summary>

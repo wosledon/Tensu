@@ -65,4 +65,32 @@ public class SettingsServiceTests : IDisposable
         Assert.Equal(originalCreatedAt, setting.CreatedAt);
         Assert.True(setting.UpdatedAt > setting.CreatedAt);
     }
+
+    [Fact]
+    public async Task SetAsync_UnknownKey_IsAllowed()
+    {
+        await _service.SetAsync("custom.myFeature", "enabled");
+
+        var value = await _service.GetAsync("custom.myFeature");
+        Assert.Equal("enabled", value);
+
+        var all = await _service.GetAllAsync();
+        Assert.Equal("enabled", all["custom.myFeature"]);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1starts-with-digit")]
+    [InlineData("has space")]
+    [InlineData("has/slash")]
+    public async Task SetAsync_InvalidKey_Throws(string key)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SetAsync(key, "value"));
+    }
+
+    [Fact]
+    public async Task SetAsync_TooLongValue_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SetAsync("custom.key", new string('x', 4001)));
+    }
 }

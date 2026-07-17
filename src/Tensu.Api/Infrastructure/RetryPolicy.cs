@@ -7,7 +7,8 @@ namespace Tensu.Api.Infrastructure;
 
 /// <summary>
 /// Retry policy with exponential backoff + jitter.
-/// Only retries idempotent requests (non-streaming).
+/// Retries idempotent requests; for streaming requests the gateway only retries
+/// failures that happen before the first byte is sent to the client (still idempotent).
 /// Automatically fails over to other keys/providers.
 /// </summary>
 public class RetryPolicy

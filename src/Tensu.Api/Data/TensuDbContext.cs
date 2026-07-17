@@ -27,6 +27,7 @@ public class TensuDbContext : DbContext
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<CompressionMapping> CompressionMappings => Set<CompressionMapping>();
     public DbSet<SemanticCacheEntry> SemanticCacheEntries => Set<SemanticCacheEntry>();
+    public DbSet<ExactCacheEntry> ExactCacheEntries => Set<ExactCacheEntry>();
     public DbSet<DailyStat> DailyStats => Set<DailyStat>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<WebhookNotification> WebhookNotifications => Set<WebhookNotification>();

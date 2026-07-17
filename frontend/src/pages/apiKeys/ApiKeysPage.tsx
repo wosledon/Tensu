@@ -3,7 +3,7 @@ import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App, Toolt
 import { DeleteOutlined, StopOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiKeyApi, modelApi, orgApi, userApi } from '../../api';
-import { useCrudList, useConfirmDelete } from '../../hooks';
+import { useCrudList, useTypedConfirmAction } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
 import type { ApiKey, Organization, User } from '../../types';
 import dayjs from 'dayjs';
@@ -45,7 +45,7 @@ function isValidIpOrCidr(value: string) {
 
 export default function ApiKeysPage() {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
 
   const ipWhitelistValidator = useCallback((_: unknown, value: string) => {
     if (!value || !value.trim()) return Promise.resolve();
@@ -67,30 +67,55 @@ export default function ApiKeysPage() {
 
   const fetchFn = useCallback((params: any) => apiKeyApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<ApiKey, any>({ fetchFn });
-  const { handleDelete } = useConfirmDelete(apiKeyApi.delete, fetchData);
+  const { confirmAction } = useTypedConfirmAction();
 
-  const handleBatchDelete = async () => {
-    if (!selectedRowKeys.length) return;
-    try {
-      await apiKeyApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
-      message.success(t('common.success'));
-      setSelectedRowKeys([]);
-      fetchData();
-    } catch {
-      message.error(t('common.error'));
-    }
+  const handleDelete = (record: ApiKey) => {
+    confirmAction({
+      title: t('apiKey.deleteTitle', { name: record.name }),
+      expectedText: record.name,
+      action: () => apiKeyApi.delete(record.id),
+      onSuccess: fetchData,
+    });
   };
 
-  const handleBatchRevoke = async () => {
+  const handleBatchDelete = () => {
     if (!selectedRowKeys.length) return;
-    try {
-      await apiKeyApi.batchRevoke(selectedRowKeys.map((k) => Number(k)));
-      message.success(t('common.success'));
-      setSelectedRowKeys([]);
-      fetchData();
-    } catch {
-      message.error(t('common.error'));
-    }
+    modal.confirm({
+      title: t('common.deleteConfirm'),
+      okType: 'danger',
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          await apiKeyApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+          message.success(t('common.success'));
+          setSelectedRowKeys([]);
+          fetchData();
+        } catch {
+          message.error(t('common.error'));
+        }
+      },
+    });
+  };
+
+  const handleBatchRevoke = () => {
+    if (!selectedRowKeys.length) return;
+    modal.confirm({
+      title: t('apiKey.batchRevokeConfirm', { count: selectedRowKeys.length }),
+      okType: 'danger',
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          await apiKeyApi.batchRevoke(selectedRowKeys.map((k) => Number(k)));
+          message.success(t('common.success'));
+          setSelectedRowKeys([]);
+          fetchData();
+        } catch {
+          message.error(t('common.error'));
+        }
+      },
+    });
   };
 
   const ensureOrgs = async () => {
@@ -126,9 +151,13 @@ export default function ApiKeysPage() {
     } catch {}
   };
 
-  const handleRevoke = async (id: number) => {
-    try { await apiKeyApi.revoke(id); message.success(t('common.success')); fetchData(); }
-    catch { message.error(t('common.error')); }
+  const handleRevoke = (record: ApiKey) => {
+    confirmAction({
+      title: t('apiKey.revokeTitle', { name: record.name }),
+      expectedText: record.name,
+      action: () => apiKeyApi.revoke(record.id),
+      onSuccess: fetchData,
+    });
   };
 
   const handleEnable = async (id: number) => {
@@ -173,12 +202,12 @@ export default function ApiKeysPage() {
       render: (_: any, r: ApiKey) => (
         <Space>
           {r.status === 'Active' && (
-            <Button type="text" danger icon={<StopOutlined />} onClick={() => handleRevoke(r.id)} title={t('apiKey.revoke')} />
+            <Button type="text" danger icon={<StopOutlined />} onClick={() => handleRevoke(r)} title={t('apiKey.revoke')} />
           )}
           {r.status === 'Disabled' && (
             <Button type="text" icon={<span style={{ fontSize: 14 }}>↻</span>} onClick={() => handleEnable(r.id)} title={t('common.enable')} />
           )}
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r)} />
         </Space>
       ),
     },

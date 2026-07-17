@@ -27,6 +27,8 @@ public class QuotaService : BaseService
         var query = _db.Quotas
             .Include(q => q.Organization)
             .Include(q => q.ApiKey)
+            .Include(q => q.Model!)
+            .ThenInclude(m => m.Provider)
             .AsQueryable();
 
         if (orgId.HasValue)
@@ -36,9 +38,11 @@ public class QuotaService : BaseService
         {
             var lower = scope.ToLowerInvariant();
             if (lower == "org")
-                query = query.Where(q => q.ApiKeyId == null);
+                query = query.Where(q => q.ApiKeyId == null && q.ModelId == null);
             else if (lower == "key")
                 query = query.Where(q => q.ApiKeyId != null);
+            else if (lower == "model")
+                query = query.Where(q => q.ModelId != null);
         }
 
         if (!string.IsNullOrEmpty(request.Keyword))
@@ -54,11 +58,14 @@ public class QuotaService : BaseService
         return await _db.Quotas
             .Include(q => q.Organization)
             .Include(q => q.ApiKey)
+            .Include(q => q.Model!)
+            .ThenInclude(m => m.Provider)
             .FirstOrDefaultAsync(q => q.Id == id);
     }
 
     public async Task<Quota> CreateAsync(Quota quota)
     {
+        NormalizeScope(quota);
         quota.CreatedAt = DateTime.UtcNow;
         quota.UpdatedAt = DateTime.UtcNow;
         _db.Quotas.Add(quota);
@@ -71,8 +78,10 @@ public class QuotaService : BaseService
         var quota = await _db.Quotas.FindAsync(id);
         if (quota == null) return null;
 
+        NormalizeScope(updated);
         quota.OrganizationId = updated.OrganizationId;
         quota.ApiKeyId = updated.ApiKeyId;
+        quota.ModelId = updated.ModelId;
         quota.Rpm = updated.Rpm;
         quota.Tpm = updated.Tpm;
         quota.ConcurrentRequestLimit = updated.ConcurrentRequestLimit;
@@ -81,6 +90,32 @@ public class QuotaService : BaseService
         quota.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return quota;
+    }
+
+    /// <summary>
+    /// Normalizes FK fields according to the requested scope so exactly one scope is active:
+    /// model scope keeps only ModelId, key scope keeps only ApiKeyId, org scope clears both.
+    /// </summary>
+    private static void NormalizeScope(Quota quota)
+    {
+        switch (quota.Scope?.ToLowerInvariant())
+        {
+            case "model":
+                quota.ApiKeyId = null;
+                break;
+            case "key":
+                quota.ModelId = null;
+                break;
+            case "org":
+                quota.ApiKeyId = null;
+                quota.ModelId = null;
+                break;
+            default:
+                // No explicit scope: derive from populated FKs (model wins over key).
+                if (quota.ModelId.HasValue)
+                    quota.ApiKeyId = null;
+                break;
+        }
     }
 
     public async Task<bool> DeleteAsync(int id)
@@ -162,10 +197,19 @@ public class QuotaService : BaseService
     }
 
     /// <summary>
-    /// Returns the most specific concurrent request limit for the organization or API key.
+    /// Returns the most specific concurrent request limit: model quota > key quota > org quota.
     /// </summary>
-    public async Task<int?> GetConcurrentRequestLimitAsync(int orgId, int? apiKeyId = null)
+    public async Task<int?> GetConcurrentRequestLimitAsync(int orgId, int? apiKeyId = null, int? modelId = null)
     {
+        if (modelId.HasValue)
+        {
+            var modelQuota = await _db.Quotas
+                .Where(q => q.OrganizationId == orgId && q.ModelId == modelId.Value && q.ConcurrentRequestLimit.HasValue)
+                .OrderByDescending(q => q.Id)
+                .FirstOrDefaultAsync();
+            if (modelQuota != null) return modelQuota.ConcurrentRequestLimit;
+        }
+
         if (apiKeyId.HasValue)
         {
             var keyQuota = await _db.Quotas
@@ -176,10 +220,71 @@ public class QuotaService : BaseService
         }
 
         var orgQuota = await _db.Quotas
-            .Where(q => q.OrganizationId == orgId && q.ApiKeyId == null && q.ConcurrentRequestLimit.HasValue)
+            .Where(q => q.OrganizationId == orgId && q.ApiKeyId == null && q.ModelId == null && q.ConcurrentRequestLimit.HasValue)
             .OrderByDescending(q => q.Id)
             .FirstOrDefaultAsync();
         return orgQuota?.ConcurrentRequestLimit;
+    }
+
+    /// <summary>
+    /// Returns the model-scoped quota for the given organization and model, if any.
+    /// </summary>
+    public async Task<Quota?> GetModelQuotaAsync(int orgId, int modelId)
+    {
+        return await _db.Quotas
+            .Where(q => q.OrganizationId == orgId && q.ModelId == modelId)
+            .OrderByDescending(q => q.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Checks whether a model-scoped quota permits the estimated token usage.
+    /// Returns (allowed, retryAfterSeconds).
+    /// </summary>
+    public async Task<(bool allowed, int retryAfterSeconds)> CheckModelTokenQuotaAsync(Quota modelQuota, int modelId, int estimatedTokens)
+    {
+        var today = DateTime.UtcNow.Date;
+        var thisMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        if (modelQuota.DailyTokenLimit.HasValue && modelQuota.DailyTokenLimit.Value > 0)
+        {
+            var scope = GetModelScope(modelId, "day", today.ToString("yyyy-MM-dd"));
+            var used = await GetCounterValueAsync(scope);
+            if (used + estimatedTokens > modelQuota.DailyTokenLimit.Value)
+            {
+                var retryAfter = (int)(today.AddDays(1) - DateTime.UtcNow).TotalSeconds;
+                _logger.LogWarning("Model quota exceeded for {Scope}: {Used}+{Estimated}/{Limit}", scope, used, estimatedTokens, modelQuota.DailyTokenLimit.Value);
+                return (false, retryAfter);
+            }
+        }
+
+        if (modelQuota.MonthlyTokenLimit.HasValue && modelQuota.MonthlyTokenLimit.Value > 0)
+        {
+            var scope = GetModelScope(modelId, "month", thisMonth.ToString("yyyy-MM"));
+            var used = await GetCounterValueAsync(scope);
+            if (used + estimatedTokens > modelQuota.MonthlyTokenLimit.Value)
+            {
+                var retryAfter = (int)(thisMonth.AddMonths(1) - DateTime.UtcNow).TotalSeconds + 1;
+                _logger.LogWarning("Model quota exceeded for {Scope}: {Used}+{Estimated}/{Limit}", scope, used, estimatedTokens, modelQuota.MonthlyTokenLimit.Value);
+                return (false, retryAfter);
+            }
+        }
+
+        return (true, 0);
+    }
+
+    /// <summary>
+    /// Records token usage against the model-scoped daily and monthly counters.
+    /// </summary>
+    public async Task RecordModelUsageAsync(int modelId, int tokens)
+    {
+        if (tokens <= 0) return;
+
+        var today = DateTime.UtcNow.Date;
+        var thisMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        await _rateLimiter.IncrementAsync(GetModelScope(modelId, "day", today.ToString("yyyy-MM-dd")), tokens);
+        await _rateLimiter.IncrementAsync(GetModelScope(modelId, "month", thisMonth.ToString("yyyy-MM")), tokens);
     }
 
     private async Task<Quota?> GetOrgQuotaAsync(int orgId)
@@ -210,4 +315,7 @@ public class QuotaService : BaseService
 
     private static string GetKeyScope(int apiKeyId, string bucketType, string bucketValue) =>
         $"key:{apiKeyId}:{bucketType}:{bucketValue}";
+
+    private static string GetModelScope(int modelId, string bucketType, string bucketValue) =>
+        $"model:{modelId}:{bucketType}:{bucketValue}";
 }

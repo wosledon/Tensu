@@ -130,4 +130,104 @@ public class QuotaServiceTests : IDisposable
         var (allowed, _) = await _quotaService.CheckOrgQuotaAsync(org.Id, 50);
         Assert.True(allowed);
     }
+
+    [Fact]
+    public async Task ModelQuota_DailyLimit_DeniesWhenExceeded()
+    {
+        _db.Organizations.Add(new Organization { Name = "Test", Path = "/" });
+        await _db.SaveChangesAsync();
+        var org = await _db.Organizations.FirstAsync();
+
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, ModelId = 7, DailyTokenLimit = 100 });
+        await _db.SaveChangesAsync();
+
+        var quota = await _quotaService.GetModelQuotaAsync(org.Id, 7);
+        Assert.NotNull(quota);
+        Assert.Equal("model", quota!.Scope);
+
+        await _quotaService.RecordModelUsageAsync(7, 90);
+        var (allowed, retryAfter) = await _quotaService.CheckModelTokenQuotaAsync(quota, 7, 20);
+        Assert.False(allowed);
+        Assert.True(retryAfter > 0);
+
+        // A different model is unaffected.
+        var (otherAllowed, _) = await _quotaService.CheckModelTokenQuotaAsync(quota, 8, 20);
+        Assert.True(otherAllowed);
+    }
+
+    [Fact]
+    public async Task GetConcurrentRequestLimitAsync_ModelQuotaTakesPrecedence()
+    {
+        _db.Organizations.Add(new Organization { Name = "Test", Path = "/" });
+        await _db.SaveChangesAsync();
+        var org = await _db.Organizations.FirstAsync();
+
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, ConcurrentRequestLimit = 5 });
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, ModelId = 3, ConcurrentRequestLimit = 2 });
+        await _db.SaveChangesAsync();
+
+        Assert.Equal(2, await _quotaService.GetConcurrentRequestLimitAsync(org.Id, modelId: 3));
+        Assert.Equal(5, await _quotaService.GetConcurrentRequestLimitAsync(org.Id, modelId: 4));
+        Assert.Equal(5, await _quotaService.GetConcurrentRequestLimitAsync(org.Id));
+    }
+
+    [Fact]
+    public async Task GetListAsync_ScopeFilter_FiltersModelQuotas()
+    {
+        _db.Organizations.Add(new Organization { Name = "Test", Path = "/" });
+        await _db.SaveChangesAsync();
+        var org = await _db.Organizations.FirstAsync();
+
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, DailyTokenLimit = 1 });
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, ApiKeyId = 1, DailyTokenLimit = 1 });
+        _db.Quotas.Add(new Quota { OrganizationId = org.Id, ModelId = 1, DailyTokenLimit = 1 });
+        await _db.SaveChangesAsync();
+
+        var model = await _quotaService.GetListAsync(new Tensu.Core.Common.PagedRequest(), scope: "model");
+        Assert.Single(model.Items);
+        Assert.Equal("model", model.Items[0].Scope);
+
+        var key = await _quotaService.GetListAsync(new Tensu.Core.Common.PagedRequest(), scope: "key");
+        Assert.Single(key.Items);
+        Assert.Equal("key", key.Items[0].Scope);
+
+        var orgOnly = await _quotaService.GetListAsync(new Tensu.Core.Common.PagedRequest(), scope: "org");
+        Assert.Single(orgOnly.Items);
+        Assert.Equal("org", orgOnly.Items[0].Scope);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ModelScope_ClearsApiKeyId()
+    {
+        _db.Organizations.Add(new Organization { Name = "Test", Path = "/" });
+        await _db.SaveChangesAsync();
+        var org = await _db.Organizations.FirstAsync();
+
+        var created = await _quotaService.CreateAsync(new Quota
+        {
+            OrganizationId = org.Id,
+            Scope = "model",
+            ModelId = 5,
+            ApiKeyId = 9,
+            DailyTokenLimit = 100
+        });
+
+        Assert.Null(created.ApiKeyId);
+        Assert.Equal(5, created.ModelId);
+        Assert.Equal("model", created.Scope);
+    }
+
+    [Fact]
+    public async Task ModelRateLimit_ScopePrefix_EnforcesRpm()
+    {
+        // model:9 RPM=1 — first check passes, second is denied.
+        var (first, _) = await _rateLimiter.CheckRateLimitAsync("model:9", rpmLimit: 1, tpmLimit: null);
+        Assert.True(first);
+
+        await _rateLimiter.RecordRequestAsync("model:9", 0);
+
+        var (second, retryAfter) = await _rateLimiter.CheckRateLimitAsync("model:9", rpmLimit: 1, tpmLimit: null);
+        Assert.False(second);
+        Assert.True(retryAfter > 0);
+    }
 }

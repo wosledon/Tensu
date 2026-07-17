@@ -22,6 +22,10 @@ public class CacheService : IDisposable
     private bool _disposed;
     private const int MaxCacheEntries = 10000;
 
+    private string? _backendMode;
+    private DateTime _backendModeExpiresAt = DateTime.MinValue;
+    private readonly SemaphoreSlim _backendModeLock = new(1, 1);
+
     public CacheService(ILogger<CacheService> logger)
     {
         _logger = logger;
@@ -81,41 +85,179 @@ public class CacheService : IDisposable
     }
 
     /// <summary>
-    /// Generate a simple bag-of-words embedding for the given text.
-    /// Tokenizes by whitespace and punctuation, lowercases, counts frequencies,
-    /// and returns a normalized 100-dimensional vector using the top 100 most frequent words.
+    /// Resolves the configured exact-cache backend ("memory" or "database").
+    /// The setting is cached for 60 seconds to avoid a database lookup per request.
+    /// </summary>
+    private async Task<string> GetBackendAsync()
+    {
+        if (_backendMode != null && DateTime.UtcNow < _backendModeExpiresAt)
+            return _backendMode;
+
+        await _backendModeLock.WaitAsync();
+        try
+        {
+            if (_backendMode != null && DateTime.UtcNow < _backendModeExpiresAt)
+                return _backendMode;
+
+            var mode = "memory";
+            if (_scopeFactory != null)
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+                    var setting = await db.Settings.AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Key == "cache.backend");
+                    if (string.Equals(setting?.Value, "database", StringComparison.OrdinalIgnoreCase))
+                        mode = "database";
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve cache backend, falling back to memory");
+                }
+            }
+
+            _backendMode = mode;
+            _backendModeExpiresAt = DateTime.UtcNow.AddSeconds(60);
+            return mode;
+        }
+        finally
+        {
+            _backendModeLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Try to get a cached response, honoring the configured cache backend
+    /// (in-memory for single instance, database for multi-instance sharing).
+    /// </summary>
+    public async Task<(bool hit, string? responseBody, bool isStream)?> TryGetAsync(string cacheKey, CancellationToken cancellationToken = default)
+    {
+        if (await GetBackendAsync() == "memory" || _scopeFactory == null)
+            return TryGet(cacheKey);
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+
+        var entry = await db.ExactCacheEntries
+            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
+
+        if (entry == null) return null;
+
+        if (entry.ExpiresAt <= DateTime.UtcNow)
+        {
+            db.ExactCacheEntries.Remove(entry);
+            await db.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+
+        entry.HitCount++;
+        await db.SaveChangesAsync(cancellationToken);
+        _logger.LogDebug("Cache HIT (database) for key {CacheKey}", cacheKey[..Math.Min(16, cacheKey.Length)]);
+        return (true, entry.ResponseBody, entry.IsStream);
+    }
+
+    /// <summary>
+    /// Store a response in the exact cache, honoring the configured cache backend.
+    /// </summary>
+    public async Task SetAsync(string cacheKey, string responseBody, bool isStream, TimeSpan? ttl = null, CancellationToken cancellationToken = default)
+    {
+        if (await GetBackendAsync() == "memory" || _scopeFactory == null)
+        {
+            Set(cacheKey, responseBody, isStream, ttl);
+            return;
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+
+        var count = await db.ExactCacheEntries.CountAsync(cancellationToken);
+        if (count >= MaxCacheEntries)
+        {
+            var overflow = await db.ExactCacheEntries
+                .OrderBy(e => e.CreatedAt)
+                .Take(count - MaxCacheEntries + 1)
+                .ToListAsync(cancellationToken);
+            db.ExactCacheEntries.RemoveRange(overflow);
+        }
+
+        var existing = await db.ExactCacheEntries
+            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
+
+        if (existing != null)
+        {
+            existing.ResponseBody = responseBody;
+            existing.IsStream = isStream;
+            existing.ExpiresAt = DateTime.UtcNow + (ttl ?? TimeSpan.FromMinutes(10));
+        }
+        else
+        {
+            db.ExactCacheEntries.Add(new ExactCacheEntry
+            {
+                CacheKey = cacheKey,
+                ResponseBody = responseBody,
+                IsStream = isStream,
+                ExpiresAt = DateTime.UtcNow + (ttl ?? TimeSpan.FromMinutes(10)),
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        _logger.LogDebug("Cache SET (database) for key {CacheKey}", cacheKey[..Math.Min(16, cacheKey.Length)]);
+    }
+
+    /// <summary>
+    /// Number of dimensions of the semantic embedding vectors.
+    /// Vectors are produced by feature hashing (unigrams + bigrams), so all texts
+    /// share the same vector space and are directly comparable.
+    /// </summary>
+    public const int EmbeddingDimensions = 256;
+
+    /// <summary>
+    /// Generate a semantic embedding for the given text using the feature hashing trick.
+    /// Tokens (word unigrams + bigrams, CJK characters treated as unigrams) are hashed
+    /// into a fixed-dimension vector with log-scaled term frequencies, then L2-normalized.
+    /// Unlike a per-document vocabulary, hashed vectors from different texts are comparable.
     /// </summary>
     public static float[] GenerateEmbedding(string text)
     {
-        const int Dimensions = 100;
-        var wordCounts = Tokenize(text)
-            .GroupBy(w => w)
-            .ToDictionary(g => g.Key, g => g.Count());
+        var vector = new float[EmbeddingDimensions];
+        var tokens = Tokenize(text).ToList();
+        if (tokens.Count == 0) return vector;
 
-        var vocabulary = wordCounts
-            .OrderByDescending(kv => kv.Value)
-            .ThenBy(kv => kv.Key)
-            .Take(Dimensions)
-            .Select(kv => kv.Key)
-            .ToList();
+        // Log-scaled term frequencies keep long documents from dominating.
+        foreach (var group in tokens.GroupBy(t => t))
+            AddFeature(vector, group.Key, (float)Math.Log(1 + group.Count()));
 
-        var vector = vocabulary.Count == 0
-            ? new float[Dimensions]
-            : BuildVector(text, vocabulary).ToArray();
-
-        // Pad or truncate to ensure exactly 100 dimensions.
-        if (vector.Length < Dimensions)
-        {
-            var padded = new float[Dimensions];
-            vector.CopyTo(padded, 0);
-            vector = padded;
-        }
-        else if (vector.Length > Dimensions)
-        {
-            vector = vector[..Dimensions];
-        }
+        var bigrams = new List<string>();
+        for (var i = 0; i + 1 < tokens.Count; i++)
+            bigrams.Add(tokens[i] + " " + tokens[i + 1]);
+        foreach (var group in bigrams.GroupBy(b => b))
+            AddFeature(vector, group.Key, 0.5f * (float)Math.Log(1 + group.Count()));
 
         return Normalize(vector);
+    }
+
+    private static void AddFeature(float[] vector, string feature, float weight)
+    {
+        var hash = StableHash(feature);
+        var bucket = (int)(hash % EmbeddingDimensions);
+        // Signed hashing reduces systematic collision bias.
+        var sign = (hash & 0x8000_0000) == 0 ? 1f : -1f;
+        vector[bucket] += sign * weight;
+    }
+
+    private static uint StableHash(string value)
+    {
+        // FNV-1a 32-bit: deterministic across processes (unlike string.GetHashCode).
+        const uint fnvPrime = 16777619;
+        var hash = 2166136261u;
+        foreach (var c in value)
+        {
+            hash ^= c;
+            hash *= fnvPrime;
+        }
+        return hash;
     }
 
     /// <summary>
@@ -155,7 +297,8 @@ public class CacheService : IDisposable
 
         foreach (var entry in entries)
         {
-            var entryEmbedding = ComputeSemanticEmbedding(entry.RequestBody);
+            var entryEmbedding = DeserializeEmbedding(entry.Embedding);
+            if (entryEmbedding == null) continue;
             var similarity = CosineSimilarity(requestEmbedding, entryEmbedding);
             if (similarity > bestSimilarity)
             {
@@ -319,15 +462,42 @@ public class CacheService : IDisposable
     /// <summary>
     /// Invalidate cache entries for a specific model.
     /// </summary>
-    public void InvalidateModel(string model)
+    public async Task InvalidateModelAsync(string model, CancellationToken cancellationToken = default)
     {
         var keysToRemove = _cache.Keys.Where(k => k.StartsWith($"{model}:")).ToList();
         foreach (var key in keysToRemove)
             _cache.TryRemove(key, out _);
+
+        if (_scopeFactory != null && await GetBackendAsync() == "database")
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+            var prefix = $"{model}:";
+            var entries = await db.ExactCacheEntries
+                .Where(e => e.CacheKey.StartsWith(prefix))
+                .ToListAsync(cancellationToken);
+            db.ExactCacheEntries.RemoveRange(entries);
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>
-    /// Get exact cache statistics.
+    /// Get exact cache statistics for the configured backend.
+    /// </summary>
+    public async Task<(int entries, int totalHits)> GetStatsAsync(CancellationToken cancellationToken = default)
+    {
+        if (await GetBackendAsync() == "memory" || _scopeFactory == null)
+            return (_cache.Count, _cache.Values.Sum(e => e.HitCount));
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+        var entries = await db.ExactCacheEntries.CountAsync(cancellationToken);
+        var hits = await db.ExactCacheEntries.SumAsync(e => (int?)e.HitCount, cancellationToken) ?? 0;
+        return (entries, hits);
+    }
+
+    /// <summary>
+    /// Get exact cache statistics (in-memory only).
     /// </summary>
     public (int entries, int totalHits) GetStats()
     {
@@ -340,7 +510,24 @@ public class CacheService : IDisposable
     public int GetExactEntryCount() => _cache.Count;
 
     /// <summary>
-    /// Clear the exact cache.
+    /// Clear the exact cache (both backends).
+    /// </summary>
+    public async Task ClearExactAsync(CancellationToken cancellationToken = default)
+    {
+        _cache.Clear();
+
+        if (_scopeFactory != null)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+            var entries = await db.ExactCacheEntries.ToListAsync(cancellationToken);
+            db.ExactCacheEntries.RemoveRange(entries);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Clear the in-memory exact cache.
     /// </summary>
     public void ClearExact()
     {
@@ -390,24 +577,57 @@ public class CacheService : IDisposable
         return Convert.ToBase64String(hash)[..22]; // Short but collision-resistant
     }
 
+    private static float[]? DeserializeEmbedding(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            var embedding = JsonSerializer.Deserialize<float[]>(json);
+            // Legacy 100-dimensional embeddings are incompatible with the current
+            // 256-dimensional space; skip them (they expire naturally).
+            if (embedding == null || embedding.Length != EmbeddingDimensions) return null;
+            return embedding;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static IEnumerable<string> Tokenize(string text)
     {
-        return Regex.Matches(text.ToLowerInvariant(), @"\b\w+\b")
-            .Cast<Match>()
-            .Select(m => m.Value)
-            .Where(w => w.Length > 0);
+        foreach (Match m in Regex.Matches(text.ToLowerInvariant(), @"\b\w+\b").Cast<Match>())
+        {
+            var word = m.Value;
+            if (word.Length == 0) continue;
+            // CJK characters have no word boundaries; emit them as single-char tokens
+            // so similarity matching works at character granularity.
+            if (word.Any(IsCjk))
+            {
+                var latin = new System.Text.StringBuilder();
+                foreach (var c in word)
+                {
+                    if (IsCjk(c))
+                    {
+                        if (latin.Length > 0) { yield return latin.ToString(); latin.Clear(); }
+                        yield return c.ToString();
+                    }
+                    else
+                    {
+                        latin.Append(c);
+                    }
+                }
+                if (latin.Length > 0) yield return latin.ToString();
+            }
+            else
+            {
+                yield return word;
+            }
+        }
     }
 
-    private static float[] BuildVector(string text, List<string> vocabulary)
-    {
-        var wordCounts = Tokenize(text)
-            .GroupBy(w => w)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        return vocabulary
-            .Select(word => wordCounts.TryGetValue(word, out var count) ? (float)count : 0f)
-            .ToArray();
-    }
+    private static bool IsCjk(char c) =>
+        c is >= '一' and <= '鿿' or >= '぀' and <= 'ヿ' or >= '가' and <= '힣';
 
     private static float[] Normalize(float[] vector)
     {

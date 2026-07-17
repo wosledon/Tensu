@@ -184,6 +184,7 @@ public class QuotaConfiguration : IEntityTypeConfiguration<Quota>
         builder.Property(e => e.Id).HasColumnName("id");
         builder.Property(e => e.OrganizationId).HasColumnName("organization_id");
         builder.Property(e => e.ApiKeyId).HasColumnName("api_key_id");
+        builder.Property(e => e.ModelId).HasColumnName("model_id");
         builder.Property(e => e.Rpm).HasColumnName("rpm");
         builder.Property(e => e.Tpm).HasColumnName("tpm");
         builder.Property(e => e.ConcurrentRequestLimit).HasColumnName("concurrent_request_limit");
@@ -194,6 +195,7 @@ public class QuotaConfiguration : IEntityTypeConfiguration<Quota>
 
         builder.HasOne(e => e.Organization).WithMany(e => e.Quotas).HasForeignKey(e => e.OrganizationId);
         builder.HasOne(e => e.ApiKey).WithMany().HasForeignKey(e => e.ApiKeyId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(e => e.Model).WithMany().HasForeignKey(e => e.ModelId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -249,6 +251,25 @@ public class SemanticCacheEntryConfiguration : IEntityTypeConfiguration<Semantic
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
 
         builder.HasIndex(e => e.Model);
+        builder.HasIndex(e => e.ExpiresAt);
+    }
+}
+
+public class ExactCacheEntryConfiguration : IEntityTypeConfiguration<ExactCacheEntry>
+{
+    public void Configure(EntityTypeBuilder<ExactCacheEntry> builder)
+    {
+        builder.ToTable("exact_cache_entries");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+        builder.Property(e => e.CacheKey).HasColumnName("cache_key").HasMaxLength(500).IsRequired();
+        builder.Property(e => e.ResponseBody).HasColumnName("response_body").IsRequired();
+        builder.Property(e => e.IsStream).HasColumnName("is_stream");
+        builder.Property(e => e.HitCount).HasColumnName("hit_count");
+        builder.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => e.CacheKey).IsUnique();
         builder.HasIndex(e => e.ExpiresAt);
     }
 }

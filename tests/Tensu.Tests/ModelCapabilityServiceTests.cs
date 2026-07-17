@@ -256,11 +256,127 @@ public class ModelCapabilityServiceTests : IDisposable
         var model = await CreateModelAsync(provider, "gpt-4o");
         var service = CreateService();
 
+        var result = await service.RunSyntheticEvaluationAsync(model.Id, new[] { "UnknownDimension" });
+
+        var reasoning = result.Results.First(r => r.Dimension == "UnknownDimension");
+        Assert.Null(reasoning.Score);
+        Assert.Contains("No evaluation probes", reasoning.Message);
+    }
+
+    [Fact]
+    public async Task RunSyntheticEvaluationAsync_LlmUnavailable_ReturnsNullScore()
+    {
+        var provider = await CreateProviderAsync();
+        var model = await CreateModelAsync(provider, "gpt-4o");
+        var service = CreateService(); // no HTTP dependencies → LLM eval unavailable
+
         var result = await service.RunSyntheticEvaluationAsync(model.Id, new[] { "Reasoning" });
 
         var reasoning = result.Results.First(r => r.Dimension == "Reasoning");
         Assert.Null(reasoning.Score);
-        Assert.Contains("manual", reasoning.Message);
+        Assert.Contains("not available", reasoning.Message);
+    }
+
+    private static string EncryptTestKey()
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
+            {
+                InitialData = new Dictionary<string, string?> { ["Encryption:Key"] = "TensuDefaultEncryptionKey32Bytes!" }
+            })
+            .Build();
+        return new Api.Infrastructure.EncryptionService(config).Encrypt("test-upstream-key");
+    }
+
+    [Fact]
+    public async Task RunSyntheticEvaluationAsync_LlmProbesPass_PersistsBenchmarkScore()
+    {
+        var provider = await CreateProviderAsync();
+        var model = await CreateModelAsync(provider, "gpt-4o");
+        provider.Keys.Add(new ProviderKey
+        {
+            ProviderId = provider.Id,
+            Name = "k1",
+            KeyValue = EncryptTestKey(),
+            Status = KeyStatus.Active
+        });
+        await _db.SaveChangesAsync();
+
+        // Mock upstream answers both math probes correctly.
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            var body = req.Content!.ReadAsStringAsync().Result;
+            var answer = body.Contains("17 * 23") ? "391" : "36";
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"choices\":[{\"message\":{\"content\":\"" + answer + "\"}}]}")
+            };
+        });
+        var service = CreateLlmService(handler);
+
+        var result = await service.RunSyntheticEvaluationAsync(model.Id, new[] { "Math" });
+
+        var math = result.Results.First(r => r.Dimension == "Math");
+        Assert.Equal(100m, math.Score);
+
+        var capability = await service.GetByModelAndDimensionAsync(model.Id, "Math");
+        Assert.NotNull(capability);
+        Assert.Equal("benchmark", capability!.Source);
+        Assert.Contains("LLM-evaluated", capability.Evidence);
+    }
+
+    [Fact]
+    public async Task RunSyntheticEvaluationAsync_LlmProbesFail_ScoresZero()
+    {
+        var provider = await CreateProviderAsync();
+        var model = await CreateModelAsync(provider, "gpt-4o");
+        provider.Keys.Add(new ProviderKey
+        {
+            ProviderId = provider.Id,
+            Name = "k1",
+            KeyValue = EncryptTestKey(),
+            Status = KeyStatus.Active
+        });
+        await _db.SaveChangesAsync();
+
+        var handler = new StubHttpMessageHandler(_ =>
+            new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"choices":[{"message":{"content":"I don't know"}}]}""")
+            });
+        var service = CreateLlmService(handler);
+
+        var result = await service.RunSyntheticEvaluationAsync(model.Id, new[] { "Math" });
+
+        var math = result.Results.First(r => r.Dimension == "Math");
+        Assert.Equal(0m, math.Score);
+    }
+
+    private ModelCapabilityService CreateLlmService(HttpMessageHandler handler)
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
+            {
+                InitialData = new Dictionary<string, string?> { ["Encryption:Key"] = "TensuDefaultEncryptionKey32Bytes!" }
+            })
+            .Build();
+        var encryption = new Api.Infrastructure.EncryptionService(config);
+        var providerService = new ProviderService(_db, encryption);
+        var loadBalancer = new Api.Infrastructure.LoadBalancer();
+        var factory = new StubHttpClientFactory(handler);
+        return new ModelCapabilityService(_db, factory, loadBalancer, providerService,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ModelCapabilityService>.Instance);
+    }
+
+    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(responder(request));
+    }
+
+    private sealed class StubHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
     [Fact]

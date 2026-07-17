@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App, Input } from 'antd';
+import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App, Input, Select } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
@@ -28,7 +28,9 @@ export default function SettingsPage() {
         form.setFieldsValue({
           compressionEnabled: data['compression.enabled'] === 'true',
           cacheEnabled: data['cache.enabled'] === 'true',
+          cacheBackend: data['cache.backend'] || 'memory',
           cacheTtlMinutes: parseInt(data['cache.ttlMinutes'] || '10'),
+          auditEncryptContent: data['audit.encryptContent'] === 'true',
           defaultRpm: parseInt(data['rateLimit.defaultRpm'] || '60'),
           defaultTpm: parseInt(data['rateLimit.defaultTpm'] || '100000'),
           dataRetentionDays: parseInt(data['audit.dataRetentionDays'] || '30'),
@@ -69,7 +71,9 @@ export default function SettingsPage() {
       const updates: [string, string][] = [
         ['compression.enabled', String(values.compressionEnabled)],
         ['cache.enabled', String(values.cacheEnabled)],
+        ['cache.backend', String(values.cacheBackend)],
         ['cache.ttlMinutes', String(values.cacheTtlMinutes)],
+        ['audit.encryptContent', String(values.auditEncryptContent)],
         ['rateLimit.defaultRpm', String(values.defaultRpm)],
         ['rateLimit.defaultTpm', String(values.defaultTpm)],
         ['audit.dataRetentionDays', String(values.dataRetentionDays)],
@@ -147,12 +151,35 @@ export default function SettingsPage() {
             <Form.Item name="cacheEnabled" label={t('common.enabled')} valuePropName="checked">
               <Switch />
             </Form.Item>
+            <Form.Item name="cacheBackend" label={t('settings.cacheBackend')}>
+              <Select
+                style={{ width: 160 }}
+                options={[
+                  { value: 'memory', label: t('settings.cacheBackendMemory') },
+                  { value: 'database', label: t('settings.cacheBackendDatabase') },
+                ]}
+              />
+            </Form.Item>
             <Form.Item name="cacheTtlMinutes" label={t('settings.ttlMinutes')}>
               <InputNumber min={1} max={60} />
             </Form.Item>
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t('settings.cacheHint')}
+          </Text>
+        </Card>
+
+        <Card title={t('settings.audit')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Space size={16} wrap>
+            <Form.Item name="dataRetentionDays" label={t('settings.dataRetentionDays')}>
+              <InputNumber min={7} max={180} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="auditEncryptContent" label={t('settings.auditEncryptContent')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('settings.auditEncryptContentHint')}
           </Text>
         </Card>
 
@@ -196,15 +223,6 @@ export default function SettingsPage() {
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t('settings.anomalyHint')}
-          </Text>
-        </Card>
-
-        <Card title={t('settings.audit')} style={{ borderRadius: 18, marginBottom: 24 }}>
-          <Form.Item name="dataRetentionDays" label={t('organization.retentionDays')}>
-            <InputNumber min={7} max={180} style={{ width: 160 }} addonAfter={t('settings.days')} />
-          </Form.Item>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t('settings.auditHint')}
           </Text>
         </Card>
 

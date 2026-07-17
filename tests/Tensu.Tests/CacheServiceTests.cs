@@ -56,13 +56,13 @@ public class CacheServiceTests
     }
 
     [Fact]
-    public void InvalidateModel_RemovesMatchingEntries()
+    public async Task InvalidateModel_RemovesMatchingEntries()
     {
         _cache.Set("gpt-4o:hash1:hash2", "data1", false);
         _cache.Set("gpt-4o:hash3:hash4", "data2", false);
         _cache.Set("claude-3:hash5:hash6", "data3", false);
 
-        _cache.InvalidateModel("gpt-4o");
+        await _cache.InvalidateModelAsync("gpt-4o");
 
         Assert.Null(_cache.TryGet("gpt-4o:hash1:hash2"));
         Assert.Null(_cache.TryGet("gpt-4o:hash3:hash4"));

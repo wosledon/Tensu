@@ -30,15 +30,18 @@ public class AuditBackgroundService : BackgroundService
 {
     private readonly AuditChannel _auditChannel;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly EncryptionService _encryptionService;
     private readonly ILogger<AuditBackgroundService> _logger;
 
     public AuditBackgroundService(
         AuditChannel auditChannel,
         IServiceScopeFactory scopeFactory,
+        EncryptionService encryptionService,
         ILogger<AuditBackgroundService> logger)
     {
         _auditChannel = auditChannel;
         _scopeFactory = scopeFactory;
+        _encryptionService = encryptionService;
         _logger = logger;
     }
 
@@ -50,6 +53,16 @@ public class AuditBackgroundService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<Data.TensuDbContext>();
+                var settings = scope.ServiceProvider.GetRequiredService<Services.SettingsService>();
+
+                var encryptContent = string.Equals(
+                    await settings.GetAsync("audit.encryptContent"), "true", StringComparison.OrdinalIgnoreCase);
+                if (encryptContent)
+                {
+                    log.RequestContent = _encryptionService.EncryptAuditContent(log.RequestContent);
+                    log.ResponseContent = _encryptionService.EncryptAuditContent(log.ResponseContent);
+                }
+
                 db.RequestLogs.Add(log);
                 await db.SaveChangesAsync(stoppingToken);
             }

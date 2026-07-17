@@ -30,7 +30,7 @@ public class CacheController : AdminBaseController
     [HttpGet("stats")]
     public async Task<IActionResult> Stats()
     {
-        var exactStats = _cache.GetStats();
+        var exactStats = await _cache.GetStatsAsync();
         var semanticCount = await _cache.GetSemanticEntryCountAsync();
 
         var from = DateTime.UtcNow.AddDays(-7);
@@ -64,7 +64,7 @@ public class CacheController : AdminBaseController
     [Authorize(Policy = "SuperAdmin")]
     public async Task<IActionResult> ClearExact()
     {
-        _cache.ClearExact();
+        await _cache.ClearExactAsync();
         await EnqueueSystemAuditAsync("clear:exact");
         return Ok(ApiResponse.Success());
     }

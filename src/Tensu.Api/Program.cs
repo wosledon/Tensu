@@ -174,6 +174,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors();
+app.UseMiddleware<RequestIdMiddleware>();
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();

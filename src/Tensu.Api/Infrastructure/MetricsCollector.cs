@@ -52,34 +52,29 @@ public class MetricsCollector
     }
 
     /// <summary>
-    /// Get P99 latency from recent samples.
+    /// Get the given percentile latency from recent samples.
     /// </summary>
-    public double GetP99LatencyMs()
+    public double GetPercentileLatencyMs(double percentile)
     {
         if (_latencySamples.IsEmpty)
             return 0;
 
         var samples = _latencySamples.ToArray();
         Array.Sort(samples);
-        var p99Index = (int)Math.Ceiling(samples.Length * 0.99) - 1;
-        p99Index = Math.Max(0, Math.Min(p99Index, samples.Length - 1));
-        return samples[p99Index];
+        var index = (int)Math.Ceiling(samples.Length * percentile) - 1;
+        index = Math.Max(0, Math.Min(index, samples.Length - 1));
+        return samples[index];
     }
+
+    /// <summary>
+    /// Get P99 latency from recent samples.
+    /// </summary>
+    public double GetP99LatencyMs() => GetPercentileLatencyMs(0.99);
 
     /// <summary>
     /// Get P95 latency from recent samples.
     /// </summary>
-    public double GetP95LatencyMs()
-    {
-        if (_latencySamples.IsEmpty)
-            return 0;
-
-        var samples = _latencySamples.ToArray();
-        Array.Sort(samples);
-        var p95Index = (int)Math.Ceiling(samples.Length * 0.95) - 1;
-        p95Index = Math.Max(0, Math.Min(p95Index, samples.Length - 1));
-        return samples[p95Index];
-    }
+    public double GetP95LatencyMs() => GetPercentileLatencyMs(0.95);
 
     /// <summary>
     /// Export metrics in Prometheus text format.
@@ -124,6 +119,12 @@ public class MetricsCollector
         sb.AppendLine("# HELP tensu_latency_ms_total Cumulative latency in ms");
         sb.AppendLine("# TYPE tensu_latency_ms_total counter");
         sb.AppendLine($"tensu_latency_ms_total {Math.Round(_totalLatencyMs)} {ts}");
+
+        sb.AppendLine("# HELP tensu_latency_percentile_ms Recent request latency percentiles in ms");
+        sb.AppendLine("# TYPE tensu_latency_percentile_ms gauge");
+        sb.AppendLine($"tensu_latency_percentile_ms{{quantile=\"0.5\"}} {GetPercentileLatencyMs(0.5)} {ts}");
+        sb.AppendLine($"tensu_latency_percentile_ms{{quantile=\"0.95\"}} {GetP95LatencyMs()} {ts}");
+        sb.AppendLine($"tensu_latency_percentile_ms{{quantile=\"0.99\"}} {GetP99LatencyMs()} {ts}");
 
         sb.AppendLine("# HELP tensu_uptime_seconds Uptime in seconds");
         sb.AppendLine("# TYPE tensu_uptime_seconds gauge");

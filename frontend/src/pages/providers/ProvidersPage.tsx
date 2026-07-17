@@ -3,7 +3,7 @@ import { Table, Form, Input, Select, Switch, Space, Tag, Card, Button, InputNumb
 import { EditOutlined, DeleteOutlined, KeyOutlined, PlusOutlined, ExportOutlined, RedoOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { providerApi } from '../../api';
-import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
+import { useCrudList, useFormModal, useTypedConfirmAction } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
 import type { Provider, ProviderKey } from '../../types';
 import { exportTableToCsv } from '../../utils/export';
@@ -11,7 +11,7 @@ import { exportTableToCsv } from '../../utils/export';
 export default function ProvidersPage() {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
 
   const fetchFn = useCallback((params: any) => providerApi.list(params), []);
   const { data, total, loading, params, fetchData, setPage, setSort, setKeyword } = useCrudList<Provider, any>({ fetchFn });
@@ -20,7 +20,16 @@ export default function ProvidersPage() {
     updateFn: providerApi.update,
     onSuccess: fetchData,
   });
-  const { handleDelete } = useConfirmDelete(providerApi.delete, fetchData);
+  const { confirmAction } = useTypedConfirmAction();
+
+  const handleDeleteProvider = (record: Provider) => {
+    confirmAction({
+      title: t('provider.deleteTitle', { name: record.name }),
+      expectedText: record.name,
+      action: () => providerApi.delete(record.id),
+      onSuccess: fetchData,
+    });
+  };
 
   const [drawerProvider, setDrawerProvider] = useState<Provider | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
@@ -28,16 +37,24 @@ export default function ProvidersPage() {
   const [keyForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (!selectedRowKeys.length) return;
-    try {
-      await providerApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
-      message.success(t('common.success'));
-      setSelectedRowKeys([]);
-      fetchData();
-    } catch {
-      message.error(t('common.error'));
-    }
+    modal.confirm({
+      title: t('common.deleteConfirm'),
+      okType: 'danger',
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          await providerApi.batchDelete(selectedRowKeys.map((k) => Number(k)));
+          message.success(t('common.success'));
+          setSelectedRowKeys([]);
+          fetchData();
+        } catch {
+          message.error(t('common.error'));
+        }
+      },
+    });
   };
 
   const handleBatchEnable = async () => {
@@ -195,7 +212,7 @@ export default function ProvidersPage() {
         <Space size="small">
           <Button type="text" icon={<KeyOutlined />} title={t('provider.manageKeys')} onClick={() => setDrawerProvider(r)} />
           <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteProvider(r)} />
         </Space>
       ),
     },
