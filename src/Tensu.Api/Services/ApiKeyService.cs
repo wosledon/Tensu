@@ -45,6 +45,11 @@ public class ApiKeyService : BaseService
         return await _db.ApiKeys.FindAsync(id);
     }
 
+    public async Task<bool> IsUserInOrganizationAsync(int userId, int orgId)
+    {
+        return await _db.Users.AnyAsync(u => u.Id == userId && u.OrganizationId == orgId);
+    }
+
     internal static object MapToListDto(ApiKey k)
     {
         return new
@@ -106,6 +111,7 @@ public class ApiKeyService : BaseService
         if (key == null) return null;
 
         key.Name = updated.Name;
+        key.UserId = updated.UserId;
         key.ExpiresAt = updated.ExpiresAt;
         key.AllowedModels = updated.AllowedModels;
         key.IpWhitelist = updated.IpWhitelist;

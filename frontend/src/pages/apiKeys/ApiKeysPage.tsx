@@ -2,10 +2,10 @@ import { useState, useCallback } from 'react';
 import { Table, Form, Input, Select, DatePicker, Space, Card, Button, App, Tooltip, Alert } from 'antd';
 import { DeleteOutlined, StopOutlined, CopyOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { apiKeyApi, modelApi, orgApi } from '../../api';
+import { apiKeyApi, modelApi, orgApi, userApi } from '../../api';
 import { useCrudList, useConfirmDelete } from '../../hooks';
 import { PageHeader, StatusDot, FormModal } from '../../components';
-import type { ApiKey, Organization } from '../../types';
+import type { ApiKey, Organization, User } from '../../types';
 import dayjs from 'dayjs';
 import { exportTableToCsv } from '../../utils/export';
 
@@ -58,6 +58,7 @@ export default function ApiKeysPage() {
   }, [t]);
 
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [models, setModels] = useState<{ id: number; name: string }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -107,6 +108,14 @@ export default function ApiKeysPage() {
     }
   };
 
+  const handleOrgChange = async (orgId: number) => {
+    form.setFieldValue('userId', undefined);
+    try {
+      const data = await userApi.list({ page: 1, pageSize: 1000, orgId });
+      setUsers(data.items);
+    } catch { setUsers([]); }
+  };
+
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
@@ -149,6 +158,7 @@ export default function ApiKeysPage() {
       ),
     },
     { title: t('apiKey.organization'), key: 'org', render: (_: any, r: ApiKey) => r.organization?.name },
+    { title: t('apiKey.user'), key: 'user', render: (_: any, r: ApiKey) => r.user?.displayName || r.user?.username || '-' },
     {
       title: t('common.status'), dataIndex: 'status', key: 'status',
       render: (v: string) => <StatusDot color={statusColors[v] || 'default'} text={v} />,
@@ -252,7 +262,16 @@ export default function ApiKeysPage() {
           <>
             <Form.Item name="name" label={t('apiKey.name')} rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name="organizationId" label={t('apiKey.organization')} rules={[{ required: true }]}>
-              <Select options={orgs.map((o) => ({ value: o.id, label: o.name }))} />
+              <Select options={orgs.map((o) => ({ value: o.id, label: o.name }))} onChange={handleOrgChange} />
+            </Form.Item>
+            <Form.Item name="userId" label={t('apiKey.user')} tooltip={t('apiKey.userHint')}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('apiKey.userHint')}
+                options={users.map((u) => ({ value: u.id, label: u.displayName ? `${u.displayName} (${u.username})` : u.username }))}
+              />
             </Form.Item>
             <Form.Item name="expiresAt" label={t('apiKey.expiresAt')}><DatePicker style={{ width: '100%' }} /></Form.Item>
             <Form.Item name="allowedModels" label={t('apiKey.allowedModels')}>

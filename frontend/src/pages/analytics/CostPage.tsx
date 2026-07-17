@@ -4,6 +4,7 @@ import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
+import type { ApiKeyUsageStat } from '../../types';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -15,6 +16,7 @@ export default function CostPage() {
   const { t } = useTranslation();
   const { isDark } = useThemeMode();
   const [data, setData] = useState<any>(null);
+  const [keyStats, setKeyStats] = useState<ApiKeyUsageStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(30, 'day'), dayjs()]);
@@ -23,8 +25,12 @@ export default function CostPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyticsApi.cost(dates[0].toISOString(), dates[1].toISOString());
+      const [result, keyResult] = await Promise.all([
+        analyticsApi.cost(dates[0].toISOString(), dates[1].toISOString()),
+        analyticsApi.byApiKey(dates[0].toISOString(), dates[1].toISOString()),
+      ]);
       setData(result);
+      setKeyStats(keyResult.items);
     } catch (err: any) {
       setError(err?.message || t('analytics.loadError'));
     } finally {
@@ -57,6 +63,25 @@ export default function CostPage() {
     { title: t('analytics.provider'), dataIndex: 'provider', key: 'provider' },
     { title: t('analytics.totalCost'), dataIndex: 'totalCost', key: 'totalCost', align: 'right' as const, render: (v: number) => `$${v.toFixed(6)}` },
     { title: t('analytics.requests'), dataIndex: 'requests', key: 'requests', align: 'right' as const },
+  ];
+
+  const apiKeyColumns = [
+    {
+      title: t('apiKey.key'), key: 'name',
+      render: (_: any, r: ApiKeyUsageStat) => (
+        <Space size={4}>
+          <span>{r.name}</span>
+          {r.keyPrefix && <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{r.keyPrefix}...</span>}
+        </Space>
+      ),
+    },
+    { title: t('apiKey.user'), dataIndex: 'user', key: 'user', render: (v: string) => v || '-' },
+    { title: t('analytics.totalCost'), dataIndex: 'totalCost', key: 'totalCost', align: 'right' as const, render: (v: number) => `$${v.toFixed(6)}` },
+    { title: t('analytics.requests'), dataIndex: 'requests', key: 'requests', align: 'right' as const },
+    {
+      title: t('analytics.avgCostPerRequest'), key: 'avgCostPerRequest', align: 'right' as const,
+      render: (_: any, r: ApiKeyUsageStat) => `$${(r.requests > 0 ? r.totalCost / r.requests : 0).toFixed(6)}`,
+    },
   ];
 
   return (
@@ -117,6 +142,14 @@ export default function CostPage() {
             <Col xs={24}>
               <Card title={t('analytics.byModel')} style={{ borderRadius: 18 }}>
                 <Table rowKey="model" size="small" pagination={false} dataSource={data?.byModel || []} columns={modelColumns} />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+            <Col xs={24}>
+              <Card title={t('analytics.byApiKey')} style={{ borderRadius: 18 }}>
+                <Table rowKey="apiKeyId" size="small" pagination={false} dataSource={keyStats} columns={apiKeyColumns} />
               </Card>
             </Col>
           </Row>

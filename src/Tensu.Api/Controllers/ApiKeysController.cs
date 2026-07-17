@@ -44,6 +44,11 @@ public class ApiKeysController : AdminBaseController
             apiKey.OrganizationId = CurrentOrgId;
             apiKey.UserId = CurrentUserId;
         }
+        else if (apiKey.UserId.HasValue
+            && !await _service.IsUserInOrganizationAsync(apiKey.UserId.Value, apiKey.OrganizationId))
+        {
+            return BadRequest(ApiResponse.Error(40001, "User does not belong to the organization"));
+        }
         var (created, plainTextKey) = await _service.CreateAsync(apiKey);
         await LogAdminAuditAsync("create", "ApiKey", created.Id.ToString(), $"Name={created.Name}");
         return Ok(ApiResponse<object>.Success(new
@@ -65,6 +70,9 @@ public class ApiKeysController : AdminBaseController
         if (existing == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));
         if (!IsSuperAdmin && existing.OrganizationId != CurrentOrgId)
             return Forbid();
+        if (apiKey.UserId.HasValue
+            && !await _service.IsUserInOrganizationAsync(apiKey.UserId.Value, existing.OrganizationId))
+            return BadRequest(ApiResponse.Error(40001, "User does not belong to the organization"));
 
         var updated = await _service.UpdateAsync(id, apiKey);
         if (updated == null) return NotFound(ApiResponse.Error(40401, "API Key not found"));

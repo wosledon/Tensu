@@ -88,6 +88,19 @@ public class AnalyticsController : AdminBaseController
         return Ok(ApiResponse<object>.Success(result));
     }
 
+    [HttpGet("by-api-key")]
+    public async Task<IActionResult> ByApiKey(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] int? orgId = null)
+    {
+        if (from == default) from = DateTime.UtcNow.AddDays(-7);
+        if (to == default) to = DateTime.UtcNow;
+        var effectiveOrgId = IsSuperAdmin ? orgId : CurrentOrgId;
+        var result = await _service.GetByApiKeyAsync(from, to, effectiveOrgId);
+        return Ok(ApiResponse<object>.Success(result));
+    }
+
     [HttpGet("anomalies")]
     public async Task<IActionResult> Anomalies(
         [FromQuery] DateTime from,

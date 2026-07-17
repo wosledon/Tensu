@@ -456,6 +456,64 @@ public class AnalyticsService
         };
     }
 
+    public async Task<object> GetByApiKeyAsync(DateTime from, DateTime to, int? orgId = null)
+    {
+        var query = _db.RequestLogs.Where(r => r.Timestamp >= from && r.Timestamp <= to && r.ApiKeyId.HasValue);
+        if (orgId.HasValue) query = query.Where(r => r.OrganizationId == orgId.Value);
+
+        var logs = await query.Select(r => new
+        {
+            r.ApiKeyId,
+            r.Status,
+            r.InputTokens,
+            r.OutputTokens,
+            r.InputCost,
+            r.OutputCost
+        }).ToListAsync();
+
+        var groups = logs
+            .GroupBy(r => r.ApiKeyId!.Value)
+            .Select(g => new
+            {
+                apiKeyId = g.Key,
+                requests = g.Count(),
+                success = g.Count(r => r.Status == Core.Enums.RequestStatus.Success),
+                inputTokens = g.Sum(r => r.InputTokens ?? 0),
+                outputTokens = g.Sum(r => r.OutputTokens ?? 0),
+                totalCost = Math.Round(g.Sum(r => (r.InputCost ?? 0) + (r.OutputCost ?? 0)), 6),
+            })
+            .OrderByDescending(x => x.requests)
+            .ToList();
+
+        var keyIds = groups.Select(g => g.apiKeyId).ToList();
+        var keyMap = await _db.ApiKeys
+            .Include(k => k.User)
+            .Include(k => k.Organization)
+            .Where(k => keyIds.Contains(k.Id))
+            .ToDictionaryAsync(k => k.Id);
+
+        var items = groups.Select(g =>
+        {
+            keyMap.TryGetValue(g.apiKeyId, out var key);
+            return new
+            {
+                g.apiKeyId,
+                name = key?.Name ?? $"key #{g.apiKeyId}", // 密钥已删除时回退
+                keyPrefix = key?.KeyPrefix,
+                user = key?.User == null ? null : (key.User.DisplayName ?? key.User.Username),
+                organization = key?.Organization?.Name,
+                g.requests,
+                successRate = g.requests > 0 ? Math.Round((double)g.success / g.requests * 100, 1) : 0,
+                g.inputTokens,
+                g.outputTokens,
+                totalTokens = g.inputTokens + g.outputTokens,
+                g.totalCost,
+            };
+        }).ToList();
+
+        return new { items };
+    }
+
     private static double Percentile(List<double> sorted, int percentile)
     {
         if (sorted.Count == 0) return 0;

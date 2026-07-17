@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Col, Row, Select, DatePicker, Typography, Spin, Space, Button, Statistic, Alert } from 'antd';
+import { Card, Col, Row, Select, DatePicker, Typography, Spin, Space, Button, Statistic, Alert, Table } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
+import type { ApiKeyUsageStat } from '../../types';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -15,6 +16,7 @@ export default function UsagePage() {
   const { t } = useTranslation();
   const { isDark } = useThemeMode();
   const [data, setData] = useState<any>(null);
+  const [keyStats, setKeyStats] = useState<ApiKeyUsageStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [granularity, setGranularity] = useState('day');
@@ -24,8 +26,12 @@ export default function UsagePage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyticsApi.usage(dates[0].toISOString(), dates[1].toISOString(), granularity);
+      const [result, keyResult] = await Promise.all([
+        analyticsApi.usage(dates[0].toISOString(), dates[1].toISOString(), granularity),
+        analyticsApi.byApiKey(dates[0].toISOString(), dates[1].toISOString()),
+      ]);
       setData(result);
+      setKeyStats(keyResult.items);
     } catch (err: any) {
       setError(err?.message || t('analytics.loadError'));
     } finally {
@@ -75,6 +81,24 @@ export default function UsagePage() {
     cacheHits: (acc.cacheHits || 0) + (d.cacheHits || 0),
     compressionSaved: (acc.compressionSaved || 0) + (d.compressionSaved || 0),
   }), {}) || {};
+
+  const apiKeyColumns = [
+    {
+      title: t('apiKey.key'), key: 'name',
+      render: (_: any, r: ApiKeyUsageStat) => (
+        <Space size={4}>
+          <span>{r.name}</span>
+          {r.keyPrefix && <span style={{ fontFamily: 'monospace', opacity: 0.6 }}>{r.keyPrefix}...</span>}
+        </Space>
+      ),
+    },
+    { title: t('apiKey.user'), dataIndex: 'user', key: 'user', render: (v: string) => v || '-' },
+    { title: t('analytics.requests'), dataIndex: 'requests', key: 'requests', align: 'right' as const },
+    { title: t('analytics.inputTokens'), dataIndex: 'inputTokens', key: 'inputTokens', align: 'right' as const },
+    { title: t('analytics.outputTokens'), dataIndex: 'outputTokens', key: 'outputTokens', align: 'right' as const },
+    { title: t('analytics.totalTokens'), dataIndex: 'totalTokens', key: 'totalTokens', align: 'right' as const },
+    { title: t('analytics.successRate'), dataIndex: 'successRate', key: 'successRate', align: 'right' as const, render: (v: number) => `${v}%` },
+  ];
 
   return (
     <div>
@@ -132,6 +156,14 @@ export default function UsagePage() {
             <Col xs={24} lg={8}>
               <Card title={t('analytics.requests') + ' Trend'} style={{ borderRadius: 18 }}>
                 <ReactECharts option={requestOption} style={{ height: 320 }} />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+            <Col xs={24}>
+              <Card title={t('analytics.byApiKey')} style={{ borderRadius: 18 }}>
+                <Table rowKey="apiKeyId" size="small" pagination={false} dataSource={keyStats} columns={apiKeyColumns} />
               </Card>
             </Col>
           </Row>

@@ -177,6 +177,20 @@ export interface ApiKey {
   createdAt: string;
 }
 
+export interface ApiKeyUsageStat {
+  apiKeyId: number;
+  name: string;
+  keyPrefix?: string;
+  user?: string;
+  organization?: string;
+  requests: number;
+  successRate: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  totalCost: number;
+}
+
 export interface RouteModel {
   id: number;
   name: string;
