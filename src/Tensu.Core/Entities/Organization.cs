@@ -9,6 +9,7 @@ public class Organization
     public string? Description { get; set; }
     public bool EnableContentLogging { get; set; } = true;
     public bool CompressionEnabled { get; set; } = true;
+    public bool CacheEnabled { get; set; } = true;
     public int DataRetentionDays { get; set; } = 30;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

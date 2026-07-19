@@ -55,6 +55,7 @@ public class ModelService : BaseService
             m.OutputContextSize,
             m.IsEnabled,
             m.CompressionEnabled,
+            m.CacheEnabled,
             m.CreatedAt,
             m.UpdatedAt,
             Provider = m.Provider == null ? null : new
@@ -120,6 +121,7 @@ public class ModelService : BaseService
         model.OutputContextSize = updated.OutputContextSize;
         model.IsEnabled = updated.IsEnabled;
         model.CompressionEnabled = updated.CompressionEnabled;
+        model.CacheEnabled = updated.CacheEnabled;
         model.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return model;
@@ -194,6 +196,7 @@ public class ModelService : BaseService
                 m.OutputContextSize,
                 m.IsEnabled,
                 m.CompressionEnabled,
+                m.CacheEnabled,
                 Provider = m.Provider == null ? null : new
                 {
                     m.Provider.Id,

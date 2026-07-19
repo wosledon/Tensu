@@ -17,6 +17,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
         builder.Property(e => e.EnableContentLogging).HasColumnName("enable_content_logging");
         builder.Property(e => e.CompressionEnabled).HasColumnName("compression_enabled");
+        builder.Property(e => e.CacheEnabled).HasColumnName("cache_enabled");
         builder.Property(e => e.DataRetentionDays).HasColumnName("data_retention_days");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
@@ -118,6 +119,7 @@ public class ModelConfiguration : IEntityTypeConfiguration<Model>
         builder.Property(e => e.OutputContextSize).HasColumnName("output_context_size");
         builder.Property(e => e.IsEnabled).HasColumnName("is_enabled");
         builder.Property(e => e.CompressionEnabled).HasColumnName("compression_enabled");
+        builder.Property(e => e.CacheEnabled).HasColumnName("cache_enabled");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
@@ -355,6 +357,8 @@ public class RequestLogConfiguration : IEntityTypeConfiguration<RequestLog>
         builder.Property(e => e.InputTokens).HasColumnName("input_tokens");
         builder.Property(e => e.InputTokensAfterCompression).HasColumnName("input_tokens_after_compression");
         builder.Property(e => e.OutputTokens).HasColumnName("output_tokens");
+        builder.Property(e => e.CachedInputTokens).HasColumnName("cached_input_tokens");
+        builder.Property(e => e.ReasoningTokens).HasColumnName("reasoning_tokens");
         builder.Property(e => e.CacheHit).HasColumnName("cache_hit");
         builder.Property(e => e.SemanticCacheHit).HasColumnName("semantic_cache_hit");
         builder.Property(e => e.TimeToFirstTokenMs).HasColumnName("time_to_first_token_ms");
@@ -415,6 +419,8 @@ public class ArchivedRequestLogConfiguration : IEntityTypeConfiguration<Archived
         builder.Property(e => e.InputTokens).HasColumnName("input_tokens");
         builder.Property(e => e.InputTokensAfterCompression).HasColumnName("input_tokens_after_compression");
         builder.Property(e => e.OutputTokens).HasColumnName("output_tokens");
+        builder.Property(e => e.CachedInputTokens).HasColumnName("cached_input_tokens");
+        builder.Property(e => e.ReasoningTokens).HasColumnName("reasoning_tokens");
         builder.Property(e => e.CacheHit).HasColumnName("cache_hit");
         builder.Property(e => e.SemanticCacheHit).HasColumnName("semantic_cache_hit");
         builder.Property(e => e.TimeToFirstTokenMs).HasColumnName("time_to_first_token_ms");

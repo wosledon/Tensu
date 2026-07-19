@@ -31,6 +31,7 @@ export default function OrganizationsPage() {
     { title: t('organization.description'), dataIndex: 'description', key: 'description', ellipsis: true },
     { title: t('organization.contentLogging'), dataIndex: 'enableContentLogging', key: 'logging', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.yes') : t('common.no')}</Tag> },
     { title: t('organization.compression'), dataIndex: 'compressionEnabled', key: 'compression', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.yes') : t('common.no')}</Tag> },
+    { title: t('organization.cache'), dataIndex: 'cacheEnabled', key: 'cache', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.yes') : t('common.no')}</Tag> },
     { title: t('organization.retentionDays'), dataIndex: 'dataRetentionDays', key: 'retention', render: (v: number) => `${v}d`, align: 'right' as const },
     {
       title: t('common.actions'), key: 'actions', width: 120,
@@ -63,6 +64,7 @@ export default function OrganizationsPage() {
         <Form.Item name="description" label={t('organization.description')}><Input.TextArea rows={2} /></Form.Item>
         <Form.Item name="enableContentLogging" label={t('organization.contentLogging')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         <Form.Item name="compressionEnabled" label={t('organization.compression')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Form.Item name="cacheEnabled" label={t('organization.cache')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         <Form.Item name="dataRetentionDays" label={t('organization.retentionDays')} initialValue={30}><InputNumber min={7} max={180} style={{ width: '100%' }} /></Form.Item>
       </FormModal>
     </div>

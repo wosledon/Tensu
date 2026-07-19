@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Tensu.Api.Data;
 using Tensu.Api.Infrastructure;
@@ -11,20 +14,38 @@ public class CompressionServiceTests : IDisposable
 {
     private readonly TensuDbContext _db;
     private readonly CompressionService _compression;
+    private readonly CompressionBackgroundService _background;
+    private readonly CancellationTokenSource _cts = new();
 
     public CompressionServiceTests()
     {
+        var dbName = Guid.NewGuid().ToString();
+        var dbRoot = new InMemoryDatabaseRoot();
         _db = new TensuDbContext(new DbContextOptionsBuilder<TensuDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(dbName, dbRoot)
             .Options);
         _db.Database.EnsureCreated();
 
+        // Run the real background persistence so decompression mappings land in the DB.
+        var channel = new CompressionChannel();
+        var services = new ServiceCollection();
+        services.AddDbContext<TensuDbContext>(o => o.UseInMemoryDatabase(dbName, dbRoot));
+        var provider = services.BuildServiceProvider();
+        _background = new CompressionBackgroundService(
+            channel,
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<CompressionBackgroundService>.Instance);
+        _background.StartAsync(_cts.Token).GetAwaiter().GetResult();
+
         var logger = new Mock<ILogger<CompressionService>>();
-        _compression = new CompressionService(logger.Object, new CompressionChannel(), _db);
+        _compression = new CompressionService(logger.Object, channel, _db);
     }
 
     public void Dispose()
     {
+        _cts.Cancel();
+        _background.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
+        _cts.Dispose();
         _db.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -111,5 +132,88 @@ public class CompressionServiceTests : IDisposable
     {
         Assert.Equal(0, CompressionService.EstimateTokens(""));
         Assert.Equal(0, CompressionService.EstimateTokens(null!));
+    }
+
+    [Fact]
+    public async Task Compress_DuplicateMessages_RemovesDuplicatesAndRestores()
+    {
+        var msg = string.Concat(Enumerable.Repeat("Repeated user message with enough content to matter. ", 4));
+        var body = $$"""{"model":"gpt-4o","messages":[{"role":"user","content":"{{msg}}"},{"role":"user","content":"{{msg}}"},{"role":"assistant","content":"ok"}]}""";
+
+        var result = await _compression.CompressAsync(body);
+
+        Assert.True(result.Applied);
+        Assert.Contains("dedup", result.Strategy);
+
+        var doc = System.Text.Json.JsonDocument.Parse(result.CompressedBody);
+        var messages = doc.RootElement.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+
+        // Restoration via mapping is byte-exact.
+        var restored = await WaitForMappingAndDecompress(result);
+        Assert.Equal(body, restored);
+    }
+
+    [Fact]
+    public async Task Compress_DuplicateParagraphs_RemovesThem()
+    {
+        var paragraph = string.Concat(Enumerable.Repeat("This is a long repeated paragraph with plenty of content. ", 6));
+        var content = $"{paragraph}\n\n{paragraph}\n\nunique tail";
+        var body = $$"""{"model":"gpt-4o","messages":[{"role":"user","content":{{System.Text.Json.JsonSerializer.Serialize(content)}}}]}""";
+
+        var result = await _compression.CompressAsync(body);
+
+        Assert.True(result.Applied);
+        Assert.Contains("dedup-paragraphs", result.Strategy);
+
+        var doc = System.Text.Json.JsonDocument.Parse(result.CompressedBody);
+        var compressedContent = doc.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+        Assert.Equal($"{paragraph}\n\nunique tail", compressedContent);
+
+        var restored = await WaitForMappingAndDecompress(result);
+        Assert.Equal(body, restored);
+    }
+
+    [Fact]
+    public async Task Compress_JsonContentWithLongKeys_ShortensKeysAndRestores()
+    {
+        var item = """{"customer_order_identifier":"A-1001","customer_delivery_address":"Street 1","customer_contact_phone":"123"}""";
+        var jsonContent = "[" + string.Join(",", Enumerable.Repeat(item, 8)) + "]";
+        var body = $$"""{"model":"gpt-4o","messages":[{"role":"user","content":{{System.Text.Json.JsonSerializer.Serialize(jsonContent)}}}]}""";
+
+        var result = await _compression.CompressAsync(body);
+
+        Assert.True(result.Applied);
+        Assert.Contains("json-keys", result.Strategy);
+        Assert.DoesNotContain("customer_order_identifier", result.CompressedBody);
+
+        var restored = await WaitForMappingAndDecompress(result);
+        Assert.Equal(body, restored);
+    }
+
+    [Fact]
+    public async Task Compress_ProtocolKeys_NeverShortened()
+    {
+        var body = """{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}],"max_tokens":100}""";
+        var result = await _compression.CompressAsync(body);
+
+        if (result.Applied)
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(result.CompressedBody);
+            Assert.True(doc.RootElement.TryGetProperty("messages", out _));
+            Assert.True(doc.RootElement.TryGetProperty("max_tokens", out _));
+        }
+    }
+
+    private async Task<string?> WaitForMappingAndDecompress(CompressionService.CompressionResult result)
+    {
+        // Mapping persistence is async via channel; poll briefly.
+        for (var i = 0; i < 100; i++)
+        {
+            var restored = await _compression.DecompressAsync(result.CompressedBody, result.Strategy, result.DecompressionKey!);
+            if (restored != null) return restored;
+            await Task.Delay(30);
+        }
+        return null;
     }
 }

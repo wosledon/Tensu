@@ -18,6 +18,10 @@ namespace Tensu.Tests.Integration;
 
 public class IntegrationTestBase : IAsyncLifetime
 {
+    // Explicit shared root so every factory instance in the process uses the same
+    // InMemory store (EF's internal provider caching is not reliable across hosts).
+    private static readonly Microsoft.EntityFrameworkCore.Storage.InMemoryDatabaseRoot SharedDbRoot = new();
+
     protected readonly WebApplicationFactory<AlertRulesController> _factory;
 
     protected IntegrationTestBase()
@@ -47,7 +51,7 @@ public class IntegrationTestBase : IAsyncLifetime
                     if (descriptor != null) services.Remove(descriptor);
 
                     services.AddDbContext<TensuDbContext>(options =>
-                        options.UseInMemoryDatabase("TensuIntegrationTestDb"));
+                        options.UseInMemoryDatabase("TensuIntegrationTestDb", SharedDbRoot));
                 });
             });
 

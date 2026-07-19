@@ -62,6 +62,7 @@ export interface Model {
   outputContextSize: number;
   isEnabled: boolean;
   compressionEnabled: boolean;
+  cacheEnabled: boolean;
   pricings: ModelPricing[];
   createdAt: string;
   updatedAt: string;
@@ -112,6 +113,7 @@ export interface Organization {
   description?: string;
   enableContentLogging: boolean;
   compressionEnabled: boolean;
+  cacheEnabled: boolean;
   dataRetentionDays: number;
   children?: Organization[];
   createdAt: string;
@@ -191,6 +193,16 @@ export interface ApiKeyUsageStat {
   totalCost: number;
 }
 
+export interface OrgUsageStat {
+  organizationId: number;
+  organizationName: string;
+  requests: number;
+  totalTokens: number;
+  totalCost: number;
+  cacheHits: number;
+  cacheHitRate: number;
+}
+
 export interface RouteModel {
   id: number;
   name: string;
@@ -266,6 +278,8 @@ export interface RequestLog {
   inputTokens?: number;
   inputTokensAfterCompression?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
   cacheHit: boolean;
   semanticCacheHit: boolean;
   timeToFirstTokenMs?: number;
@@ -298,6 +312,8 @@ export interface ArchivedRequestLog {
   inputTokens?: number;
   inputTokensAfterCompression?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
   cacheHit: boolean;
   semanticCacheHit?: boolean;
   timeToFirstTokenMs?: number;

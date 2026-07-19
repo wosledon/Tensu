@@ -94,6 +94,8 @@ public class GatewayControllerTests : IntegrationTestBase, IAsyncLifetime
         var data = result.GetProperty("data");
         Assert.True(data.GetArrayLength() > 0);
         Assert.Equal("model", data[0].GetProperty("object").GetString());
-        Assert.Equal("OpenAI-gpt-4o", data[0].GetProperty("id").GetString());
+        // Other integration test classes share the same database, so assert presence
+        // rather than list position.
+        Assert.Contains(data.EnumerateArray(), m => m.GetProperty("id").GetString() == "OpenAI-gpt-4o");
     }
 }

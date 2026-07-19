@@ -127,6 +127,21 @@ public class DataRetentionBackgroundService : BackgroundService
 
         await transaction.CommitAsync(ct);
 
+        // The cleanup operation itself is recorded in the admin audit log (PRD §3.6.4).
+        db.AdminAuditLogs.Add(new AdminAuditLog
+        {
+            Timestamp = now,
+            UserId = 0,
+            Username = "system",
+            Action = "data-retention-cleanup",
+            EntityType = "RequestLog",
+            Details = $"archived={totalArchived}, deleted={totalDeleted}, archivedDeleted={archivedDeleted}, " +
+                      $"rateLimitCounters={countersDeleted}, compressionMappings={compressionMappingsDeleted}, " +
+                      $"semanticCache={semanticCacheDeleted}, exactCache={exactCacheDeleted}, " +
+                      $"dailyStats={dailyStatsDeleted}, adminAudit={adminAuditDeleted}, dataDeletionRequests={dataDeletionDeleted}"
+        });
+        await db.SaveChangesAsync(ct);
+
         _logger.LogInformation(
             "Data retention archived {Archived} and deleted {Deleted} audit logs (per-organization retention, global {GlobalDays} days)",
             totalArchived, totalDeleted, globalRetentionDays);
@@ -220,6 +235,8 @@ public class DataRetentionBackgroundService : BackgroundService
             InputTokens = log.InputTokens,
             InputTokensAfterCompression = log.InputTokensAfterCompression,
             OutputTokens = log.OutputTokens,
+            CachedInputTokens = log.CachedInputTokens,
+            ReasoningTokens = log.ReasoningTokens,
             CacheHit = log.CacheHit,
             SemanticCacheHit = log.SemanticCacheHit,
             TimeToFirstTokenMs = log.TimeToFirstTokenMs,

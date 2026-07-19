@@ -52,6 +52,9 @@ tests/Tensu.Tests/  — xunit + Moq + WebApplicationFactory + coverlet
 | **审计内容加密开关** | `audit.encryptContent` | 开启后新写入的 RequestContent/ResponseContent 以 `enc:v1:` 前缀 AES 加密，读取自动解密；历史明文兼容 |
 | **模型自动评估会真实调用上游** | `ModelCapabilityService` | Latency/Throughput/CostEfficiency 走历史日志；其余维度发送真实 LLM 探测请求（产生少量上游计费） |
 | **缓存后端可配置** | `cache.backend` = `memory`(默认)/`database` | database 模式走 `exact_cache_entries` 表，多实例共享；配置 60s 热加载 |
+| **缓存/压缩均有全局+组织+模型三级开关** | `IsCacheEnabledAsync`/`IsCompressionEnabledAsync` | 任一级关闭即对该请求停用；`Organization.CacheEnabled`/`Model.CacheEnabled` 默认 true |
+| **压缩策略不止 minify** | `CompressionService.CompressAsync` | dedup（重复消息/段落）+ json-keys（内容内 JSON 短化 key）+ json-structure + log-template；策略名以 `+` 组合，还原靠 compression_mappings 存原文 |
+| **成本多币种** | `AnalyticsService` | `currency.rate.*`=每美元兑换数；log 路径按 `RequestLog.Currency` 折算到 `currency.default`，DailyStat 聚合路径无币种字段不折算 |
 
 ## 已完成但需注意的缺口
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Tensu.Api.Data;
@@ -49,17 +50,32 @@ public class CompressionService
 
         try
         {
-            var json = JsonDocument.Parse(requestBody);
-            var minified = MinifyJson(json.RootElement);
-            var minifiedTokens = EstimateTokens(minified);
-
-            if (minifiedTokens < originalTokens * 0.95)
+            var root = JsonNode.Parse(requestBody);
+            if (root != null)
             {
-                var decompressionKey = ComputeHash(minified);
-                await PersistMappingAsync(requestBody, minified, "json-structure", decompressionKey, cancellationToken);
-                return new CompressionResult(
-                    minified, originalTokens, minifiedTokens,
-                    "json-structure", Applied: true, decompressionKey);
+                var strategies = new List<string>();
+
+                // Basic dedup: drop exact duplicate messages and repeated paragraphs.
+                if (DedupMessages(root)) strategies.Add("dedup");
+                if (DedupParagraphs(root)) strategies.Add("dedup-paragraphs");
+
+                // Shorten long keys inside JSON-structured message content (mapping kept
+                // in the compression mapping table, so restoration stays exact).
+                if (ShortenJsonContentKeys(root)) strategies.Add("json-keys");
+
+                var minified = root.ToJsonString();
+                strategies.Add("json-structure");
+                var minifiedTokens = EstimateTokens(minified);
+
+                if (minifiedTokens < originalTokens * 0.95)
+                {
+                    var strategy = string.Join('+', strategies.Distinct());
+                    var decompressionKey = ComputeHash(minified);
+                    await PersistMappingAsync(requestBody, minified, strategy, decompressionKey, cancellationToken);
+                    return new CompressionResult(
+                        minified, originalTokens, minifiedTokens,
+                        strategy, Applied: true, decompressionKey);
+                }
             }
         }
         catch (JsonException)
@@ -83,6 +99,199 @@ public class CompressionService
         return new CompressionResult(
             requestBody, originalTokens, originalTokens,
             "none", Applied: false);
+    }
+
+    /// <summary>
+    /// Remove exact duplicate entries from the top-level "messages" array.
+    /// Duplicates are byte-identical, so removing them does not lose information.
+    /// </summary>
+    private static bool DedupMessages(JsonNode root)
+    {
+        if (root is not JsonObject obj) return false;
+        if (obj["messages"] is not JsonArray messages) return false;
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var removed = false;
+        for (var i = messages.Count - 1; i >= 0; i--)
+        {
+            var fingerprint = messages[i]?.ToJsonString() ?? "";
+            if (fingerprint.Length == 0) continue;
+            if (!seen.Add(fingerprint))
+            {
+                messages.RemoveAt(i);
+                removed = true;
+            }
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// Remove repeated paragraphs (blank-line separated, ≥ 50 chars) inside long string
+    /// values, keeping the first occurrence. Exact duplicates only.
+    /// </summary>
+    private static bool DedupParagraphs(JsonNode root)
+    {
+        var changed = false;
+        foreach (var (parent, key, value) in EnumerateStrings(root))
+        {
+            if (value.Length < 400) continue;
+            var parts = Regex.Split(value, @"(\n{2,})");
+            if (parts.Length < 3) continue;
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var sb = new StringBuilder();
+            var removedAny = false;
+            // parts alternate: paragraph, separator, paragraph, separator, ...
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var part = parts[i];
+                var isSeparator = part.StartsWith('\n');
+                if (!isSeparator)
+                {
+                    var trimmed = part.Trim();
+                    if (trimmed.Length >= 50 && !seen.Add(trimmed))
+                    {
+                        // Drop the duplicate paragraph together with the separator after it.
+                        removedAny = true;
+                        if (i + 1 < parts.Length && parts[i + 1].StartsWith('\n'))
+                            i++;
+                        continue;
+                    }
+                }
+                sb.Append(part);
+            }
+
+            if (removedAny)
+            {
+                ReplaceString(parent, key, sb.ToString());
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>
+    /// Shorten long property names inside string values that themselves contain JSON
+    /// (data-heavy / few-shot prompts). Keys ≥ 5 chars become k0..kN within that string;
+    /// the original body is stored in the mapping table for exact restoration.
+    /// </summary>
+    private static bool ShortenJsonContentKeys(JsonNode root)
+    {
+        var changed = false;
+        foreach (var (parent, key, value) in EnumerateStrings(root))
+        {
+            if (value.Length < 200) continue;
+
+            JsonNode? content;
+            try { content = JsonNode.Parse(value); }
+            catch (JsonException) { continue; }
+            if (content is not (JsonObject or JsonArray)) continue;
+
+            var keyCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            CountKeys(content, keyCounts);
+
+            // Only worth it for long keys used at least twice.
+            var candidates = keyCounts
+                .Where(kv => kv.Key.Length >= 5 && kv.Value >= 2)
+                .OrderByDescending(kv => (kv.Key.Length - 3) * kv.Value)
+                .ToList();
+            var savings = candidates.Sum(kv => (kv.Key.Length - 3) * kv.Value);
+            if (savings < 60) continue;
+
+            var existing = new HashSet<string>(keyCounts.Keys, StringComparer.Ordinal);
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            var n = 0;
+            foreach (var kv in candidates)
+            {
+                string shortName;
+                do { shortName = $"k{n++}"; } while (existing.Contains(shortName));
+                map[kv.Key] = shortName;
+            }
+
+            var renamed = RenameKeys(content, map);
+            var serialized = renamed.ToJsonString();
+            if (serialized.Length < value.Length)
+            {
+                ReplaceString(parent, key, serialized);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static void CountKeys(JsonNode node, Dictionary<string, int> counts)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var prop in obj)
+                {
+                    counts[prop.Key] = counts.GetValueOrDefault(prop.Key) + 1;
+                    if (prop.Value != null) CountKeys(prop.Value, counts);
+                }
+                break;
+            case JsonArray arr:
+                foreach (var item in arr)
+                    if (item != null) CountKeys(item, counts);
+                break;
+        }
+    }
+
+    private static JsonNode RenameKeys(JsonNode node, Dictionary<string, string> map)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                var renamed = new JsonObject();
+                foreach (var prop in obj)
+                {
+                    var name = map.TryGetValue(prop.Key, out var s) ? s : prop.Key;
+                    renamed[name] = prop.Value != null ? RenameKeys(prop.Value, map) : null;
+                }
+                return renamed;
+            case JsonArray arr:
+                var newArr = new JsonArray();
+                foreach (var item in arr)
+                    newArr.Add(item != null ? RenameKeys(item, map) : null);
+                return newArr;
+            default:
+                return node.DeepClone();
+        }
+    }
+
+    private static IEnumerable<(JsonNode parent, object key, string value)> EnumerateStrings(JsonNode node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var prop in obj.ToList())
+                {
+                    if (prop.Value is JsonValue jv && jv.TryGetValue<string>(out var s))
+                        yield return (obj, prop.Key, s);
+                    else if (prop.Value != null)
+                        foreach (var item in EnumerateStrings(prop.Value))
+                            yield return item;
+                }
+                break;
+            case JsonArray arr:
+                for (var i = 0; i < arr.Count; i++)
+                {
+                    if (arr[i] is JsonValue jv && jv.TryGetValue<string>(out var s))
+                        yield return (arr, i, s);
+                    else if (arr[i] != null)
+                        foreach (var item in EnumerateStrings(arr[i]!))
+                            yield return item;
+                }
+                break;
+        }
+    }
+
+    private static void ReplaceString(JsonNode parent, object key, string newValue)
+    {
+        if (parent is JsonObject obj && key is string name)
+            obj[name] = newValue;
+        else if (parent is JsonArray arr && key is int index)
+            arr[index] = newValue;
     }
 
     /// <summary>
@@ -120,66 +329,6 @@ public class CompressionService
             Strategy = strategy,
             DecompressionKey = decompressionKey,
         }, cancellationToken);
-    }
-
-    private string MinifyJson(JsonElement element)
-    {
-        using var stream = new MemoryStream();
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
-        {
-            Indented = false,
-            SkipValidation = false
-        });
-
-        WriteElement(element, writer);
-        writer.Flush();
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private void WriteElement(JsonElement element, Utf8JsonWriter writer)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject())
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteElement(property.Value, writer);
-                }
-                writer.WriteEndObject();
-                break;
-
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteElement(item, writer);
-                writer.WriteEndArray();
-                break;
-
-            case JsonValueKind.String:
-                writer.WriteStringValue(element.GetString() ?? "");
-                break;
-
-            case JsonValueKind.Number:
-                if (element.TryGetInt64(out var l))
-                    writer.WriteNumberValue(l);
-                else
-                    writer.WriteNumberValue(element.GetDouble());
-                break;
-
-            case JsonValueKind.True:
-                writer.WriteBooleanValue(true);
-                break;
-
-            case JsonValueKind.False:
-                writer.WriteBooleanValue(false);
-                break;
-
-            case JsonValueKind.Null:
-                writer.WriteNullValue();
-                break;
-        }
     }
 
     /// <summary>

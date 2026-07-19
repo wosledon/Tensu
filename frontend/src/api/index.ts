@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, ApiKeyUsageStat, RouteModel, RouteModelTarget, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, ApiKeyUsageStat, OrgUsageStat, RouteModel, RouteModelTarget, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
 import { getApiErrorMessage } from './errorHandler';
 
 const api = axios.create({
@@ -236,6 +236,8 @@ export const analyticsApi = {
     api.get<ApiResponse<any>>('/analytics/cache', { params: { from, to, orgId } }).then(unwrap),
   byApiKey: (from: string, to: string, orgId?: number) =>
     api.get<ApiResponse<{ items: ApiKeyUsageStat[] }>>('/analytics/by-api-key', { params: { from, to, orgId } }).then(unwrap),
+  byOrganization: (from: string, to: string) =>
+    api.get<ApiResponse<{ defaultCurrency: string; items: OrgUsageStat[] }>>('/analytics/by-organization', { params: { from, to } }).then(unwrap),
   anomalies: (from: string, to: string, orgId?: number, severity?: string, type?: string, page = 1, pageSize = 20) =>
     api.get<ApiResponse<{ items: AnomalyResult[]; total: number; page: number; pageSize: number }>>('/analytics/anomalies', { params: { from, to, orgId, severity, type, page, pageSize } }).then(unwrap),
 };

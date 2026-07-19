@@ -3,8 +3,9 @@ import { Card, Col, Row, Select, DatePicker, Typography, Spin, Space, Button, St
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
+import { useAuth } from '../../hooks/useAuth';
 import { analyticsApi } from '../../api';
-import type { ApiKeyUsageStat } from '../../types';
+import type { ApiKeyUsageStat, OrgUsageStat } from '../../types';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -15,29 +16,37 @@ const chartColors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#5AC8FA', '#FF
 export default function UsagePage() {
   const { t } = useTranslation();
   const { isDark } = useThemeMode();
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
   const [keyStats, setKeyStats] = useState<ApiKeyUsageStat[]>([]);
+  const [orgStats, setOrgStats] = useState<OrgUsageStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [granularity, setGranularity] = useState('day');
   const [dates, setDates] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
 
+  const isSuperAdmin = user?.role === 'SuperAdmin';
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [result, keyResult] = await Promise.all([
+      const [result, keyResult, orgResult] = await Promise.all([
         analyticsApi.usage(dates[0].toISOString(), dates[1].toISOString(), granularity),
         analyticsApi.byApiKey(dates[0].toISOString(), dates[1].toISOString()),
+        isSuperAdmin
+          ? analyticsApi.byOrganization(dates[0].toISOString(), dates[1].toISOString()).catch(() => null)
+          : Promise.resolve(null),
       ]);
       setData(result);
       setKeyStats(keyResult.items);
+      setOrgStats(orgResult?.items ?? []);
     } catch (err: any) {
       setError(err?.message || t('analytics.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [dates, granularity, t]);
+  }, [dates, granularity, isSuperAdmin, t]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -112,6 +121,7 @@ export default function UsagePage() {
             format="YYYY-MM-DD"
           />
           <Select value={granularity} onChange={setGranularity} style={{ width: 120 }}>
+            <Select.Option value="minute">{t('analytics.minute')}</Select.Option>
             <Select.Option value="hour">{t('analytics.hour')}</Select.Option>
             <Select.Option value="day">{t('analytics.day')}</Select.Option>
             <Select.Option value="week">{t('analytics.week')}</Select.Option>
@@ -167,6 +177,28 @@ export default function UsagePage() {
               </Card>
             </Col>
           </Row>
+
+          {isSuperAdmin && orgStats.length > 0 && (
+            <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+              <Col xs={24}>
+                <Card title={t('analytics.byOrganization')} style={{ borderRadius: 18 }}>
+                  <Table
+                    rowKey="organizationId"
+                    size="small"
+                    pagination={false}
+                    dataSource={orgStats}
+                    columns={[
+                      { title: t('organization.name'), dataIndex: 'organizationName', key: 'organizationName' },
+                      { title: t('analytics.requests'), dataIndex: 'requests', key: 'requests', align: 'right' as const },
+                      { title: t('analytics.totalTokens'), dataIndex: 'totalTokens', key: 'totalTokens', align: 'right' as const },
+                      { title: t('analytics.totalCost'), dataIndex: 'totalCost', key: 'totalCost', align: 'right' as const },
+                      { title: t('analytics.cacheHitRate'), dataIndex: 'cacheHitRate', key: 'cacheHitRate', align: 'right' as const, render: (v: number) => `${v}%` },
+                    ]}
+                  />
+                </Card>
+              </Col>
+            </Row>
+          )}
         </>
       )}
     </div>

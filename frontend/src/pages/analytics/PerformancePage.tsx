@@ -76,6 +76,20 @@ export default function PerformancePage() {
                 <Statistic title={t('analytics.avgSpeed')} value={data?.overall?.avgSpeed || 0} suffix="t/s" />
               </Card>
             </Col>
+            {data?.overall?.reasoningShare != null && (
+              <Col xs={24} sm={12} lg={6}>
+                <Card style={{ borderRadius: 18 }}>
+                  <Statistic
+                    title={t('analytics.reasoningShare')}
+                    value={data.overall.reasoningShare}
+                    suffix="%"
+                  />
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {(data.overall.reasoningTokensTotal ?? 0).toLocaleString()} / {(data.overall.cachedInputTokensTotal ?? 0).toLocaleString()} {t('analytics.reasoningCachedNote')}
+                  </Typography.Text>
+                </Card>
+              </Col>
+            )}
           </Row>
 
           <Row gutter={[24, 24]} style={{ marginTop: 24 }}>

@@ -125,6 +125,8 @@ export default function AuditPage() {
           <Descriptions.Item label={t('common.status')}><StatusDot color={statusColors[record.status] || 'default'} text={record.status} /></Descriptions.Item>
           <Descriptions.Item label={t('audit.inputTokens')}>{record.inputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
           <Descriptions.Item label={t('audit.outputTokens')}>{record.outputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('audit.cachedInputTokens')}>{record.cachedInputTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('audit.reasoningTokens')}>{record.reasoningTokens?.toLocaleString() ?? '-'}</Descriptions.Item>
           <Descriptions.Item label={t('audit.latency')}>{record.totalDurationMs ? `${record.totalDurationMs}ms` : '-'}</Descriptions.Item>
           <Descriptions.Item label={t('audit.ttft')}>{record.timeToFirstTokenMs ? `${record.timeToFirstTokenMs}ms` : '-'}</Descriptions.Item>
           <Descriptions.Item label={t('audit.speed')}>{record.outputTokensPerSecond ? `${record.outputTokensPerSecond.toFixed(2)} t/s` : '-'}</Descriptions.Item>

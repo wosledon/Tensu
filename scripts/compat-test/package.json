@@ -1,0 +1,14 @@
+{
+  "name": "tensu-sdk-compat-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PRD §7.1 compatibility test: connect official OpenAI/Anthropic SDKs directly to the Tensu gateway.",
+  "scripts": {
+    "test": "node index.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.77.0"
+  }
+}

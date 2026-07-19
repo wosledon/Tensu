@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Tensu.Api.Data;
@@ -251,6 +252,7 @@ public class GatewayController : ControllerBase
             var provider = model.Provider;
             if (provider == null) return StatusCode(500, new { error = new { message = "Provider not found", type = "server_error" } });
             HttpContext.Response.Headers["X-Upstream-Provider"] = provider.Name;
+            HttpContext.Response.Headers["X-Route-Model"] = model.Name;
 
             // ── Model-scoped quota check (RPM/TPM + daily/monthly token limits) ──
             var modelQuota = await _quotaService.GetModelQuotaAsync(apiKey.OrganizationId, model.Id);
@@ -300,9 +302,14 @@ public class GatewayController : ControllerBase
                 var bodyToSend = compressionApplied ? compressionResult!.CompressedBody : requestBody;
                 var compressionMappingKey = compressionApplied ? compressionResult!.DecompressionKey : null;
 
+                // Ask OpenAI-compatible providers to include authoritative usage in stream
+                // chunks (ignored by providers that don't support it; Anthropic sends usage
+                // in message_start/message_delta natively).
+                bodyToSend = MaybeInjectStreamOptions(bodyToSend, provider, isStream);
+
                 // ── Cache check ──
-                var cacheEnabled = await IsCacheEnabledAsync();
-                var semanticCacheEnabled = await IsSemanticCacheEnabledAsync();
+                var cacheEnabled = await IsCacheEnabledAsync(model.Id, apiKey.OrganizationId);
+                var semanticCacheEnabled = await IsSemanticCacheEnabledAsync(model.Id, apiKey.OrganizationId);
                 var semanticCacheThreshold = await GetSemanticCacheThresholdAsync();
                 var semanticCacheTtl = await GetSemanticCacheTtlAsync();
                 var cacheKey = CacheService.ComputeCacheKey(requestedModel, requestBody);
@@ -324,7 +331,7 @@ public class GatewayController : ControllerBase
 
                         var cachedResponse = cacheHit.Value.responseBody!;
                         var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, cacheHit.Value.isStream);
-                        var (inputCost, outputCost) = ComputeCost(model, inputTokens, cachedOutputTokens);
+                        var (inputCost, outputCost) = CostCalculator.Compute(model, inputTokens, cachedOutputTokens);
 
                         var responseToReturn = cacheHit.Value.isStream && !isStream
                             ? CacheService.ConvertStreamToNonStream(cachedResponse)
@@ -363,7 +370,7 @@ public class GatewayController : ControllerBase
 
                             var cachedResponse = semanticHit.Value.responseBody!;
                             var cachedOutputTokens = EstimateOutputTokensFromResponse(cachedResponse, semanticHit.Value.isStream);
-                            var (inputCost, outputCost) = ComputeCost(model, inputTokens, cachedOutputTokens);
+                            var (inputCost, outputCost) = CostCalculator.Compute(model, inputTokens, cachedOutputTokens);
 
                             var responseToReturn = semanticHit.Value.isStream && !isStream
                                 ? CacheService.ConvertStreamToNonStream(cachedResponse)
@@ -480,8 +487,19 @@ public class GatewayController : ControllerBase
                         _loadBalancer.RecordLatency(provider.Id, sw.ElapsedMilliseconds);
                         _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
-                        var outputTokens = EstimateOutputTokensFromResponse(responseBody, isStream: false);
-                        var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+                        // Prefer authoritative usage from the upstream response over estimates.
+                        var estimatedOutputTokens = EstimateOutputTokensFromResponse(responseBody, isStream: false);
+                        CostCalculator.UpstreamUsage usage = default;
+                        try
+                        {
+                            using var responseJson = JsonDocument.Parse(responseBody);
+                            usage = CostCalculator.ExtractUsage(responseJson.RootElement, provider.Protocol);
+                        }
+                        catch { }
+
+                        var billedInputTokens = usage.InputTokens ?? inputTokens;
+                        var outputTokens = usage.OutputTokens ?? estimatedOutputTokens;
+                        var (inputCost, outputCost) = CostCalculator.Compute(model, billedInputTokens, outputTokens, usage.CachedInputTokens, usage.ReasoningTokens);
 
                         if (cacheEnabled)
                             await _cache.SetAsync(cacheKey, responseBody, isStream: false, cacheTtl);
@@ -489,16 +507,18 @@ public class GatewayController : ControllerBase
                         if (semanticCacheEnabled)
                             await _cache.SetSemanticAsync(requestedModel, requestBody, responseBody, isStream: false, semanticCacheTtl, CancellationToken.None);
 
-                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, inputTokens + outputTokens, apiKey.Id);
+                        await _quotaService.RecordOrgUsageAsync(apiKey.OrganizationId, billedInputTokens + outputTokens, apiKey.Id);
                         if (modelQuota != null)
-                            await _quotaService.RecordModelUsageAsync(model.Id, inputTokens + outputTokens);
+                            await _quotaService.RecordModelUsageAsync(model.Id, billedInputTokens + outputTokens);
 
                         await EnqueueAuditLog(requestId, model, apiKey, responseBody, sw.ElapsedMilliseconds, false,
-                            RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
-                            compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey);
+                            RequestStatus.Success, billedInputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                            compressionStrategy, compressionApplied, requestBody, compressionMappingKey: compressionMappingKey,
+                            cachedInputTokens: usage.HasAny ? usage.CachedInputTokens : null,
+                            reasoningTokens: usage.HasAny ? usage.ReasoningTokens : null);
 
                         Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-                        _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
+                        _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, billedInputTokens, outputTokens, rateLimited: false);
                         return Content(responseBody, "application/json");
                     }
                 }
@@ -812,7 +832,7 @@ public class GatewayController : ControllerBase
 
         if (modelId.HasValue)
         {
-            var model = await _modelService.GetByIdAsync(modelId.Value) as Tensu.Core.Entities.Model;
+            var model = await _db.Models.FindAsync(modelId.Value);
             if (model != null && !model.CompressionEnabled)
                 return false;
         }
@@ -820,16 +840,50 @@ public class GatewayController : ControllerBase
         return true;
     }
 
-    private async Task<bool> IsCacheEnabledAsync()
+    private async Task<bool> IsCacheEnabledAsync(int? modelId = null, int? orgId = null)
     {
         var value = await _settingsService.GetAsync("cache.enabled");
-        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (orgId.HasValue)
+        {
+            var org = await _db.Organizations.FindAsync(orgId.Value);
+            if (org != null && !org.CacheEnabled)
+                return false;
+        }
+
+        if (modelId.HasValue)
+        {
+            var model = await _db.Models.FindAsync(modelId.Value);
+            if (model != null && !model.CacheEnabled)
+                return false;
+        }
+
+        return true;
     }
 
-    private async Task<bool> IsSemanticCacheEnabledAsync()
+    private async Task<bool> IsSemanticCacheEnabledAsync(int? modelId = null, int? orgId = null)
     {
         var value = await _settingsService.GetAsync("semanticCache.enabled");
-        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (orgId.HasValue)
+        {
+            var org = await _db.Organizations.FindAsync(orgId.Value);
+            if (org != null && !org.CacheEnabled)
+                return false;
+        }
+
+        if (modelId.HasValue)
+        {
+            var model = await _db.Models.FindAsync(modelId.Value);
+            if (model != null && !model.CacheEnabled)
+                return false;
+        }
+
+        return true;
     }
 
     private async Task<float> GetSemanticCacheThresholdAsync()
@@ -854,6 +908,28 @@ public class GatewayController : ControllerBase
         if (value != null && int.TryParse(value, out var minutes) && minutes > 0)
             return TimeSpan.FromMinutes(minutes);
         return TimeSpan.FromMinutes(10);
+    }
+
+    /// <summary>
+    /// For OpenAI-compatible streaming requests, inject stream_options.include_usage so the
+    /// upstream returns authoritative token usage in the final chunk. Client-provided
+    /// stream_options are left untouched.
+    /// </summary>
+    private static string MaybeInjectStreamOptions(string body, Provider provider, bool isStream)
+    {
+        if (!isStream || provider.Protocol != ProtocolType.OpenAI) return body;
+        try
+        {
+            var node = JsonNode.Parse(body);
+            if (node is not JsonObject obj) return body;
+            if (obj["stream_options"] != null) return body;
+            obj["stream_options"] = new JsonObject { ["include_usage"] = true };
+            return node.ToJsonString();
+        }
+        catch (JsonException)
+        {
+            return body;
+        }
     }
 
     private int EstimateOutputTokensFromResponse(string responseBody, bool isStream)
@@ -919,21 +995,6 @@ public class GatewayController : ControllerBase
         }
     }
 
-    private static (decimal inputCost, decimal outputCost) ComputeCost(Model model, int inputTokens, int outputTokens)
-    {
-        var now = DateTime.UtcNow;
-        var pricing = (model.Pricings ?? [])
-            .Where(p => p.EffectiveFrom <= now && (p.EffectiveTo == null || p.EffectiveTo >= now))
-            .OrderByDescending(p => p.EffectiveFrom)
-            .FirstOrDefault();
-
-        if (pricing == null) return (0, 0);
-
-        var inputCost = inputTokens * pricing.InputPricePerMillionTokens / 1_000_000m;
-        var outputCost = outputTokens * pricing.OutputPricePerMillionTokens / 1_000_000m;
-        return (inputCost, outputCost);
-    }
-
     private async Task<IActionResult> HandleStreamResponse(
         HttpResponseMessage response, string requestId, Model model, ApiKey apiKey, Stopwatch sw,
         string requestBody, int inputTokens, int inputTokensAfterCompression, string compressionStrategy, bool compressionApplied,
@@ -961,6 +1022,7 @@ public class GatewayController : ControllerBase
         long ttftMs = 0;
         var aggregatedContent = new StringBuilder();
         var aggregatedSse = new StringBuilder();
+        CostCalculator.UpstreamUsage? streamUsage = null;
 
         try
         {
@@ -984,11 +1046,31 @@ public class GatewayController : ControllerBase
                     try
                     {
                         var chunkJson = JsonDocument.Parse(data);
+                        var chunkUsage = CostCalculator.ExtractStreamUsage(chunkJson.RootElement, provider.Protocol);
+                        if (chunkUsage.HasValue)
+                        {
+                            // Merge: later chunks may only carry a subset (e.g. Anthropic
+                            // message_delta carries only cumulative output_tokens).
+                            var prev = streamUsage ?? default;
+                            streamUsage = new CostCalculator.UpstreamUsage(
+                                chunkUsage.Value.InputTokens ?? prev.InputTokens,
+                                chunkUsage.Value.OutputTokens ?? prev.OutputTokens,
+                                chunkUsage.Value.CachedInputTokens > 0 ? chunkUsage.Value.CachedInputTokens : prev.CachedInputTokens,
+                                chunkUsage.Value.ReasoningTokens > 0 ? chunkUsage.Value.ReasoningTokens : prev.ReasoningTokens);
+                        }
+
                         if (chunkJson.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
                         {
                             var delta = choices[0].GetProperty("delta");
                             if (delta.TryGetProperty("content", out var content))
                                 aggregatedContent.Append(content.GetString());
+                        }
+                        else if (chunkJson.RootElement.TryGetProperty("type", out var typeProp) &&
+                                 typeProp.GetString() == "content_block_delta" &&
+                                 chunkJson.RootElement.TryGetProperty("delta", out var anthropicDelta) &&
+                                 anthropicDelta.TryGetProperty("text", out var anthropicText))
+                        {
+                            aggregatedContent.Append(anthropicText.GetString());
                         }
                     }
                     catch { }
@@ -1005,8 +1087,11 @@ public class GatewayController : ControllerBase
             _loadBalancer.RecordLatency(model.ProviderId, sw.ElapsedMilliseconds);
             _loadBalancer.RecordKeyLatency(selectedKey.Id, sw.ElapsedMilliseconds);
 
-            var outputTokens = CompressionService.EstimateTokens(aggregatedContent.ToString());
-            var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+            var billedInputTokens = streamUsage?.InputTokens ?? inputTokens;
+            var outputTokens = streamUsage?.OutputTokens ?? CompressionService.EstimateTokens(aggregatedContent.ToString());
+            var cachedInputTokens = streamUsage?.CachedInputTokens ?? 0;
+            var reasoningTokens = streamUsage?.ReasoningTokens ?? 0;
+            var (inputCost, outputCost) = CostCalculator.Compute(model, billedInputTokens, outputTokens, cachedInputTokens, reasoningTokens);
             var totalDurationSec = sw.ElapsedMilliseconds / 1000.0;
             double? outputTokensPerSecond = totalDurationSec > 0 ? outputTokens / totalDurationSec : null;
 
@@ -1018,17 +1103,21 @@ public class GatewayController : ControllerBase
                 await _cache.SetSemanticAsync(requestedModel, requestBody, aggregatedSseBody, isStream: true, semanticCacheTtl, CancellationToken.None);
 
             await EnqueueAuditLog(requestId, model, apiKey, aggregatedContent.ToString(), sw.ElapsedMilliseconds, true,
-                RequestStatus.Success, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
-                compressionStrategy, compressionApplied, requestBody, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey);
+                RequestStatus.Success, billedInputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                compressionStrategy, compressionApplied, requestBody, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey,
+                cachedInputTokens: streamUsage.HasValue ? streamUsage.Value.CachedInputTokens : null,
+                reasoningTokens: streamUsage.HasValue ? streamUsage.Value.ReasoningTokens : null);
 
-            _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
+            _metrics.RecordRequest(model.Name, provider.Name, success: true, cacheHit: false, sw.ElapsedMilliseconds, billedInputTokens, outputTokens, rateLimited: false);
             return new EmptyResult();
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException)
         {
             sw.Stop();
-            var outputTokens = CompressionService.EstimateTokens(aggregatedContent.ToString());
-            var (inputCost, outputCost) = ComputeCost(model, inputTokens, outputTokens);
+            var interruptedInputTokens = streamUsage?.InputTokens ?? inputTokens;
+            var outputTokens = streamUsage?.OutputTokens ?? CompressionService.EstimateTokens(aggregatedContent.ToString());
+            var (inputCost, outputCost) = CostCalculator.Compute(model, interruptedInputTokens, outputTokens,
+                streamUsage?.CachedInputTokens ?? 0, streamUsage?.ReasoningTokens ?? 0);
             var totalDurationSec = sw.ElapsedMilliseconds / 1000.0;
             double? outputTokensPerSecond = totalDurationSec > 0 ? outputTokens / totalDurationSec : null;
 
@@ -1040,9 +1129,11 @@ public class GatewayController : ControllerBase
                 await _cache.SetSemanticAsync(requestedModel, requestBody, aggregatedSseBody, isStream: true, semanticCacheTtl, CancellationToken.None);
 
             await EnqueueAuditLog(requestId, model, apiKey, aggregatedContent.ToString(), sw.ElapsedMilliseconds, true,
-                RequestStatus.Interrupted, inputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
-                compressionStrategy, compressionApplied, requestBody, "INTERRUPTED", ex.Message, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey);
-            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, inputTokens, outputTokens, rateLimited: false);
+                RequestStatus.Interrupted, interruptedInputTokens, inputTokensAfterCompression, outputTokens, inputCost, outputCost,
+                compressionStrategy, compressionApplied, requestBody, "INTERRUPTED", ex.Message, ttftMs: ttftMs, outputTokensPerSecond: outputTokensPerSecond, compressionMappingKey: compressionMappingKey,
+                cachedInputTokens: streamUsage.HasValue ? streamUsage.Value.CachedInputTokens : null,
+                reasoningTokens: streamUsage.HasValue ? streamUsage.Value.ReasoningTokens : null);
+            _metrics.RecordRequest(model.Name, provider.Name, success: false, cacheHit: false, sw.ElapsedMilliseconds, interruptedInputTokens, outputTokens, rateLimited: false);
             return new EmptyResult();
         }
     }
@@ -1220,7 +1311,8 @@ public class GatewayController : ControllerBase
         string compressionStrategy, bool compressionApplied,
         string? requestContent = null,
         string? errorCode = null, string? errorMessage = null, long ttftMs = 0,
-        double? outputTokensPerSecond = null, bool cacheHit = false, string? compressionMappingKey = null, bool semanticCacheHit = false)
+        double? outputTokensPerSecond = null, bool cacheHit = false, string? compressionMappingKey = null, bool semanticCacheHit = false,
+        int? cachedInputTokens = null, int? reasoningTokens = null)
     {
         try
         {
@@ -1246,6 +1338,8 @@ public class GatewayController : ControllerBase
                 InputTokens = inputTokens,
                 InputTokensAfterCompression = inputTokensAfterCompression,
                 OutputTokens = outputTokens,
+                CachedInputTokens = cachedInputTokens,
+                ReasoningTokens = reasoningTokens,
                 CacheHit = cacheHit,
                 SemanticCacheHit = semanticCacheHit,
                 TimeToFirstTokenMs = ttftMs > 0 ? ttftMs : null,

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Tensu.Api.Data;
 
@@ -10,9 +11,11 @@ using Tensu.Api.Data;
 namespace Tensu.Api.Data.Migrations
 {
     [DbContext(typeof(TensuDbContext))]
-    partial class TensuDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718220317_AddCacheEnabledToggles")]
+    partial class AddCacheEnabledToggles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
@@ -223,10 +226,6 @@ namespace Tensu.Api.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("cache_hit");
 
-                    b.Property<int?>("CachedInputTokens")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("cached_input_tokens");
-
                     b.Property<bool>("CompressionApplied")
                         .HasColumnType("INTEGER")
                         .HasColumnName("compression_applied");
@@ -306,10 +305,6 @@ namespace Tensu.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_name");
-
-                    b.Property<int?>("ReasoningTokens")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("reasoning_tokens");
 
                     b.Property<string>("RequestContent")
                         .HasColumnType("TEXT")
@@ -1213,10 +1208,6 @@ namespace Tensu.Api.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("cache_hit");
 
-                    b.Property<int?>("CachedInputTokens")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("cached_input_tokens");
-
                     b.Property<bool>("CompressionApplied")
                         .HasColumnType("INTEGER")
                         .HasColumnName("compression_applied");
@@ -1296,10 +1287,6 @@ namespace Tensu.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT")
                         .HasColumnName("provider_name");
-
-                    b.Property<int?>("ReasoningTokens")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("reasoning_tokens");
 
                     b.Property<string>("RequestContent")
                         .HasColumnType("TEXT")

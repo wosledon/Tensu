@@ -88,6 +88,18 @@ public class AnalyticsController : AdminBaseController
         return Ok(ApiResponse<object>.Success(result));
     }
 
+    [HttpGet("by-organization")]
+    [Authorize(Policy = "SuperAdmin")]
+    public async Task<IActionResult> ByOrganization(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to)
+    {
+        if (from == default) from = DateTime.UtcNow.AddDays(-7);
+        if (to == default) to = DateTime.UtcNow;
+        var result = await _service.GetByOrganizationAsync(from, to);
+        return Ok(ApiResponse<object>.Success(result));
+    }
+
     [HttpGet("by-api-key")]
     public async Task<IActionResult> ByApiKey(
         [FromQuery] DateTime from,

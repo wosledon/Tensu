@@ -21,6 +21,8 @@ public class ArchivedRequestLog
     public int? InputTokens { get; set; }
     public int? InputTokensAfterCompression { get; set; }
     public int? OutputTokens { get; set; }
+    public int? CachedInputTokens { get; set; }
+    public int? ReasoningTokens { get; set; }
     public bool CacheHit { get; set; }
     public bool SemanticCacheHit { get; set; }
 

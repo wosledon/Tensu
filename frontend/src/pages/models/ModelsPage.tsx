@@ -16,6 +16,45 @@ interface CapabilityItemProps {
   color?: string;
 }
 
+function ToggleCard({ name, color }: { name: string; color: string }) {
+  const { t } = useTranslation();
+  const { token } = theme.useToken();
+  return (
+    <Form.Item noStyle shouldUpdate={(prev, cur) => prev[name] !== cur[name]}>
+      {({ getFieldValue, setFieldValue }) => {
+        const checked = getFieldValue(name);
+        return (
+          <div onClick={() => setFieldValue(name, !checked)}
+            style={{
+              padding: '10px 16px', borderRadius: token.borderRadiusLG, cursor: 'pointer',
+              backgroundColor: checked ? `${color}18` : token.colorFillQuaternary,
+              border: `1.5px solid ${checked ? color : 'transparent'}`,
+              transition: 'all 200ms ease', userSelect: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ fontWeight: 500, fontSize: 14, color: checked ? color : token.colorTextSecondary }}>
+              {checked ? t('common.yes') : t('common.no')}
+            </span>
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: checked ? color : token.colorBorderSecondary,
+              transition: 'all 200ms ease', flexShrink: 0,
+            }}>
+              {checked && (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+          </div>
+        );
+      }}
+    </Form.Item>
+  );
+}
+
 function CapabilityItem({ icon: Icon, label, hint, name, color }: CapabilityItemProps) {
   const { token } = theme.useToken();
   return (
@@ -408,74 +447,17 @@ export default function ModelsPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="isEnabled" label={t('common.enabled')} valuePropName="checked" initialValue={true}>
-                <Form.Item noStyle shouldUpdate={(prev, cur) => prev.isEnabled !== cur.isEnabled}>
-                  {({ getFieldValue, setFieldValue }) => {
-                    const checked = getFieldValue('isEnabled');
-                    return (
-                      <div onClick={() => setFieldValue('isEnabled', !checked)}
-                        style={{
-                          padding: '10px 16px', borderRadius: token.borderRadiusLG, cursor: 'pointer',
-                          backgroundColor: checked ? '#34C75918' : token.colorFillQuaternary,
-                          border: `1.5px solid ${checked ? '#34C759' : 'transparent'}`,
-                          transition: 'all 200ms ease', userSelect: 'none',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        }}
-                      >
-                        <span style={{ fontWeight: 500, fontSize: 14, color: checked ? '#34C759' : token.colorTextSecondary }}>
-                          {checked ? t('common.yes') : t('common.no')}
-                        </span>
-                        <div style={{
-                          width: 20, height: 20, borderRadius: '50%',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          backgroundColor: checked ? '#34C759' : token.colorBorderSecondary,
-                          transition: 'all 200ms ease', flexShrink: 0,
-                        }}>
-                          {checked && (
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                              <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }}
-                </Form.Item>
+                <ToggleCard name="isEnabled" color="#34C759" />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="compressionEnabled" label={t('model.compression')} valuePropName="checked" initialValue={true}>
-                <Form.Item noStyle shouldUpdate={(prev, cur) => prev.compressionEnabled !== cur.compressionEnabled}>
-                  {({ getFieldValue, setFieldValue }) => {
-                    const checked = getFieldValue('compressionEnabled');
-                    return (
-                      <div onClick={() => setFieldValue('compressionEnabled', !checked)}
-                        style={{
-                          padding: '10px 16px', borderRadius: token.borderRadiusLG, cursor: 'pointer',
-                          backgroundColor: checked ? '#007AFF18' : token.colorFillQuaternary,
-                          border: `1.5px solid ${checked ? '#007AFF' : 'transparent'}`,
-                          transition: 'all 200ms ease', userSelect: 'none',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        }}
-                      >
-                        <span style={{ fontWeight: 500, fontSize: 14, color: checked ? '#007AFF' : token.colorTextSecondary }}>
-                          {checked ? t('common.yes') : t('common.no')}
-                        </span>
-                        <div style={{
-                          width: 20, height: 20, borderRadius: '50%',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          backgroundColor: checked ? '#007AFF' : token.colorBorderSecondary,
-                          transition: 'all 200ms ease', flexShrink: 0,
-                        }}>
-                          {checked && (
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                              <path d="M2.5 6l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }}
-                </Form.Item>
+                <ToggleCard name="compressionEnabled" color="#007AFF" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="cacheEnabled" label={t('model.cache')} valuePropName="checked" initialValue={true}>
+                <ToggleCard name="cacheEnabled" color="#AF52DE" />
               </Form.Item>
             </Col>
           </Row>

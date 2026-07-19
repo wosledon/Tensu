@@ -55,19 +55,31 @@ export default function CachePage() {
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div> : (
         <>
           <Row gutter={[24, 24]}>
-            <Col xs={24} sm={12} lg={8}>
+            <Col xs={24} sm={12} lg={6}>
               <Card style={{ borderRadius: 18 }}>
                 <Statistic title={t('analytics.totalRequests')} value={data?.totalRequests || 0} />
               </Card>
             </Col>
-            <Col xs={24} sm={12} lg={8}>
+            <Col xs={24} sm={12} lg={6}>
               <Card style={{ borderRadius: 18 }}>
                 <Statistic title={t('analytics.cacheHits')} value={data?.cacheHits || 0} />
               </Card>
             </Col>
-            <Col xs={24} sm={12} lg={8}>
+            <Col xs={24} sm={12} lg={6}>
               <Card style={{ borderRadius: 18 }}>
                 <Statistic title={t('analytics.hitRate')} value={data?.hitRate || 0} suffix="%" />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Card style={{ borderRadius: 18 }}>
+                <Statistic
+                  title={t('analytics.cacheSaved')}
+                  value={data?.savedTokens || 0}
+                  suffix={t('analytics.tokensSuffix')}
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('analytics.cacheSavedCost', { cost: data?.savedCost ?? 0, currency: data?.defaultCurrency ?? 'USD' })}
+                </Typography.Text>
               </Card>
             </Col>
           </Row>

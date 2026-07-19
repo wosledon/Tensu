@@ -36,6 +36,8 @@ public class OrganizationService : BaseService
             org.Path,
             org.Description,
             org.EnableContentLogging,
+            org.CompressionEnabled,
+            org.CacheEnabled,
             org.DataRetentionDays,
             org.CreatedAt,
             org.UpdatedAt
@@ -52,6 +54,8 @@ public class OrganizationService : BaseService
             org.Path,
             org.Description,
             org.EnableContentLogging,
+            org.CompressionEnabled,
+            org.CacheEnabled,
             org.DataRetentionDays,
             org.CreatedAt,
             org.UpdatedAt,
@@ -82,6 +86,8 @@ public class OrganizationService : BaseService
         org.Name = updated.Name;
         org.Description = updated.Description;
         org.EnableContentLogging = updated.EnableContentLogging;
+        org.CompressionEnabled = updated.CompressionEnabled;
+        org.CacheEnabled = updated.CacheEnabled;
         org.DataRetentionDays = updated.DataRetentionDays;
         org.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();

@@ -19,6 +19,8 @@ public class RequestLog
     public int? InputTokens { get; set; }
     public int? InputTokensAfterCompression { get; set; }
     public int? OutputTokens { get; set; }
+    public int? CachedInputTokens { get; set; } // prompt tokens served from upstream cache
+    public int? ReasoningTokens { get; set; } // thinking/reasoning tokens in the completion
     public bool CacheHit { get; set; }
     public bool SemanticCacheHit { get; set; }
 

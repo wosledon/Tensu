@@ -112,8 +112,7 @@ public class GatewayCostCalculationTests : IDisposable
 
     private static (decimal inputCost, decimal outputCost) InvokeComputeCost(Model model, int inputTokens, int outputTokens)
     {
-        var method = typeof(GatewayController).GetMethod("ComputeCost", BindingFlags.NonPublic | BindingFlags.Static);
-        return ((decimal inputCost, decimal outputCost))method!.Invoke(null, new object[] { model, inputTokens, outputTokens })!;
+        return Api.Infrastructure.CostCalculator.Compute(model, inputTokens, outputTokens);
     }
 
     private int InvokeEstimateOutputTokensFromResponse(string responseBody, bool isStream)

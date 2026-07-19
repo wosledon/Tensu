@@ -16,6 +16,7 @@ public class Model
     public int OutputContextSize { get; set; }
     public bool IsEnabled { get; set; } = true;
     public bool CompressionEnabled { get; set; } = true;
+    public bool CacheEnabled { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

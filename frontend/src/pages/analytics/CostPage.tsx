@@ -103,24 +103,42 @@ export default function CostPage() {
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div> : (
         <>
           <Row gutter={[24, 24]}>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card style={{ borderRadius: 18 }}>
-                <Statistic title={t('analytics.totalCost')} value={data?.totalCost || 0} prefix="$" precision={6} />
+                <Statistic
+                  title={t('analytics.totalCost')}
+                  value={data?.currencyConversionApplied ? data?.totalCostInDefaultCurrency ?? 0 : data?.totalCost || 0}
+                  prefix={data?.currencyConversionApplied ? `${data?.defaultCurrency ?? 'USD'} ` : '$'}
+                  precision={6}
+                />
               </Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card style={{ borderRadius: 18 }}>
                 <Statistic title={t('analytics.requests')} value={data?.totalRequests || 0} />
               </Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card style={{ borderRadius: 18 }}>
                 <Statistic title={t('analytics.avgCostPerRequest')} value={data?.avgCostPerRequest || 0} prefix="$" precision={6} />
               </Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card style={{ borderRadius: 18 }}>
-                <Statistic title={t('analytics.compressionSaved')} value={data?.compressionSavings || 0} prefix="$" precision={6} />
+                <Statistic title={t('analytics.compressionSaved')} value={data?.compressionSavings || 0} prefix={data?.currencyConversionApplied ? `${data?.defaultCurrency ?? 'USD'} ` : '$'} precision={6} />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {(data?.compressionSavedTokens ?? 0).toLocaleString()} tokens
+                </Typography.Text>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={4}>
+              <Card style={{ borderRadius: 18 }}>
+                <Statistic
+                  title={t('analytics.forecastNext7Days')}
+                  value={data?.forecastNext7Days ?? 0}
+                  prefix={data?.currencyConversionApplied ? `${data?.defaultCurrency ?? 'USD'} ` : '$'}
+                  precision={2}
+                />
               </Card>
             </Col>
           </Row>
