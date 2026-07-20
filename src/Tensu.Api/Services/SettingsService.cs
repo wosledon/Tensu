@@ -54,6 +54,8 @@ public class SettingsService
         ["currency.rate.EUR"] = "0.92",
         ["currency.rate.JPY"] = "150.0",
         ["currency.rate.GBP"] = "0.79",
+        ["embedding.providerId"] = "",
+        ["embedding.model"] = "",
     };
 
     public SettingsService(TensuDbContext db)

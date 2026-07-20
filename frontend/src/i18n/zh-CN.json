@@ -475,7 +475,12 @@
     "currencyRateEUR": "EUR 汇率",
     "currencyRateJPY": "JPY 汇率",
     "currencyRateGBP": "GBP 汇率",
-    "currencyHint": "汇率相对于默认币种。"
+    "currencyHint": "汇率相对于默认币种。",
+    "embedding": "语义缓存 Embedding",
+    "embeddingProvider": "Embedding 供应商",
+    "embeddingProviderPlaceholder": "选择 OpenAI 供应商",
+    "embeddingModel": "Embedding 模型",
+    "embeddingHint": "配置后将使用真实 Embedding API 生成语义向量；留空则使用本地特征哈希。需选择 OpenAI 协议的供应商。"
   },
   "compression": {
     "restoreTitle": "CCR 压缩还原",

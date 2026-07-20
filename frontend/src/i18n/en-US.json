@@ -477,7 +477,12 @@
     "currencyRateEUR": "EUR Rate",
     "currencyRateJPY": "JPY Rate",
     "currencyRateGBP": "GBP Rate",
-    "currencyHint": "Exchange rates relative to the default currency."
+    "currencyHint": "Exchange rates relative to the default currency.",
+    "embedding": "Semantic Cache Embedding",
+    "embeddingProvider": "Embedding Provider",
+    "embeddingProviderPlaceholder": "Select an OpenAI provider",
+    "embeddingModel": "Embedding Model",
+    "embeddingHint": "When configured, a real Embedding API will be used for semantic vectors; leave empty to use local feature hashing. Requires an OpenAI-protocol provider."
   },
   "compression": {
     "restoreTitle": "CCR Compression Restore",
