@@ -205,6 +205,50 @@ public class CompressionServiceTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Compress_SkipsCodeBlocks()
+    {
+        var body = $$"""{"model":"gpt-4o","messages":[{"role":"user","content":"Here is code:\n```python\nprint('hello')\n```\nExplain it."}]}""";
+        var result = await _compression.CompressAsync(body);
+        Assert.False(result.Applied);
+        Assert.Equal("none", result.Strategy);
+    }
+
+    [Fact]
+    public async Task Compress_SkipsFewShotExamples()
+    {
+        var body = "{\"model\":\"gpt-4o\",\"messages\":["
+            + "{\"role\":\"user\",\"content\":\"Example 1:\\nInput: hello\\nOutput: world\\n\\nExample 2:\\nInput: foo\\nOutput: bar\"}"
+            + ",{\"role\":\"assistant\",\"content\":\"I understand the pattern.\"}"
+            + "]}";
+        var result = await _compression.CompressAsync(body);
+        Assert.False(result.Applied);
+        Assert.Equal("none", result.Strategy);
+    }
+
+    [Fact]
+    public async Task Compress_SkipsQaPattern()
+    {
+        var body = "{\"model\":\"gpt-4o\",\"messages\":["
+            + "{\"role\":\"user\",\"content\":\"Q: What is AI?\\nA: Artificial Intelligence.\\n\\nQ: What is ML?\\nA: Machine Learning.\"}"
+            + ",{\"role\":\"assistant\",\"content\":\"Here are the answers.\"}"
+            + "]}";
+        var result = await _compression.CompressAsync(body);
+        Assert.False(result.Applied);
+        Assert.Equal("none", result.Strategy);
+    }
+
+    [Fact]
+    public async Task Compress_PlainJsonContent_StillCompresses()
+    {
+        var item = """{"customer_order_identifier":"A-1001","customer_delivery_address":"Street 1","customer_contact_phone":"123"}""";
+        var jsonContent = "[" + string.Join(",", Enumerable.Repeat(item, 8)) + "]";
+        var body = $$"""{"model":"gpt-4o","messages":[{"role":"user","content":{{System.Text.Json.JsonSerializer.Serialize(jsonContent)}}}]}""";
+
+        var result = await _compression.CompressAsync(body);
+        Assert.True(result.Applied);
+    }
+
     private async Task<string?> WaitForMappingAndDecompress(CompressionService.CompressionResult result)
     {
         // Mapping persistence is async via channel; poll briefly.

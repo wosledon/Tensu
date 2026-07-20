@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, ApiKeyUsageStat, OrgUsageStat, RouteModel, RouteModelTarget, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery } from '../types';
+import type { ApiResponse, PagedResult, PagedRequest, Provider, Model, ModelCapability, ModelCapabilityMatrix, Organization, User, ApiKey, ApiKeyUsageStat, OrgUsageStat, RouteModel, RouteModelTarget, RequestLog, ArchivedRequestLog, LoginResponse, CurrentUser, ProviderKey, ModelPricing, RouteRule, Quota, OAuthProvider, AnomalyResult, AdminAuditLog, WebhookNotification, AlertRule, WebhookDelivery, DataDeletionRequest } from '../types';
 import { getApiErrorMessage } from './errorHandler';
 
 const api = axios.create({
@@ -92,6 +92,10 @@ export const modelApi = {
     api.post<ApiResponse<object>>('/models/batch/disable', ids).then(unwrap),
   addPricing: (modelId: number, data: Partial<ModelPricing>) =>
     api.post<ApiResponse<ModelPricing>>(`/models/${modelId}/pricing`, data).then(unwrap),
+  getPricingHistory: (modelId: number) =>
+    api.get<ApiResponse<any[]>>(`/models/${modelId}/pricing`).then(unwrap),
+  getCurrentPricing: (modelId: number) =>
+    api.get<ApiResponse<ModelPricing>>(`/models/${modelId}/pricings/current`).then(unwrap),
   syncFromProvider: (providerId: number) =>
     api.post<ApiResponse<{ added: number; existing: number; total: number }>>(`/models/sync/${providerId}`).then(unwrap),
   allEnabled: () =>
@@ -310,6 +314,18 @@ export const compressionApi = {
     api.post<ApiResponse<{ originalBody: string }>>('/compression/restore', { decompressionKey }).then(unwrap),
   deleteMapping: (decompressionKey: string) =>
     api.delete<ApiResponse<void>>(`/compression/mappings/${decompressionKey}`).then(unwrap),
+};
+
+// Data Deletions
+export const dataDeletionApi = {
+  list: (params: PagedRequest & { orgId?: number }) =>
+    api.get<ApiResponse<PagedResult<DataDeletionRequest>>>('/data-deletions', { params }).then(unwrap),
+  get: (id: number) =>
+    api.get<ApiResponse<DataDeletionRequest>>(`/data-deletions/${id}`).then(unwrap),
+  create: (data: Partial<DataDeletionRequest>) =>
+    api.post<ApiResponse<DataDeletionRequest>>('/data-deletions', data).then(unwrap),
+  process: (id: number) =>
+    api.post<ApiResponse<void>>(`/data-deletions/${id}/process`).then(unwrap),
 };
 
 // Webhook Deliveries

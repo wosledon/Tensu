@@ -99,6 +99,7 @@ if (!isTesting)
     builder.Services.AddHostedService<DataRetentionBackgroundService>();
     builder.Services.AddHostedService<KeyRotationBackgroundService>();
     builder.Services.AddHostedService<StatsAggregationBackgroundService>();
+    builder.Services.AddHostedService<ConfigFileWatcherService>();
 }
 builder.Services.AddScoped<KeyRotationService>();
 builder.Services.AddScoped<DesensitizationService>();
@@ -141,6 +142,7 @@ using (var scope = app.Services.CreateScope())
         try
         {
             db.Database.Migrate();
+            db.EnsureAuditTriggersAsync().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

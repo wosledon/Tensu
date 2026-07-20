@@ -88,6 +88,13 @@ public class CacheService : IDisposable
     /// Resolves the configured exact-cache backend ("memory" or "database").
     /// The setting is cached for 60 seconds to avoid a database lookup per request.
     /// </summary>
+    public void InvalidateBackendCache()
+    {
+        _backendMode = null;
+        _backendModeExpiresAt = DateTime.MinValue;
+        _logger.LogInformation("Cache backend configuration cache invalidated");
+    }
+
     private async Task<string> GetBackendAsync()
     {
         if (_backendMode != null && DateTime.UtcNow < _backendModeExpiresAt)

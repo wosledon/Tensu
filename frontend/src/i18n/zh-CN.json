@@ -53,6 +53,7 @@
     "webhooks": "Webhook 通知",
     "alertRules": "告警规则",
     "compressionRestore": "压缩还原",
+    "dataDeletions": "数据删除",
     "groupGateway": "网关配置",
     "chat": "聊天测试",
     "groupAccess": "访问管理",
@@ -148,7 +149,11 @@
     "visionHint": "支持图像理解与生成",
     "reasoningHint": "支持链式推理与复杂问题",
     "toolUseHint": "支持函数调用与外部工具",
-    "thinkingHint": "支持显式推理模式输出"
+    "thinkingHint": "支持显式推理模式输出",
+    "pricingHistory": "定价历史",
+    "effectiveFrom": "生效时间",
+    "effectiveTo": "失效时间",
+    "current": "当前有效"
   },
   "capability": {
     "title": "能力评分管理",
@@ -547,6 +552,30 @@
     "eventsPlaceholder": "选择或输入事件类型",
     "create": "创建 Webhook",
     "edit": "编辑 Webhook"
+  },
+  "dataDeletion": {
+    "title": "数据删除请求",
+    "create": "创建删除请求",
+    "process": "执行删除",
+    "processTitle": "执行数据删除",
+    "processConfirmText": "执行删除",
+    "detail": "删除请求详情",
+    "id": "ID",
+    "reason": "删除原因",
+    "reasonPlaceholder": "请输入删除原因",
+    "organizationId": "组织 ID",
+    "userId": "用户 ID",
+    "apiKeyId": "API Key ID",
+    "requestId": "Request ID",
+    "deletedRequestLogs": "已删除请求日志",
+    "deletedArchivedLogs": "已删除归档日志",
+    "errorMessage": "错误信息",
+    "createdAt": "创建时间",
+    "completedAt": "完成时间",
+    "statusPending": "待处理",
+    "statusProcessing": "处理中",
+    "statusCompleted": "已完成",
+    "statusFailed": "失败"
   },
   "error": {
     "title": "出错了",

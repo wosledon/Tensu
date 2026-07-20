@@ -35,6 +35,7 @@ const OAuthProvidersPage = lazy(() => import('./pages/oauthProviders/OAuthProvid
 const CompressionRestorePage = lazy(() => import('./pages/compression/CompressionRestorePage'));
 const ChatPage = lazy(() => import('./pages/chat/ChatPage'));
 const AlertRulesPage = lazy(() => import('./pages/alertRules/AlertRulesPage'));
+const DataDeletionsPage = lazy(() => import('./pages/dataDeletions/DataDeletionsPage'));
 
 function PageLoader() {
   return (
@@ -94,6 +95,7 @@ export default function App() {
                   <Route path="compression/restore" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><CompressionRestorePage /></Suspense></RequireRole>} />
                   <Route path="chat" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><ChatPage /></Suspense></RequireRole>} />
                   <Route path="alert-rules" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><AlertRulesPage /></Suspense></RequireRole>} />
+                  <Route path="data-deletions" element={<RequireRole roles={adminRoles}><Suspense fallback={<PageLoader />}><DataDeletionsPage /></Suspense></RequireRole>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>

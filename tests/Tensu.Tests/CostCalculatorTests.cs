@@ -139,4 +139,80 @@ public class CostCalculatorTests
         var model = new Model { Name = "m", Pricings = [] };
         Assert.Equal((0m, 0m), CostCalculator.Compute(model, 1000, 1000));
     }
+
+    [Fact]
+    public void Compute_ExchangeRate_ConvertsCostToUsd()
+    {
+        var model = new Model
+        {
+            Name = "cny-model",
+            Pricings =
+            [
+                new ModelPricing
+                {
+                    InputPricePerMillionTokens = 18m,
+                    OutputPricePerMillionTokens = 60m,
+                    Currency = "CNY",
+                    ExchangeRate = 7.2m,
+                    EffectiveFrom = DateTime.UtcNow.AddDays(-1)
+                }
+            ]
+        };
+
+        var (inputCost, outputCost) = CostCalculator.Compute(model, 1_000_000, 100_000);
+        Assert.Equal(18m * 1_000_000m / 1_000_000m / 7.2m, inputCost);
+        Assert.Equal(60m * 100_000m / 1_000_000m / 7.2m, outputCost);
+    }
+
+    [Fact]
+    public void Compute_ExchangeRate_DefaultUsd_NoConversion()
+    {
+        var model = new Model
+        {
+            Name = "usd-model",
+            Pricings =
+            [
+                new ModelPricing
+                {
+                    InputPricePerMillionTokens = 10m,
+                    OutputPricePerMillionTokens = 30m,
+                    Currency = "USD",
+                    ExchangeRate = 1.0m,
+                    EffectiveFrom = DateTime.UtcNow.AddDays(-1)
+                }
+            ]
+        };
+
+        var (inputCost, outputCost) = CostCalculator.Compute(model, 1_000_000, 100_000);
+        Assert.Equal(10m, inputCost);
+        Assert.Equal(3m, outputCost);
+    }
+
+    [Fact]
+    public void Compute_ExchangeRate_WithCachedAndReasoningTokens()
+    {
+        var model = new Model
+        {
+            Name = "eur-model",
+            Pricings =
+            [
+                new ModelPricing
+                {
+                    InputPricePerMillionTokens = 9.2m,
+                    OutputPricePerMillionTokens = 36.8m,
+                    CachedInputPricePerMillionTokens = 0.92m,
+                    ThinkingPricePerMillionTokens = 73.6m,
+                    Currency = "EUR",
+                    ExchangeRate = 0.92m,
+                    EffectiveFrom = DateTime.UtcNow.AddDays(-1)
+                }
+            ]
+        };
+
+        var (inputCost, outputCost) = CostCalculator.Compute(model, 1_000_000, 100_000, cachedInputTokens: 400_000, reasoningTokens: 30_000);
+        var expectedInput = ((600_000 * 9.2m + 400_000 * 0.92m) / 1_000_000m) / 0.92m;
+        var expectedOutput = ((70_000 * 36.8m + 30_000 * 73.6m) / 1_000_000m) / 0.92m;
+        Assert.Equal(expectedInput, inputCost);
+        Assert.Equal(expectedOutput, outputCost);
+    }
 }

@@ -4,7 +4,7 @@ import {
   DashboardOutlined, DeploymentUnitOutlined, ApiOutlined, BranchesOutlined, AppstoreOutlined, ThunderboltOutlined, CodeOutlined,
   KeyOutlined, TeamOutlined, UserOutlined, ControlOutlined, BarChartOutlined, AuditOutlined, LineChartOutlined, DollarOutlined, RocketOutlined,
   CloudOutlined, WarningOutlined, SettingOutlined, NotificationOutlined, GlobalOutlined, RobotOutlined,
-  SunOutlined, MoonOutlined, DesktopOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  SunOutlined, MoonOutlined, DesktopOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -67,6 +67,7 @@ export default function MainLayout() {
         { key: '/analytics/anomalies', icon: <WarningOutlined />, label: t('analytics.anomalies') },
         { key: '/admin-audit', icon: <AuditOutlined />, label: t('nav.adminAudit'), roles: ['SuperAdmin'] },
         { key: '/alert-rules', icon: <WarningOutlined />, label: t('nav.alertRules'), roles: ['SuperAdmin'] },
+        { key: '/data-deletions', icon: <DeleteOutlined />, label: t('nav.dataDeletions'), roles: ['SuperAdmin', 'Admin'] },
       ],
     },
     {
@@ -115,7 +116,7 @@ export default function MainLayout() {
   const getDefaultOpenKeys = (path: string): string[] => {
     const keys: string[] = [];
     if (path.startsWith('/providers') || path.startsWith('/models') || path.startsWith('/route-models') || path.startsWith('/chat')) keys.push('gateway-group');
-    if (path.startsWith('/audit') || path.startsWith('/analytics') || path.startsWith('/admin-audit') || path.startsWith('/alert-rules')) keys.push('ops-group');
+    if (path.startsWith('/audit') || path.startsWith('/analytics') || path.startsWith('/admin-audit') || path.startsWith('/alert-rules') || path.startsWith('/data-deletions')) keys.push('ops-group');
     if (path.startsWith('/api-keys') || path.startsWith('/oauth-providers')) keys.push('access-group');
     if (path.startsWith('/organizations') || path.startsWith('/users') || path.startsWith('/quotas')) keys.push('org-group');
     if (path.startsWith('/settings') || path.startsWith('/admin-audit') || path.startsWith('/webhooks') || path.startsWith('/oauth-providers') || path.startsWith('/alert-rules') || path.startsWith('/compression')) keys.push('system-group');

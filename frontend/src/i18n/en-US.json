@@ -53,6 +53,7 @@
     "webhooks": "Webhooks",
     "alertRules": "Alert Rules",
     "compressionRestore": "Compression Restore",
+    "dataDeletions": "Data Deletions",
     "groupGateway": "Gateway Config",
     "chat": "Chat",
     "groupAccess": "Access",
@@ -147,8 +148,12 @@
     "cache": "Cache",
     "visionHint": "Supports image understanding",
     "reasoningHint": "Supports chain-of-thought reasoning",
-    "toolUseHint": "Supports function calling and tools",
-    "thinkingHint": "Supports explicit thinking mode"
+    "toolUseHint": "Supports function calling",
+    "thinkingHint": "Supports explicit thinking mode",
+    "pricingHistory": "Pricing History",
+    "effectiveFrom": "Effective From",
+    "effectiveTo": "Effective To",
+    "current": "Current"
   },
   "capability": {
     "title": "Capability Scores",
@@ -549,6 +554,30 @@
     "eventsPlaceholder": "Select or enter event types",
     "create": "Create Webhook",
     "edit": "Edit Webhook"
+  },
+  "dataDeletion": {
+    "title": "Data Deletion Requests",
+    "create": "Create Deletion Request",
+    "process": "Process Deletion",
+    "processTitle": "Process Data Deletion",
+    "processConfirmText": "PROCESS",
+    "detail": "Deletion Request Detail",
+    "id": "ID",
+    "reason": "Reason",
+    "reasonPlaceholder": "Enter the reason for deletion",
+    "organizationId": "Organization ID",
+    "userId": "User ID",
+    "apiKeyId": "API Key ID",
+    "requestId": "Request ID",
+    "deletedRequestLogs": "Deleted Request Logs",
+    "deletedArchivedLogs": "Deleted Archived Logs",
+    "errorMessage": "Error Message",
+    "createdAt": "Created At",
+    "completedAt": "Completed At",
+    "statusPending": "Pending",
+    "statusProcessing": "Processing",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed"
   },
   "error": {
     "title": "Something went wrong",

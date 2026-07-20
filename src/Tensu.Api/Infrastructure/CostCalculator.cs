@@ -106,6 +106,13 @@ public static class CostCalculator
             + cachedInput * cachedPrice) / 1_000_000m;
         var outputCost = ((outputTokens - reasoning) * pricing.OutputPricePerMillionTokens
             + reasoning * thinkingPrice) / 1_000_000m;
+
+        if (pricing.ExchangeRate > 0)
+        {
+            inputCost /= pricing.ExchangeRate;
+            outputCost /= pricing.ExchangeRate;
+        }
+
         return (inputCost, outputCost);
     }
 
