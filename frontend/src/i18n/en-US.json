@@ -54,6 +54,7 @@
     "webhooks": "Webhooks",
     "alertRules": "Alert Rules",
     "compressionRestore": "Compression Restore",
+    "dataDeletions": "Data Deletions",
     "groupGateway": "Gateway Config",
     "chat": "Chat",
     "groupAccess": "Access",
@@ -148,8 +149,12 @@
     "cache": "Cache",
     "visionHint": "Supports image understanding",
     "reasoningHint": "Supports chain-of-thought reasoning",
-    "toolUseHint": "Supports function calling and tools",
-    "thinkingHint": "Supports explicit thinking mode"
+    "toolUseHint": "Supports function calling",
+    "thinkingHint": "Supports explicit thinking mode",
+    "pricingHistory": "Pricing History",
+    "effectiveFrom": "Effective From",
+    "effectiveTo": "Effective To",
+    "current": "Current"
   },
   "capability": {
     "title": "Capability Scores",
@@ -473,7 +478,12 @@
     "currencyRateEUR": "EUR Rate",
     "currencyRateJPY": "JPY Rate",
     "currencyRateGBP": "GBP Rate",
-    "currencyHint": "Exchange rates relative to the default currency."
+    "currencyHint": "Exchange rates relative to the default currency.",
+    "embedding": "Semantic Cache Embedding",
+    "embeddingProvider": "Embedding Provider",
+    "embeddingProviderPlaceholder": "Select an OpenAI provider",
+    "embeddingModel": "Embedding Model",
+    "embeddingHint": "When configured, a real Embedding API will be used for semantic vectors; leave empty to use local feature hashing. Requires an OpenAI-protocol provider."
   },
   "compression": {
     "restoreTitle": "CCR Compression Restore",
@@ -550,6 +560,30 @@
     "eventsPlaceholder": "Select or enter event types",
     "create": "Create Webhook",
     "edit": "Edit Webhook"
+  },
+  "dataDeletion": {
+    "title": "Data Deletion Requests",
+    "create": "Create Deletion Request",
+    "process": "Process Deletion",
+    "processTitle": "Process Data Deletion",
+    "processConfirmText": "PROCESS",
+    "detail": "Deletion Request Detail",
+    "id": "ID",
+    "reason": "Reason",
+    "reasonPlaceholder": "Enter the reason for deletion",
+    "organizationId": "Organization ID",
+    "userId": "User ID",
+    "apiKeyId": "API Key ID",
+    "requestId": "Request ID",
+    "deletedRequestLogs": "Deleted Request Logs",
+    "deletedArchivedLogs": "Deleted Archived Logs",
+    "errorMessage": "Error Message",
+    "createdAt": "Created At",
+    "completedAt": "Completed At",
+    "statusPending": "Pending",
+    "statusProcessing": "Processing",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed"
   },
   "error": {
     "title": "Something went wrong",

@@ -3,7 +3,8 @@ import { Card, Form, Switch, InputNumber, Button, Space, Typography, Spin, App, 
 import { SaveOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
-import { settingsApi } from '../../api';
+import { settingsApi, providerApi } from '../../api';
+import type { Provider } from '../../types';
 import { PageHeader } from '../../components';
 
 const { Text } = Typography;
@@ -20,6 +21,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const [providers, setProviders] = useState<Provider[]>([]);
 
   useEffect(() => {
     settingsApi.getAll()
@@ -58,10 +60,15 @@ export default function SettingsPage() {
           currencyRateEUR: parseFloat(data['currency.rate.EUR'] || '0.92'),
           currencyRateJPY: parseFloat(data['currency.rate.JPY'] || '150.0'),
           currencyRateGBP: parseFloat(data['currency.rate.GBP'] || '0.79'),
+          embeddingProviderId: data['embedding.providerId'] || '',
+          embeddingModel: data['embedding.model'] || '',
         });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    providerApi.list({ page: 1, pageSize: 200 }).then((r) => {
+      setProviders(r.items.filter((p) => p.protocol === 'OpenAI'));
+    }).catch(() => {});
   }, [form]);
 
   const handleSave = async () => {
@@ -101,6 +108,8 @@ export default function SettingsPage() {
         ['currency.rate.EUR', String(values.currencyRateEUR)],
         ['currency.rate.JPY', String(values.currencyRateJPY)],
         ['currency.rate.GBP', String(values.currencyRateGBP)],
+        ['embedding.providerId', String(values.embeddingProviderId || '')],
+        ['embedding.model', String(values.embeddingModel || '')],
       ];
       await Promise.all(updates.map(([k, v]) => settingsApi.set(k, v)));
       message.success(t('common.success'));
@@ -166,6 +175,25 @@ export default function SettingsPage() {
           </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t('settings.cacheHint')}
+          </Text>
+        </Card>
+
+        <Card title={t('settings.embedding')} style={{ borderRadius: 18, marginBottom: 24 }}>
+          <Space size={16} wrap>
+            <Form.Item name="embeddingProviderId" label={t('settings.embeddingProvider')}>
+              <Select
+                allowClear
+                style={{ width: 200 }}
+                placeholder={t('settings.embeddingProviderPlaceholder')}
+                options={providers.map((p) => ({ value: String(p.id), label: p.name }))}
+              />
+            </Form.Item>
+            <Form.Item name="embeddingModel" label={t('settings.embeddingModel')}>
+              <Input style={{ width: 200 }} placeholder="text-embedding-3-small" />
+            </Form.Item>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('settings.embeddingHint')}
           </Text>
         </Card>
 

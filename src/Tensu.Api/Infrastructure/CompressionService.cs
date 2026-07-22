@@ -43,10 +43,20 @@ public class CompressionService
     /// Compress a request body if beneficial. Returns the (possibly compressed) body
     /// along with token estimates and the strategy used. When compression is applied,
     /// a mapping is persisted so the original body can be restored later.
+    ///
+    /// Semantic safety: compression is skipped when the content contains format-sensitive
+    /// patterns such as code blocks, few-shot examples, or structured prompts.
     /// </summary>
     public async Task<CompressionResult> CompressAsync(string requestBody, CancellationToken cancellationToken = default)
     {
         var originalTokens = EstimateTokens(requestBody);
+
+        if (HasFormatSensitiveContent(requestBody))
+        {
+            return new CompressionResult(
+                requestBody, originalTokens, originalTokens,
+                "none", Applied: false);
+        }
 
         try
         {
@@ -370,10 +380,65 @@ public class CompressionService
     public static int EstimateTokens(string text)
     {
         if (string.IsNullOrEmpty(text)) return 0;
-        // Simple heuristic
         var cjkCount = text.Count(c => c > 0x4E00 && c < 0x9FFF);
         var otherCount = text.Length - cjkCount;
         return (otherCount / 4) + (cjkCount / 2);
+    }
+
+    /// <summary>
+    /// Detects format-sensitive content where compression could alter semantics.
+    /// Skips compression for code blocks and few-shot examples.
+    /// </summary>
+    private static bool HasFormatSensitiveContent(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+
+        var lowered = text.ToLowerInvariant();
+
+        if (lowered.Contains("```")) return true;
+
+        try
+        {
+            var root = JsonNode.Parse(text);
+            if (root is JsonObject obj && obj["messages"] is JsonArray messages)
+            {
+                var messageCount = messages.Count;
+                if (messageCount >= 3)
+                {
+                    var fewShotIndicators = 0;
+                    foreach (var msg in messages)
+                    {
+                        if (msg is not JsonObject m) continue;
+                        if (m["content"] is not JsonValue jv || !jv.TryGetValue<string>(out var content)) continue;
+                        if (string.IsNullOrEmpty(content)) continue;
+
+                        var contentLower = content.ToLowerInvariant();
+
+                        if (contentLower.Contains("```")) return true;
+
+                        var hasExampleHeader = contentLower.Contains("example 1:")
+                            || contentLower.Contains("example 2:")
+                            || contentLower.Contains("example 3:")
+                            || Regex.IsMatch(contentLower, @"^example\s+\d+:", RegexOptions.Multiline);
+
+                        var hasQaPattern = (contentLower.Contains("q:") && contentLower.Contains("a:"))
+                            || (contentLower.Contains("question:") && contentLower.Contains("answer:"))
+                            || (contentLower.Contains("input:") && contentLower.Contains("output:"));
+
+                        var hasInstructionResponse = (contentLower.Contains("instruction:") && contentLower.Contains("response:"))
+                            || (contentLower.Contains("prompt:") && contentLower.Contains("completion:"));
+
+                        if (hasExampleHeader || hasQaPattern || hasInstructionResponse)
+                            fewShotIndicators++;
+                    }
+
+                    if (fewShotIndicators >= 2) return true;
+                }
+            }
+        }
+        catch (JsonException) { }
+
+        return false;
     }
 
     private static string ComputeHash(string input)

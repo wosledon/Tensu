@@ -383,6 +383,21 @@ export interface WebhookDelivery {
   isSuccess: boolean;
 }
 
+export interface DataDeletionRequest {
+  id: number;
+  organizationId?: number;
+  userId?: number;
+  apiKeyId?: string;
+  reason: string;
+  status: string;
+  errorMessage?: string;
+  createdAt: string;
+  completedAt?: string;
+  deletedRequestLogs: number;
+  deletedArchivedLogs: number;
+  requestId?: string;
+}
+
 export interface LoginRequest {
   username: string;
   password: string;

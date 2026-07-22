@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip, Typography, theme, App, Row, Col } from 'antd';
+import { Table, Form, Input, InputNumber, Select, Space, Tag, Card, Button, Tooltip, Typography, theme, App, Row, Col, Descriptions, Spin, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, DollarOutlined, EyeOutlined, BulbOutlined, ToolOutlined, ExperimentOutlined, ContainerOutlined, ThunderboltOutlined, CompressOutlined, SettingOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { modelApi, providerApi } from '../../api';
@@ -7,6 +7,7 @@ import { useCrudList, useFormModal, useConfirmDelete } from '../../hooks';
 import { PageHeader, CapabilityTags, FormModal } from '../../components';
 import type { Model, Provider } from '../../types';
 import { exportTableToCsv } from '../../utils/export';
+import dayjs from 'dayjs';
 
 interface CapabilityItemProps {
   icon: React.ComponentType<{ style?: React.CSSProperties }>;
@@ -111,6 +112,9 @@ export default function ModelsPage() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [pricingTarget, setPricingTarget] = useState<Model | null>(null);
   const [pricingForm] = Form.useForm();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pricingHistory, setPricingHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => modelApi.list(params), []);
@@ -204,6 +208,20 @@ export default function ModelsPage() {
     } catch {}
   };
 
+  const handleViewHistory = async (model: Model) => {
+    setHistoryOpen(true);
+    setPricingHistory([]);
+    setHistoryLoading(true);
+    try {
+      const history = await modelApi.getPricingHistory(model.id);
+      setPricingHistory(history);
+    } catch {
+      message.error(t('common.error'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const columns = [
     {
       title: t('model.name'), key: 'name', sorter: true,
@@ -233,11 +251,12 @@ export default function ModelsPage() {
         ) : <Tag>{t('common.noData')}</Tag>,
     },
     {
-      title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 160,
+      title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 200,
       render: (_: any, r: Model) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={async () => { await ensureProviders(); openEdit(r); }} />
           <Button type="text" icon={<DollarOutlined />} onClick={() => { setPricingTarget(r); pricingForm.resetFields(); setPricingOpen(true); }} />
+          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewHistory(r)} title={t('model.pricingHistory', 'Pricing History')} />
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.id)} />
         </Space>
       ),
@@ -492,6 +511,39 @@ export default function ModelsPage() {
           </Col>
         </Row>
       </FormModal>
+
+      <Modal
+        title={t('model.pricingHistory', 'Pricing History')}
+        open={historyOpen}
+        onCancel={() => setHistoryOpen(false)}
+        footer={<Button onClick={() => setHistoryOpen(false)}>{t('common.close')}</Button>}
+        width={720}
+      >
+        {historyLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : pricingHistory.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: token.colorTextSecondary }}>{t('common.noData')}</div>
+        ) : (
+          <Descriptions bordered size="small" column={1}>
+            {pricingHistory.map((item: any) => (
+              <Descriptions.Item key={item.id} label={
+                <span>
+                  {t('model.currency')}: {item.currency} &nbsp;|&nbsp;
+                  {t('model.effectiveFrom')}: {item.effectiveFrom ? dayjs(item.effectiveFrom).format('YYYY-MM-DD HH:mm') : '-'} &nbsp;|&nbsp;
+                  {item.effectiveTo ? `${t('model.effectiveTo')}: ${dayjs(item.effectiveTo).format('YYYY-MM-DD HH:mm')}` : t('model.current')}
+                </span>
+              }>
+                <Space>
+                  <span>Input: ${item.inputPricePerMillionTokens} / Output: ${item.outputPricePerMillionTokens}</span>
+                  {item.cachedInputPricePerMillionTokens && <Typography.Text type="secondary">Cached: ${item.cachedInputPricePerMillionTokens}</Typography.Text>}
+                  {item.thinkingPricePerMillionTokens && <Typography.Text type="secondary">Thinking: ${item.thinkingPricePerMillionTokens}</Typography.Text>}
+                  <span style={{ color: token.colorTextTertiary }}>Rate: {item.exchangeRate}</span>
+                </Space>
+              </Descriptions.Item>
+            ))}
+          </Descriptions>
+        )}
+      </Modal>
     </div>
   );
 }

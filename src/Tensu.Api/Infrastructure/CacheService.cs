@@ -88,6 +88,13 @@ public class CacheService : IDisposable
     /// Resolves the configured exact-cache backend ("memory" or "database").
     /// The setting is cached for 60 seconds to avoid a database lookup per request.
     /// </summary>
+    public void InvalidateBackendCache()
+    {
+        _backendMode = null;
+        _backendModeExpiresAt = DateTime.MinValue;
+        _logger.LogInformation("Cache backend configuration cache invalidated");
+    }
+
     private async Task<string> GetBackendAsync()
     {
         if (_backendMode != null && DateTime.UtcNow < _backendModeExpiresAt)
@@ -270,6 +277,97 @@ public class CacheService : IDisposable
     }
 
     /// <summary>
+    /// Compute a semantic embedding for the given request body.
+    /// When embedding.providerId and embedding.model settings are configured,
+    /// calls the real embedding API of the specified OpenAI-protocol provider.
+    /// Otherwise falls back to local FNV feature hashing.
+    /// </summary>
+    public async Task<float[]> ComputeSemanticEmbeddingAsync(string requestBody)
+    {
+        if (_scopeFactory == null)
+            return ComputeSemanticEmbedding(requestBody);
+
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
+
+            var providerIdStr = await db.Settings.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == "embedding.providerId");
+            var modelName = await db.Settings.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == "embedding.model");
+
+            if (string.IsNullOrEmpty(providerIdStr?.Value) || string.IsNullOrEmpty(modelName?.Value))
+                return ComputeSemanticEmbedding(requestBody);
+
+            if (!int.TryParse(providerIdStr.Value, out var providerId))
+                return ComputeSemanticEmbedding(requestBody);
+
+            var provider = await db.Providers.AsNoTracking()
+                .Include(p => p.Keys)
+                .FirstOrDefaultAsync(p => p.Id == providerId && p.IsEnabled);
+
+            if (provider == null || provider.Protocol != Tensu.Core.Enums.ProtocolType.OpenAI)
+                return ComputeSemanticEmbedding(requestBody);
+
+            var activeKey = provider.Keys
+                .Where(k => k.Status == Tensu.Core.Enums.KeyStatus.Active)
+                .OrderByDescending(k => k.UpdatedAt)
+                .FirstOrDefault();
+
+            if (activeKey == null)
+                return ComputeSemanticEmbedding(requestBody);
+
+            var encryptionService = scope.ServiceProvider.GetRequiredService<EncryptionService>();
+            var apiKey = encryptionService.Decrypt(activeKey.KeyValue);
+            var baseUrl = provider.BaseUrl.TrimEnd('/');
+
+            var httpClientFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient();
+            httpClient.DefaultRequestHeaders.Clear();
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+
+            var text = ExtractTextContent(requestBody);
+            if (string.IsNullOrWhiteSpace(text))
+                return ComputeSemanticEmbedding(requestBody);
+
+            var requestPayload = new { model = modelName.Value, input = text };
+            var json = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await httpClient.PostAsync($"{baseUrl}/embeddings", content, cts.Token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Embedding API returned {StatusCode}, falling back to feature hashing", (int)response.StatusCode);
+                return ComputeSemanticEmbedding(requestBody);
+            }
+
+            var responseBody = await response.Content.ReadAsStringAsync(cts.Token);
+            using var doc = JsonDocument.Parse(responseBody);
+
+            if (doc.RootElement.TryGetProperty("data", out var data) && data.GetArrayLength() > 0
+                && data[0].TryGetProperty("embedding", out var embeddingElement))
+            {
+                var vector = new float[embeddingElement.GetArrayLength()];
+                var i = 0;
+                foreach (var val in embeddingElement.EnumerateArray())
+                    vector[i++] = (float)val.GetDouble();
+                return Normalize(vector);
+            }
+
+            _logger.LogWarning("Embedding API returned no data, falling back to feature hashing");
+            return ComputeSemanticEmbedding(requestBody);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Embedding API call failed, falling back to feature hashing");
+            return ComputeSemanticEmbedding(requestBody);
+        }
+    }
+
+    /// <summary>
     /// Try to get a semantically similar cached response for the given request.
     /// </summary>
     public async Task<(bool hit, string? responseBody, bool isStream)?> TryGetSemanticAsync(
@@ -281,7 +379,7 @@ public class CacheService : IDisposable
             return null;
         }
 
-        var requestEmbedding = ComputeSemanticEmbedding(requestBody);
+        var requestEmbedding = await ComputeSemanticEmbeddingAsync(requestBody);
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
@@ -331,7 +429,7 @@ public class CacheService : IDisposable
             return;
         }
 
-        var embedding = ComputeSemanticEmbedding(requestBody);
+        var embedding = await ComputeSemanticEmbeddingAsync(requestBody);
 
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TensuDbContext>();
@@ -583,9 +681,7 @@ public class CacheService : IDisposable
         try
         {
             var embedding = JsonSerializer.Deserialize<float[]>(json);
-            // Legacy 100-dimensional embeddings are incompatible with the current
-            // 256-dimensional space; skip them (they expire naturally).
-            if (embedding == null || embedding.Length != EmbeddingDimensions) return null;
+            if (embedding == null || embedding.Length == 0) return null;
             return embedding;
         }
         catch (JsonException)

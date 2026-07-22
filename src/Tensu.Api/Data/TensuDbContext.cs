@@ -49,7 +49,7 @@ public class TensuDbContext : DbContext
     private void ValidateAuditImmutability()
     {
         var modifiedEntities = ChangeTracker.Entries()
-            .Where(e => e.Entity is RequestLog or ArchivedRequestLog)
+            .Where(e => e.Entity is RequestLog or ArchivedRequestLog or AdminAuditLog)
             .ToList();
 
         foreach (var entry in modifiedEntities)
@@ -59,6 +59,49 @@ public class TensuDbContext : DbContext
             if (entry.State == EntityState.Deleted)
                 throw new InvalidOperationException("Audit logs are immutable and cannot be deleted directly.");
         }
+    }
+
+    public async Task EnsureAuditTriggersAsync()
+    {
+        var triggerSql = @"
+            CREATE TRIGGER IF NOT EXISTS trg_request_logs_no_update
+                BEFORE UPDATE ON request_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'request_logs is immutable');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_request_logs_no_delete
+                BEFORE DELETE ON request_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'request_logs is immutable');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_archived_request_logs_no_update
+                BEFORE UPDATE ON archived_request_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'archived_request_logs is immutable');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_archived_request_logs_no_delete
+                BEFORE DELETE ON archived_request_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'archived_request_logs is immutable');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_admin_audit_logs_no_update
+                BEFORE UPDATE ON admin_audit_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'admin_audit_logs is immutable');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_admin_audit_logs_no_delete
+                BEFORE DELETE ON admin_audit_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'admin_audit_logs is immutable');
+            END;
+        ";
+
+        await Database.ExecuteSqlRawAsync(triggerSql);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
