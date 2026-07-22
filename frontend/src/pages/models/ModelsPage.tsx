@@ -114,7 +114,7 @@ export default function ModelsPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => modelApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage } = useCrudList<Model, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage } = useCrudList<Model, any>({ fetchFn, persistKey: 'models' });
   const { form, open, editing, submitting, openCreate, openEdit, close, submit } = useFormModal<Model>({
     createFn: modelApi.create,
     updateFn: modelApi.update,
@@ -253,6 +253,8 @@ export default function ModelsPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('model.title')}
         extra={
           <Space>

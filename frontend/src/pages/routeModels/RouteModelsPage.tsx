@@ -25,7 +25,7 @@ export default function RouteModelsPage() {
   const modelOptions = models.map((m) => ({ value: m.id, label: `${m.provider?.name}-${m.name}` }));
 
   const fetchFn = useCallback((params: any) => routeModelApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<RouteModel, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<RouteModel, any>({ fetchFn, persistKey: 'routeModels' });
   const { form, open, editing, submitting, openCreate, openEdit, close } = useFormModal<RouteModel>({
     createFn: routeModelApi.create,
     updateFn: routeModelApi.update,
@@ -205,6 +205,8 @@ export default function RouteModelsPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('routeModel.title')}
         icon={<BranchesOutlined />}
         onCreate={async () => { await ensureModels(); openCreate(); }}

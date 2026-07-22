@@ -13,7 +13,7 @@ export default function UsersPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
 
   const fetchFn = useCallback((params: any) => userApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<User, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<User, any>({ fetchFn, persistKey: 'users' });
   const { form, open, editing, submitting, openCreate, openEdit, close, submit } = useFormModal<User>({
     createFn: (data) => userApi.create(data as any),
     updateFn: userApi.update,
@@ -61,6 +61,8 @@ export default function UsersPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('organization.users')}
         onCreate={async () => { await ensureOrgs(); openCreate(); }}
         onSearch={setKeyword}

@@ -4,12 +4,53 @@ html, body, #root {
   height: 100%;
 }
 
-.ant-card {
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.ant-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+/* ── Theme switch: smooth color transition (~200ms per design spec §11) ── */
+body,
+.ant-layout,
+.ant-layout-header,
+.ant-layout-sider,
+.ant-card,
+.ant-menu,
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ── Page content fade-in on route change ── */
+.ant-layout-content > div {
+  animation: tensu-page-enter 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes tensu-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Cards: soft default, interactive hover lift ── */
+.ant-card {
+  transition: box-shadow 0.2s cubic-bezier(0.32, 0.72, 0, 1), transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ant-card-hoverable:hover,
+.card-interactive:hover {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-2px);
+}
+
+/* ── Table: airy header, gentle row hover ── */
+.ant-table-thead > tr > th {
+  font-weight: 600;
 }
 
 .ant-table-tbody > tr {
@@ -20,6 +61,15 @@ html, body, #root {
   background-color: var(--ant-color-bg-text-hover) !important;
 }
 
+/* ── Buttons: subtle press feedback ── */
+.ant-btn {
+  transition: all 0.15s ease;
+}
+
+.ant-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .ant-btn-icon-only {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -28,15 +78,62 @@ html, body, #root {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+/* ── Slim, unobtrusive scrollbars ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 128, 0.32) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 128, 0.32);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 128, 0.5);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Visible keyboard focus (a11y) ── */
+:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Respect reduced-motion preference (design spec §5.3) ── */
 @media (prefers-reduced-motion: reduce) {
   .ant-card,
   .ant-table-tbody > tr,
+  .ant-btn,
   .ant-btn-icon-only,
-  .ant-menu-item {
+  .ant-menu-item,
+  body,
+  .ant-layout,
+  .ant-layout-header,
+  .ant-layout-sider {
     transition: none !important;
+  }
+
+  .ant-layout-content > div {
+    animation: none;
+  }
+
+  .ant-card-hoverable:hover,
+  .card-interactive:hover {
+    transform: none;
   }
 }
 
+/* ── Respect reduced-transparency preference (design spec §3.5) ── */
 @media (prefers-reduced-transparency: reduce) {
   .ant-layout-sider,
   .ant-layout-header {

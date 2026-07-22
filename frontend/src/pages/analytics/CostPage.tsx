@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Col, Row, DatePicker, Typography, Spin, Space, Button, Statistic, Table, Alert } from 'antd';
+import { Card, Col, Row, DatePicker, Typography, Space, Button, Statistic, Table, Alert } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
+import { PageSkeleton } from '../../components';
 import type { ApiKeyUsageStat } from '../../types';
 import dayjs from 'dayjs';
 
@@ -100,7 +101,7 @@ export default function CostPage() {
       </Card>
 
       {error && <Alert type="error" message={error} style={{ marginBottom: 24 }} />}
-      {loading ? <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div> : (
+      {loading ? <PageSkeleton /> : (
         <>
           <Row gutter={[24, 24]}>
             <Col xs={24} sm={12} lg={5}>

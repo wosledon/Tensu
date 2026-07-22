@@ -14,7 +14,7 @@ export default function ProvidersPage() {
   const { message, modal } = App.useApp();
 
   const fetchFn = useCallback((params: any) => providerApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage, setSort, setKeyword } = useCrudList<Provider, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage, setSort, setKeyword } = useCrudList<Provider, any>({ fetchFn, persistKey: 'providers' });
   const { form, open, editing, submitting, openCreate, openEdit, close, submit } = useFormModal<Provider>({
     createFn: providerApi.create,
     updateFn: providerApi.update,
@@ -261,6 +261,8 @@ export default function ProvidersPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('provider.title')}
         onCreate={openCreate}
         onSearch={setKeyword}

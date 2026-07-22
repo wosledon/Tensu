@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, DatePicker, Typography, Spin, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal, Descriptions } from 'antd';
+import { Card, DatePicker, Typography, Space, Button, Table, Tag, Select, Row, Col, Statistic, Modal, Descriptions } from 'antd';
 import { ExportOutlined, ReloadOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { analyticsApi } from '../../api';
+import { PageSkeleton } from '../../components';
 import { exportTableToCsv } from '../../utils/export';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -224,7 +225,7 @@ export default function AnomalyPage() {
         </Space>
       </Card>
 
-      {loading ? <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div> : (
+      {loading ? <PageSkeleton /> : (
         <>
           {error && <Card style={{ borderRadius: 18, marginBottom: 24, borderColor: '#ff4d4f' }}>{error}</Card>}
           <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>

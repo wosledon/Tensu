@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Card, Col, Row, Statistic, Typography, Spin } from 'antd';
+import { Card, Col, Row, Typography } from 'antd';
 import { ApiOutlined, ThunderboltOutlined, DollarOutlined, CloudOutlined, AlertOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../hooks/useThemeMode';
 import { analyticsApi } from '../../api';
 import { useNavigate } from 'react-router-dom';
+import { StatCard, PageSkeleton } from '../../components';
 
 const { Title } = Typography;
 
@@ -26,7 +28,7 @@ export default function DashboardPage() {
         .catch(() => {})
         .finally(() => setLoading(false));
 
-      const from = new Date(); from.setHours(0,0,0,0);
+      const from = new Date(); from.setHours(0, 0, 0, 0);
       const to = new Date();
       analyticsApi.anomalies(from.toISOString(), to.toISOString())
         .then((res) => setAnomalyCount(res?.total ?? 0))
@@ -38,17 +40,25 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}><Spin size="large" /></div>;
+  if (loading) return <PageSkeleton cards={5} />;
 
   const textColor = isDark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
   const gridColor = isDark ? 'rgba(84,84,88,0.2)' : 'rgba(60,60,67,0.08)';
+
+  const trend: any[] = data?.dailyTrend ?? [];
+  const prev = trend[trend.length - 2];
+
+  const areaGradient = (color: string) => new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: `${color}33` },
+    { offset: 1, color: `${color}05` },
+  ]);
 
   const trendOption = {
     color: chartColors,
     tooltip: { trigger: 'axis' as const },
     legend: { data: [t('audit.totalRequests'), t('audit.totalTokens')], textStyle: { color: textColor } },
     grid: { left: 48, right: 24, top: 48, bottom: 24 },
-    xAxis: { type: 'category' as const, data: data?.dailyTrend?.map((d: any) => d.date) || [], axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
+    xAxis: { type: 'category' as const, data: trend.map((d: any) => d.date), axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
     yAxis: [
       { type: 'value' as const, name: t('audit.totalRequests'), axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
       { type: 'value' as const, name: t('audit.totalTokens'), axisLabel: { color: textColor }, splitLine: { show: false } },
@@ -56,13 +66,14 @@ export default function DashboardPage() {
     series: [
       {
         name: t('audit.totalRequests'), type: 'bar' as const,
-        data: data?.dailyTrend?.map((d: any) => d.requests) || [],
+        data: trend.map((d: any) => d.requests),
         itemStyle: { borderRadius: [6, 6, 0, 0] },
       },
       {
         name: t('audit.totalTokens'), type: 'line' as const, yAxisIndex: 1,
-        data: data?.dailyTrend?.map((d: any) => d.tokens) || [],
+        data: trend.map((d: any) => d.tokens),
         smooth: true, lineStyle: { width: 2 },
+        areaStyle: { color: areaGradient('#34C759') },
       },
     ],
   };
@@ -84,7 +95,7 @@ export default function DashboardPage() {
     tooltip: { trigger: 'axis' as const },
     legend: { data: [t('audit.avgLatency'), t('audit.successRate')], textStyle: { color: textColor } },
     grid: { left: 48, right: 48, top: 48, bottom: 24 },
-    xAxis: { type: 'category' as const, data: data?.dailyTrend?.map((d: any) => d.date) || [], axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
+    xAxis: { type: 'category' as const, data: trend.map((d: any) => d.date), axisLabel: { color: textColor }, axisLine: { lineStyle: { color: gridColor } } },
     yAxis: [
       { type: 'value' as const, name: 'ms', axisLabel: { color: textColor }, splitLine: { lineStyle: { color: gridColor } } },
       { type: 'value' as const, name: '%', min: 0, max: 100, axisLabel: { color: textColor }, splitLine: { show: false } },
@@ -92,56 +103,64 @@ export default function DashboardPage() {
     series: [
       {
         name: t('audit.avgLatency'), type: 'line' as const, smooth: true,
-        data: data?.dailyTrend?.map((d: any) => Math.round(d.avgLatency)) || [],
-        areaStyle: { opacity: 0.15 },
+        data: trend.map((d: any) => Math.round(d.avgLatency)),
+        areaStyle: { color: areaGradient('#007AFF') },
       },
       {
         name: t('audit.successRate'), type: 'line' as const, yAxisIndex: 1, smooth: true,
-        data: data?.dailyTrend?.map((d: any) => d.successRate) || [],
+        data: trend.map((d: any) => d.successRate),
         lineStyle: { type: 'dashed' as const },
       },
     ],
   };
 
   const stats = [
-    { title: t('dashboard.todayRequests'), value: data?.today?.requests || 0, icon: <ApiOutlined />, color: '#007AFF' },
-    { title: t('dashboard.todayTokens'), value: data?.today?.tokens || 0, icon: <ThunderboltOutlined />, color: '#34C759' },
-    { title: t('dashboard.todayCost'), value: data?.today?.cost || 0, prefix: '$', precision: 4, icon: <DollarOutlined />, color: '#FF9500' },
-    { title: t('dashboard.cacheHitRate'), value: data?.today?.cacheHitRate || 0, suffix: '%', icon: <CloudOutlined />, color: '#AF52DE' },
-    { title: t('analytics.anomalies', 'Anomalies'), value: anomalyCount, icon: <AlertOutlined />, color: '#FF3B30', onClick: () => navigate('/analytics/anomalies') },
+    {
+      title: t('dashboard.todayRequests'), value: data?.today?.requests || 0,
+      icon: <ApiOutlined />, color: '#007AFF',
+      compareValue: prev?.requests, sparkData: trend.map((d: any) => d.requests),
+    },
+    {
+      title: t('dashboard.todayTokens'), value: data?.today?.tokens || 0,
+      icon: <ThunderboltOutlined />, color: '#34C759',
+      compareValue: prev?.tokens, sparkData: trend.map((d: any) => d.tokens),
+    },
+    {
+      title: t('dashboard.todayCost'), value: data?.today?.cost || 0, prefix: '$', precision: 4,
+      icon: <DollarOutlined />, color: '#FF9500',
+      compareValue: prev?.cost, sparkData: trend.map((d: any) => d.cost ?? 0),
+    },
+    {
+      title: t('dashboard.cacheHitRate'), value: data?.today?.cacheHitRate || 0, suffix: '%',
+      icon: <CloudOutlined />, color: '#AF52DE',
+      sparkData: trend.map((d: any) => d.cacheHitRate ?? 0),
+    },
+    {
+      title: t('analytics.anomalies'), value: anomalyCount,
+      icon: <AlertOutlined />, color: '#FF3B30',
+      onClick: () => navigate('/analytics/anomalies'),
+    },
   ];
 
   return (
     <div>
       <Title level={4} style={{ margin: 0, marginBottom: 32 }}>{t('dashboard.title')}</Title>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
         {stats.map((s, i) => (
-          <Card key={i} style={{ borderRadius: 18, cursor: s.onClick ? 'pointer' : undefined, transition: 'box-shadow 0.2s, transform 0.2s' }}
-            hoverable
-            onClick={s.onClick}
-          >
-            <Statistic
-              title={s.title}
-              value={s.value}
-              prefix={s.prefix}
-              suffix={s.suffix}
-              precision={s.precision}
-              valueStyle={{ color: s.color, fontFamily: '"SF Mono", ui-monospace, monospace', fontSize: 28, fontWeight: 600 }}
-            />
-          </Card>
+          <StatCard key={i} {...s} />
         ))}
       </div>
 
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={16}>
           <Card title={t('dashboard.requestTrend')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={trendOption} style={{ height: 300 }} />
+            <ReactECharts option={trendOption} style={{ height: 300 }} notMerge />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
           <Card title={t('dashboard.modelDistribution')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={modelPieOption} style={{ height: 300 }} />
+            <ReactECharts option={modelPieOption} style={{ height: 300 }} notMerge />
           </Card>
         </Col>
       </Row>
@@ -149,7 +168,7 @@ export default function DashboardPage() {
       <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={14}>
           <Card title={t('audit.latency') + ' & ' + t('audit.status')} style={{ borderRadius: 18 }}>
-            <ReactECharts option={latencyOption} style={{ height: 300 }} />
+            <ReactECharts option={latencyOption} style={{ height: 300 }} notMerge />
           </Card>
         </Col>
         <Col xs={24} lg={10}>
@@ -163,8 +182,12 @@ export default function DashboardPage() {
                     <div key={p.name} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '12px 16px', borderRadius: 12,
-                      background: 'var(--ant-color-bg-elevated)', transition: 'background 0.2s',
-                    }}>
+                      background: 'var(--ant-color-bg-elevated)', transition: 'background 0.2s, transform 0.2s',
+                      cursor: 'pointer',
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(4px)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+                    >
                       <span style={{ fontWeight: 500 }}>{p.name}</span>
                       <span style={{ color: statusColor, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500 }}>
                         <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor' }} />

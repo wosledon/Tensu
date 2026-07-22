@@ -66,7 +66,7 @@ export default function ApiKeysPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const fetchFn = useCallback((params: any) => apiKeyApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<ApiKey, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<ApiKey, any>({ fetchFn, persistKey: 'apiKeys' });
   const { confirmAction } = useTypedConfirmAction();
 
   const handleDelete = (record: ApiKey) => {
@@ -220,6 +220,8 @@ export default function ApiKeysPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('apiKey.title')}
         onCreate={async () => { await ensureOrgs(); await ensureModels(); form.resetFields(); setCreatedKey(null); setModalOpen(true); }}
         onSearch={setKeyword}

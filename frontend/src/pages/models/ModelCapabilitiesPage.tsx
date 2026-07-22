@@ -27,7 +27,7 @@ export default function ModelCapabilitiesPage() {
     (params: any) => modelCapabilityApi.list({ ...params, modelId: modelFilter, dimension: dimensionFilter }),
     [modelFilter, dimensionFilter],
   );
-  const { data, total, loading, params, fetchData, setPage } = useCrudList<ModelCapability, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage } = useCrudList<ModelCapability, any>({ fetchFn, persistKey: 'modelCapabilities' });
   const { form, open, editing, submitting, openCreate, openEdit, close } = useFormModal<ModelCapability>({
     createFn: modelCapabilityApi.create,
     updateFn: modelCapabilityApi.update,
@@ -146,6 +146,8 @@ export default function ModelCapabilitiesPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('capability.title')}
         onCreate={async () => { await ensureModels(); openCreate(); }}
         extra={

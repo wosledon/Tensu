@@ -32,7 +32,7 @@ export default function QuotasPage() {
   const [models, setModels] = useState<Model[]>([]);
 
   const fetchFn = useCallback((params: any) => quotaApi.list(params), []);
-  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<Quota, any>({ fetchFn });
+  const { data, total, loading, params, fetchData, setPage, setKeyword } = useCrudList<Quota, any>({ fetchFn, persistKey: 'quotas' });
   const { form, open, editing, submitting, openCreate, openEdit, close, submit } = useFormModal<Quota>({
     createFn: quotaApi.create,
     updateFn: quotaApi.update,
@@ -109,6 +109,8 @@ export default function QuotasPage() {
   return (
     <div>
       <PageHeader
+        onRefresh={fetchData}
+        refreshing={loading}
         title={t('quota.title')}
         onCreate={async () => { await ensureOptions(); openCreate(); }}
         onSearch={setKeyword}

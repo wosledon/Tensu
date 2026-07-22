@@ -2,3 +2,8 @@ export { default as PageHeader } from './PageHeader';
 export { default as StatusDot } from './StatusDot';
 export { default as CapabilityTags } from './CapabilityTags';
 export { default as FormModal } from './FormModal';
+export { default as StatCard } from './StatCard';
+export { default as Sparkline } from './Sparkline';
+export { default as CopyButton } from './CopyButton';
+export { default as EmptyState } from './EmptyState';
+export { default as PageSkeleton } from './PageSkeleton';
